@@ -22,7 +22,12 @@ ENDPOINT = "http://localhost:5001"
 cmds = [
     ("/start", newSession),
     ("/print", printStory) ,
-    ("/log", lambda prog, w: printStory(prog, w, stderr=True))
+    ("/log", lambda prog, w: printStory(prog, w, stderr=True)),
+    ("/set", setOption),
+    ("/unset", lambda prog, w: setOption(prog, "")),
+    ("/lsoptions", showOptions),
+    ("/cont", doContinue),
+        ("/continue", doContinue)
 ]
     
 
@@ -52,7 +57,10 @@ class Program(object):
     def __init__(self, chat_user=""):
         self.chat_user = chat_user
         self.session = Session(chat_user=chat_user)
-        
+        self.options = {}
+
+    def getOption(self, key):
+        return self.options.get(key, False)
         
 
     
@@ -62,9 +70,11 @@ while True:
     w = input()
     for (cmd, f) in cmds:
         if w.startswith(cmd):
-            v = f(prog, " ".join(w.split(" ")[1:]))
+            v = f(prog, w.split(" ")[1:])
             printerr(v)
-            skip = True
+            if not(prog.getOption("continue")):
+                # skip means we don't send a prompt this iteration, which we don't want to do when user issues a command, except for the /continue command
+                skip = True
             
     if skip:
         skip = False
@@ -75,8 +85,10 @@ while True:
         else:
             w = INPUT_DELIMITER + CHAT_USER + ": " + w + INPUT_DELIMITER
 
-
-    if prog.session.hasTemplate():
+    if prog.getOption("continue"):
+        setOption(prog, ["continue", ""])
+        prompt = getPrompt(prog.session.getStory(trim_end=True), "", system_msg = prog.session.template_system)                
+    elif prog.session.hasTemplate():
         w = prog.session.injectTemplate(w)
         prompt = getPrompt(prog.session.getStory(), w, system_msg = prog.session.template_system)
     else:

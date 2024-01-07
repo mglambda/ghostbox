@@ -35,8 +35,12 @@ class Session(object):
     def addText(self, w):
         self.story.append(w)
 
-    def getStory(self):
-        return "".join(self.story)
+    def getStory(self, trim_end=False):
+        w = "".join(self.story)
+        if trim_end == True:
+            if w.endswith(self.template_end):
+                return w[:-len(self.template_end)]
+        return w
 
     def getNote(self):
         if not(self.note):
