@@ -1,7 +1,8 @@
 #!/bin/python
-import requests, json, os, io, re, base64, random, sys
+import requests, json, os, io, re, base64, random, sys, threading
 from commands import *
 from kbcli_util import *
+from kbcli_streaming import streamPrompt
 from session import Session
 
 argw = " ".join(sys.argv)
@@ -57,7 +58,9 @@ class Program(object):
     def __init__(self, chat_user=""):
         self.chat_user = chat_user
         self.session = Session(chat_user=chat_user)
-        self.options = {}
+        self.streaming_done = threading.Event()
+        self.stream_queue = []
+        self.options = {"streaming" : "True"}
 
     def getOption(self, key):
         return self.options.get(key, False)
@@ -93,13 +96,27 @@ while True:
         prompt = getPrompt(prog.session.getStory(), w, system_msg = prog.session.template_system)
     else:
         prompt = getPrompt(prog.session.memory + prog.session.getNote() + prog.session.getStory() , w + prog.session.prompt)
-    r = requests.post(ENDPOINT + "/api/v1/generate", json=prompt)
+
+
+
+    if prog.getOption("streaming"):
+        r = streamPrompt(prog, ENDPOINT + "/api/extra/generate/stream", json=prompt)
+        prog.streaming_done.wait()
+        prog.streaming_done.clear()
+        r.json = lambda ws=prog.stream_queue: {"results" : [{"text" : "".join(ws)}]}
+        prog.stream_queue = []
+    else:
+        r = requests.post(ENDPOINT + "/api/v1/generate", json=prompt)
     if r.status_code == 200:
         results = r.json()['results']
         displaytxt = filterLonelyPrompt(prog.session.prompt, trimIncompleteSentence(trimChatUser(CHAT_USER, results[0]["text"])))
         txt = prog.session.prompt + displaytxt + prog.session.template_end
         prog.session.addText(w + txt)
-        if CHAT_USER:
+
+        if prog.getOption("streaming"):
+            # already printed it piecemeal, so skip this step
+            continue
+        elif CHAT_USER:
             # we filter again because we don't want prompts in the spoken dialogue for chats, though it must be in the saved story if it was generated
             displaytxt = filterPrompt(prog.session.prompt, displaytxt)
             print(displaytxt)
