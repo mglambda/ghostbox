@@ -1,4 +1,4 @@
-import os
+import os, glob
 from kbcli_util import *
 
 
@@ -14,6 +14,7 @@ class Session(object):
         self.template_system = ""
         self.template = ""
         self.template_end = ""
+        self.keys = {}
         self.story = []
         if self.dir is not None:
             try:
@@ -26,7 +27,10 @@ class Session(object):
 
     def injectTemplate(self, prompt):
         # prompt is any user provided string, and will be replacing {$user_msg} which is supposed to be in the template somewhere
-        return self.template.replace("{$user_msg}", self.memory + self.getNote() + prompt)
+        w = self.template.replace("{$user_msg}", self.memory + self.getNote() + prompt)
+        for (key, v) in self.keys.items():
+            w.replace(key, v) #replaces filenames found in dir with their conten, e.g. 'memory' has contents that will be spliced into {$memory}
+        return w
         
     def addText(self, w):
         self.story.append(w)
@@ -46,50 +50,9 @@ class Session(object):
         if not(os.path.isdir(self.dir)):
             return
 
-        templatefile = self.dir + "/template"
-        if os.path.isfile(templatefile):
-            self.template = open(templatefile, "r").read()
-            printerr("Using prompt template from " + templatefile)
-
-
-        templatesystemfile = self.dir + "/template_system"
-        if os.path.isfile(templatesystemfile):
-            self.template_system = open(templatesystemfile, "r").read()
-
-            
-        templateendfile = self.dir + "/template_end"
-        if os.path.isfile(templateendfile):
-            self.template_end = open(templateendfile, "r").read()
-            
-        memoryfile = self.dir + "/memory"
-        if os.path.isfile(memoryfile):
-            self.memory = self._replaceUser(open(memoryfile, "r").read())
-            printerr("Initialized memory from " + memoryfile)
-        else:
-            printerr("Warning: Memory file not found: " + memoryfile)
-
-        notefile = self.dir + "/note"
-        if os.path.isfile(notefile):
-            self.note = self._replaceUser(open(notefile, "r").read())
-            printerr("Initialized author's note from " + notefile)
-        else:
-            printerr("Warning: Author's note file not found: " + notefile)
-
-        promptfile = self.dir + "/prompt"
-        if os.path.isfile(promptfile):
-            self.prompt = self._replaceUser(open(promptfile, "r").read())
-            printerr("Ok - prompt file found.") 
-        else:
-            printerr("Warning: No initial prompt found, missing " + promptfile)
-
-        initpromptfile = self.dir + "/initial_prompt"
-        if os.path.isfile(initpromptfile):
-            self.initial_prompt = self._replaceUser(open(initpromptfile, "r").read())
-            self.addText(self.initial_prompt)
-            printerr("Ok - initial prompt file found.") 
-        else:
-            printerr("Warning: No initial prompt found, missing " + initpromptfile)
-            
-            
-            
-        
+        for filepath in glob.glob(self.dir + "/*"):
+            filename = os.path.split(filepath)[1]
+            if os.path.isfile(filepath):
+                self.__dict__[filename] = open(filepath, "r").read()
+                self.keys["{$" + filename + "}"] = self.__dict__[filename]
+                printerr("Found " + filename)
