@@ -60,7 +60,7 @@ class Program(object):
         self.session = Session(chat_user=chat_user)
         self.streaming_done = threading.Event()
         self.stream_queue = []
-        self.options = {"streaming" : "True"}
+        self.options = {"cli_prompt" : "\n 🧠 ", "streaming" : "True"}
 
     def getOption(self, key):
         return self.options.get(key, False)
@@ -70,7 +70,7 @@ class Program(object):
 prog = Program(chat_user=CHAT_USER)
 skip = False
 while True:
-    w = input()
+    w = input(prog.getOption("cli_prompt"))
     for (cmd, f) in cmds:
         if w.startswith(cmd):
             v = f(prog, w.split(" ")[1:])
