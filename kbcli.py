@@ -20,7 +20,9 @@ INPUT_DELIMITER = "\n\n" # inserted between user input and response, but only wh
 ENDPOINT = "http://localhost:5001"
 
 cmds = [
-    ("/start", newSession)
+    ("/start", newSession),
+    ("/print", printStory) ,
+    ("/log", lambda prog, w: printStory(prog, w, stderr=True))
 ]
     
 
