@@ -6,21 +6,7 @@ from kbcli_util import *
 from kbcli_streaming import streamPrompt
 from session import Session
 
-argw = " ".join(sys.argv)
-w = getArgument("--max_tokens", argw)
-if w:
-    MAX_TOKENS = int(w)
-else:
-    MAX_TOKENS = 256
-
-w = getArgument("--user", argw)
-if w:
-    CHAT_USER = w
-else:
-    CHAT_USER = ""
-INPUT_DELIMITER = "\n\n" # inserted between user input and response, but only when tehre is a CHAT_USER
-ENDPOINT = "http://localhost:5001"
-
+# these can be typed in at the CLI prompt
 cmds = [
     ("/start", newSession),
     ("/print", printStory) ,
@@ -31,47 +17,44 @@ cmds = [
     ("/cont", doContinue),
         ("/continue", doContinue)
 ]
-    
-
-
-def split_text(text):
-    parts = re.split(r'\n[a-zA-Z]', text)
-    return parts
-
-
-
-def getPrompt(conversation_history, text, system_msg = ""): # For KoboldAI Generation
-    return {"prompt": conversation_history + text + "",
-            "memory" : system_msg, # koboldcpp special feature: will prepend this to the prompt, overwriting prompt history if necessary
-            "n": 1,
-            "max_context_length": 2048, #1024,
-            "max_length": MAX_TOKENS,
-            "rep_pen": 1.1, "temperature": 0.7, "top_p": 0.92, "top_k": 0, "top_a": 0, "typical": 1, "tfs": 1, "rep_pen_range": 320, "rep_pen_slope": 0.7, "sampler_order": [6, 0, 1, 3, 4, 2, 5], "quiet": True, "use_default_badwordsids": True}            
-#        "max_context_length": 1024, "max_length": 256, "n": 1, "rep_pen": 1.8, "rep_pen_range": 2048, "rep_pen_slope": 0.7, "temperature": 0.7, "tfs": 1, "top_a": 0, "top_k": 0, "top_p": 0.9, "typical": 1, "sampler_order": [6, 0, 1, 3, 4, 2, 5], "singleline": False, "sampler_seed": 69420, "sampler_full_determinism": False, "frmttriminc": False, "frmtrmblln": False}    
-
-
-def getStory():
-    url = ENDPOINT + "/API/v1/story"
-    print(url)
-    return requests.get(url)
 
 class Program(object):
-    def __init__(self, chat_user=""):
+    def __init__(self, chat_user="", options={}):
         self.chat_user = chat_user
         self.session = Session(chat_user=chat_user)
         self.streaming_done = threading.Event()
         self.stream_queue = []
-        self.options = {"cli_prompt" : "\n 🧠 ", "streaming" : "True"}
+        self.options = options
 
     def getOption(self, key):
         return self.options.get(key, False)
         
+    def getPrompt(self, conversation_history, text, system_msg = ""): # For KoboldAI Generation
+        return {"prompt": conversation_history + text + "",
+                "memory" : system_msg, # koboldcpp special feature: will prepend this to the prompt, overwriting prompt history if necessary
+                "n": 1,
+                "max_context_length": 2048, #1024,
+                "max_length": self.options["max_length"],
+                "rep_pen": 1.1, "temperature": 0.7, "top_p": 0.92, "top_k": 0, "top_a": 0, "typical": 1, "tfs": 1, "rep_pen_range": 320, "rep_pen_slope": 0.7, "sampler_order": [6, 0, 1, 3, 4, 2, 5], "quiet": True, "use_default_badwordsids": True}            
+    #        "max_context_length": 1024, "max_length": 256, "n": 1, "rep_pen": 1.8, "rep_pen_range": 2048, "rep_pen_slope": 0.7, "temperature": 0.7, "tfs": 1, "top_a": 0, "top_k": 0, "top_p": 0.9, "typical": 1, "sampler_order": [6, 0, 1, 3, 4, 2, 5], "singleline": False, "sampler_seed": 69420, "sampler_full_determinism": False, "frmttriminc": False, "frmtrmblln": False}    
+
+
 
 
 
 def main():
-    prog = Program(chat_user=CHAT_USER)
+    parser = argparse.ArgumentParser(description="kbcli - koboldcpp Command Line Interface", formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser.add_argument("--endpoint", type=str, default="http://localhost:5001", help="Address of koboldcpp http endpoint.")
+    parser.add_argument("--max_length", type=int, default=300, help="Number of tokens to request from koboldcpp for generation.")
+    parser.add_argument("--user", type=str, default="", help="Username you wish to be called when chatting. Setting this automatically enables chat mode.")
+    parser.add_argument("--streaming", type=bool, default=True, help="Enable streaming mode.")
+    parser.add_argument("--cli_prompt", type=str, default="\n 🧠 ", help="String to show at the bottom as command prompt. Can be empty.")
+    
+    args = parser.parse_args()
+    CHAT_USER = args.user
+    prog = Program(chat_user=CHAT_USER, options=args.__dict__)
     skip = False
+    
     while True:
         w = input(prog.getOption("cli_prompt"))
         for (cmd, f) in cmds:
@@ -93,23 +76,23 @@ def main():
 
         if prog.getOption("continue"):
             setOption(prog, ["continue", ""])
-            prompt = getPrompt(prog.session.getStory(trim_end=True), "", system_msg = prog.session.getSystem())                
+            prompt = prog.getPrompt(prog.session.getStory(trim_end=True), "", system_msg = prog.session.getSystem())                
         elif prog.session.hasTemplate():
             w = prog.session.injectTemplate(w)
-            prompt = getPrompt(prog.session.getStory(), w, system_msg = prog.session.getSystem())
+            prompt = prog.getPrompt(prog.session.getStory(), w, system_msg = prog.session.getSystem())
         else:
-            prompt = getPrompt(prog.session.memory + prog.session.getNote() + prog.session.getStory() , w + prog.session.prompt)
+            prompt = prog.getPrompt(prog.session.memory + prog.session.getNote() + prog.session.getStory() , w + prog.session.prompt)
 
 
 
         if prog.getOption("streaming"):
-            r = streamPrompt(prog, ENDPOINT + "/api/extra/generate/stream", json=prompt)
+            r = streamPrompt(prog, prog.getOption("endpoint") + "/api/extra/generate/stream", json=prompt)
             prog.streaming_done.wait()
             prog.streaming_done.clear()
             r.json = lambda ws=prog.stream_queue: {"results" : [{"text" : "".join(ws)}]}
             prog.stream_queue = []
         else:
-            r = requests.post(ENDPOINT + "/api/v1/generate", json=prompt)
+            r = requests.post(prog.getOption("endpoint") + "/api/v1/generate", json=prompt)
 
         if r.status_code == 200:
             results = r.json()['results']

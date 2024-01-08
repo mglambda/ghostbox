@@ -43,5 +43,5 @@ def setOption(prog, argv):
 def showOptions(prog, argv):
     w = ""
     for (k, v) in prog.options.items():
-        w += k + ": " + v
+        w += k + ": " + str(v)
     return w
