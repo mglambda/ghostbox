@@ -16,7 +16,7 @@ def trimIncompleteSentence(w):
         return w
     return w[:i+1]
 
-w1 = "This is an example sentence. Another one. And this is incom"
+
 
 
 def getArgument(argname, argv):

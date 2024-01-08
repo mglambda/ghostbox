@@ -31,7 +31,15 @@ class Session(object):
         for (key, v) in self.keys.items():
             w.replace(key, v) #replaces filenames found in dir with their conten, e.g. 'memory' has contents that will be spliced into {$memory}
         return w
-        
+
+    def getSystem(self):
+        w = self.template_system
+        for (key, v) in self.keys.items():
+            w = w.replace(key, v)
+        return w
+
+
+    
     def addText(self, w):
         self.story.append(w)
 
@@ -60,3 +68,4 @@ class Session(object):
                 self.__dict__[filename] = open(filepath, "r").read()
                 self.keys["{$" + filename + "}"] = self.__dict__[filename]
                 printerr("Found " + filename)
+

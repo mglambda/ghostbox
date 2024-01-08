@@ -1,5 +1,6 @@
 #!/bin/python
 import requests, json, os, io, re, base64, random, sys, threading
+import argparse
 from commands import *
 from kbcli_util import *
 from kbcli_streaming import streamPrompt
@@ -66,62 +67,68 @@ class Program(object):
         return self.options.get(key, False)
         
 
-    
-prog = Program(chat_user=CHAT_USER)
-skip = False
-while True:
-    w = input(prog.getOption("cli_prompt"))
-    for (cmd, f) in cmds:
-        if w.startswith(cmd):
-            v = f(prog, w.split(" ")[1:])
-            printerr(v)
-            if not(prog.getOption("continue")):
-                # skip means we don't send a prompt this iteration, which we don't want to do when user issues a command, except for the /continue command
-                skip = True
+
+
+def main():
+    prog = Program(chat_user=CHAT_USER)
+    skip = False
+    while True:
+        w = input(prog.getOption("cli_prompt"))
+        for (cmd, f) in cmds:
+            if w.startswith(cmd):
+                v = f(prog, w.split(" ")[1:])
+                printerr(v)
+                if not(prog.getOption("continue")):
+                    # skip means we don't send a prompt this iteration, which we don't want to do when user issues a command, except for the /continue command
+                    skip = True
             
-    if skip:
-        skip = False
-        continue
-    if CHAT_USER:
-        if w == "":
-            w = INPUT_DELIMITER
+        if skip:
+            skip = False
+            continue
+        if CHAT_USER:
+            if w == "":
+                w = INPUT_DELIMITER
+            else:
+                w = INPUT_DELIMITER + CHAT_USER + ": " + w + INPUT_DELIMITER
+
+        if prog.getOption("continue"):
+            setOption(prog, ["continue", ""])
+            prompt = getPrompt(prog.session.getStory(trim_end=True), "", system_msg = prog.session.getSystem())                
+        elif prog.session.hasTemplate():
+            w = prog.session.injectTemplate(w)
+            prompt = getPrompt(prog.session.getStory(), w, system_msg = prog.session.getSystem())
         else:
-            w = INPUT_DELIMITER + CHAT_USER + ": " + w + INPUT_DELIMITER
-
-    if prog.getOption("continue"):
-        setOption(prog, ["continue", ""])
-        prompt = getPrompt(prog.session.getStory(trim_end=True), "", system_msg = prog.session.template_system)                
-    elif prog.session.hasTemplate():
-        w = prog.session.injectTemplate(w)
-        prompt = getPrompt(prog.session.getStory(), w, system_msg = prog.session.template_system)
-    else:
-        prompt = getPrompt(prog.session.memory + prog.session.getNote() + prog.session.getStory() , w + prog.session.prompt)
+            prompt = getPrompt(prog.session.memory + prog.session.getNote() + prog.session.getStory() , w + prog.session.prompt)
 
 
-
-    if prog.getOption("streaming"):
-        r = streamPrompt(prog, ENDPOINT + "/api/extra/generate/stream", json=prompt)
-        prog.streaming_done.wait()
-        prog.streaming_done.clear()
-        r.json = lambda ws=prog.stream_queue: {"results" : [{"text" : "".join(ws)}]}
-        prog.stream_queue = []
-    else:
-        r = requests.post(ENDPOINT + "/api/v1/generate", json=prompt)
-    if r.status_code == 200:
-        results = r.json()['results']
-        displaytxt = filterLonelyPrompt(prog.session.prompt, trimIncompleteSentence(trimChatUser(CHAT_USER, results[0]["text"])))
-        txt = prog.session.prompt + displaytxt + prog.session.template_end
-        prog.session.addText(w + txt)
 
         if prog.getOption("streaming"):
-            # already printed it piecemeal, so skip this step
-            continue
-        elif CHAT_USER:
-            # we filter again because we don't want prompts in the spoken dialogue for chats, though it must be in the saved story if it was generated
-            displaytxt = filterPrompt(prog.session.prompt, displaytxt)
-            print(displaytxt)
+            r = streamPrompt(prog, ENDPOINT + "/api/extra/generate/stream", json=prompt)
+            prog.streaming_done.wait()
+            prog.streaming_done.clear()
+            r.json = lambda ws=prog.stream_queue: {"results" : [{"text" : "".join(ws)}]}
+            prog.stream_queue = []
         else:
-            print(displaytxt)
-    else:
-        print(str(r.status_code))
-    
+            r = requests.post(ENDPOINT + "/api/v1/generate", json=prompt)
+
+        if r.status_code == 200:
+            results = r.json()['results']
+            displaytxt = filterLonelyPrompt(prog.session.prompt, trimIncompleteSentence(trimChatUser(CHAT_USER, results[0]["text"])))
+            txt = prog.session.prompt + displaytxt + prog.session.template_end
+            prog.session.addText(w + txt)
+
+            if prog.getOption("streaming"):
+                # already printed it piecemeal, so skip this step
+                continue
+            elif CHAT_USER:
+                # we filter again because we don't want prompts in the spoken dialogue for chats, though it must be in the saved story if it was generated
+                displaytxt = filterPrompt(prog.session.prompt, displaytxt)
+                print(displaytxt)
+            else:
+                print(displaytxt)
+        else:
+            print(str(r.status_code))
+        
+if __name__ == "__main__":
+    main()
+
