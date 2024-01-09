@@ -18,7 +18,7 @@ def process_sse_streaming_events(prog, r):
             if w.startswith("data: "):
                 d = json.loads(w[6:])
                 v = d["token"]
-                print(v, end="")
+                print(v, end="", flush=prog.getOption("streaming_flush"))
                 prog.stream_queue.append(v)
     prog.streaming_done.set()
 

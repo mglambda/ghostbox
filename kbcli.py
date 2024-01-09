@@ -54,6 +54,7 @@ def main():
     parser.add_argument("--max_length", type=int, default=300, help="Number of tokens to request from koboldcpp for generation.")
     parser.add_argument("--user", type=str, default="", help="Username you wish to be called when chatting. Setting this automatically enables chat mode.")
     parser.add_argument("--streaming", type=bool, default=True, help="Enable streaming mode.")
+    parser.add_argument("--streaming_flush", type=bool, default=False, help="When True, flush print buffer immediately in streaming mode (print token-by-token). When set to false, waits for newline until generated text is printed.")
     parser.add_argument("--cli_prompt", type=str, default="\n 🧠 ", help="String to show at the bottom as command prompt. Can be empty.")
     for (param, value) in DEFAULT_PARAMS.items():
         parser.add_argument("--" + param, type=type(value), default=value, help="Passed on to koboldcpp. Change during runtime with /set " + param + ".")
