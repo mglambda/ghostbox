@@ -5,7 +5,7 @@ def newSession(program, argv):
         return "No path provided. Cannot Start."
 
     filepath = argv[0]    
-    program.session = Session(dir=filepath, chat_user=program.chat_user)
+    program.session = Session(dir=filepath, chat_user=program.getOption("chat_user"))
     w = "Ok. Loaded " + filepath + "\n\n"
     w += program.session.initial_prompt
     return w

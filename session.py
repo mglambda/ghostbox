@@ -5,7 +5,6 @@ from kbcli_util import *
 class Session(object):
     def __init__(self, dir=None, chat_user=""):
         self.dir = dir
-        self.chat_user = chat_user
         self.memory = ""
         self.note = ""
         self.prompt = ""
@@ -14,7 +13,8 @@ class Session(object):
         self.template_system = ""
         self.template = ""
         self.template_end = ""
-        self.keys = {}
+        self.chat_user = chat_user
+        self.keys = { "{$chat_user}" : chat_user}
         self.story = []
         if self.dir is not None:
             try:
@@ -32,11 +32,21 @@ class Session(object):
             w.replace(key, v) #replaces filenames found in dir with their conten, e.g. 'memory' has contents that will be spliced into {$memory}
         return w
 
-    def getSystem(self):
-        w = self.template_system
-        for (key, v) in self.keys.items():
-            w = w.replace(key, v)
+    def _expandVars(self, w):
+        # recursively expand all {$var} occurences if t hey are in keys
+        n = 0
+        while n < 10: #pevent infinite recursion, which users can totally do with mutually recursive files
+            n += 1
+            w_old = w
+            for (key, v) in self.keys.items():
+                w = w.replace(key, v)
+            if w == w_old:
+                break
         return w
+    
+            
+    def getSystem(self):
+        return self._expandVars(self.template_system)
 
 
     

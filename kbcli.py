@@ -22,9 +22,8 @@ cmds = [
 DEFAULT_PARAMS = {                "rep_pen": 1.1, "temperature": 0.7, "top_p": 0.92, "top_k": 0, "top_a": 0, "typical": 1, "tfs": 1, "rep_pen_range": 320, "rep_pen_slope": 0.7, "sampler_order": [6, 0, 1, 3, 4, 2, 5], "quiet": True, "use_default_badwordsids": True}
 
 class Program(object):
-    def __init__(self, chat_user="", options={}):
-        self.chat_user = chat_user
-        self.session = Session(chat_user=chat_user)
+    def __init__(self, options={}):
+        self.session = Session(chat_user=options.get("chat_user", ""))
         self.streaming_done = threading.Event()
         self.stream_queue = []
         self.options = options
@@ -52,7 +51,7 @@ def main():
     parser = argparse.ArgumentParser(description="kbcli - koboldcpp Command Line Interface", formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument("--endpoint", type=str, default="http://localhost:5001", help="Address of koboldcpp http endpoint.")
     parser.add_argument("--max_length", type=int, default=300, help="Number of tokens to request from koboldcpp for generation.")
-    parser.add_argument("--user", type=str, default="", help="Username you wish to be called when chatting. Setting this automatically enables chat mode.")
+    parser.add_argument("--chat_user", type=str, default="", help="Username you wish to be called when chatting. Setting this automatically enables chat mode. It will also replace occurrences of {chat_user} anywhere in the character files.")
     parser.add_argument("--streaming", type=bool, default=True, help="Enable streaming mode.")
     parser.add_argument("--streaming_flush", type=bool, default=False, help="When True, flush print buffer immediately in streaming mode (print token-by-token). When set to false, waits for newline until generated text is printed.")
     parser.add_argument("--cli_prompt", type=str, default="\n 🧠 ", help="String to show at the bottom as command prompt. Can be empty.")
@@ -60,8 +59,8 @@ def main():
         parser.add_argument("--" + param, type=type(value), default=value, help="Passed on to koboldcpp. Change during runtime with /set " + param + ".")
     
     args = parser.parse_args()
-    CHAT_USER = args.user
-    prog = Program(chat_user=CHAT_USER, options=args.__dict__)
+    CHAT_USER = ""
+    prog = Program(options=args.__dict__)
     skip = False
     
     while True:
@@ -85,6 +84,7 @@ def main():
 
         if prog.getOption("continue"):
             setOption(prog, ["continue", ""])
+            w = "" # get rid of /cont etc
             prompt = prog.getPrompt(prog.session.getStory(trim_end=True), "", system_msg = prog.session.getSystem())                
         elif prog.session.hasTemplate():
             w = prog.session.injectTemplate(w)
