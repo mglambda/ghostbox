@@ -60,8 +60,8 @@ def main():
     parser.add_argument("--endpoint", type=str, default="http://localhost:5001", help="Address of koboldcpp http endpoint.")
     parser.add_argument("--max_length", type=int, default=300, help="Number of tokens to request from koboldcpp for generation.")
     parser.add_argument("--chat_user", type=str, default="", help="Username you wish to be called when chatting. Setting this automatically enables chat mode. It will also replace occurrences of {chat_user} anywhere in the character files.")
-    parser.add_argument("--streaming", type=bool, default=True, help="Enable streaming mode.")
-    parser.add_argument("--streaming_flush", type=bool, default=False, help="When True, flush print buffer immediately in streaming mode (print token-by-token). When set to false, waits for newline until generated text is printed.")
+    parser.add_argument("--streaming", action=argparse.BooleanOptionalAction, default=True, help="Enable streaming mode.")
+    parser.add_argument("--streaming_flush", action=argparse.BooleanOptionalAction, default=False, help="When True, flush print buffer immediately in streaming mode (print token-by-token). When set to false, waits for newline until generated text is printed.")
     parser.add_argument("--cli_prompt", type=str, default="\n 🧠 ", help="String to show at the bottom as command prompt. Can be empty.")
     for (param, value) in DEFAULT_PARAMS.items():
         parser.add_argument("--" + param, type=type(value), default=value, help="Passed on to koboldcpp. Change during runtime with /set " + param + ".")
@@ -73,6 +73,12 @@ def main():
     
     while True:
         w = input(prog.getOption("cli_prompt"))
+        if prog.getMode() == "chat":
+            # for convenience when chatting
+            if w == "":
+                w = "/cont"
+            
+            
         for (cmd, f) in cmds:
             if w.startswith(cmd):
                 v = f(prog, w.split(" ")[1:])
@@ -84,14 +90,9 @@ def main():
         if skip:
             skip = False
             continue
-        if CHAT_USER:
-            if w == "":
-                w = INPUT_DELIMITER
-            else:
-                w = INPUT_DELIMITER + CHAT_USER + ": " + w + INPUT_DELIMITER
 
         if prog.getOption("continue"):
-            setOption(prog, ["continue", ""])
+            setOption(prog, ["continue", "False"])
             w = "" # get rid of /cont etc
             prompt = prog.getPrompt(prog.session.getStory(trim_end=True), "", system_msg = prog.session.getSystem())                
         elif prog.session.hasTemplate():
@@ -99,8 +100,6 @@ def main():
             prompt = prog.getPrompt(prog.session.getStory(), w, system_msg = prog.session.getSystem())
         else:
             prompt = prog.getPrompt(prog.session.memory + prog.session.getNote() + prog.session.getStory() , w + prog.session.prompt)
-
-
 
         if prog.getOption("streaming"):
             r = streamPrompt(prog, prog.getOption("endpoint") + "/api/extra/generate/stream", json=prompt)
@@ -113,17 +112,13 @@ def main():
 
         if r.status_code == 200:
             results = r.json()['results']
-            displaytxt = filterLonelyPrompt(prog.session.prompt, trimIncompleteSentence(trimChatUser(CHAT_USER, results[0]["text"])))
+            displaytxt = filterLonelyPrompt(prog.session.prompt, trimIncompleteSentence(trimChatUser(prog.getOption("chat_user"), results[0]["text"])))
             txt = prog.session.prompt + displaytxt + prog.session.template_end
             prog.session.addText(w + txt)
 
             if prog.getOption("streaming"):
                 # already printed it piecemeal, so skip this step
                 continue
-            elif CHAT_USER:
-                # we filter again because we don't want prompts in the spoken dialogue for chats, though it must be in the saved story if it was generated
-                displaytxt = filterPrompt(prog.session.prompt, displaytxt)
-                print(displaytxt)
             else:
                 print(displaytxt)
         else:
