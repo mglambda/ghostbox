@@ -31,17 +31,22 @@ def doContinue(prog, argv):
     return ""
 
 def setOption(prog, argv):
+    name = argv[0]
     if argv == []:
         return ""
 
     if len(argv) == 1:
-        prog.options[argv[0]] = ""
+        prog.options[name] = ""
 
-    prog.options[argv[0]] = " ".join(argv[1:])
+    w = " ".join(argv[1:])
+    try:
+        prog.options[name] = eval(w)
+    except:
+        return "Couldn't set " + name + " to " + w + ". Couldn't evaluate."
     return ""
     
 def showOptions(prog, argv):
     w = ""
     for (k, v) in prog.options.items():
-        w += k + ": " + str(v)
+        w += k + ": " + str(v) + "\n"
     return w

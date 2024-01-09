@@ -18,6 +18,9 @@ cmds = [
         ("/continue", doContinue)
 ]
 
+#defined here for convenience. Can all be changed through cli parameters or with / commands
+DEFAULT_PARAMS = {                "rep_pen": 1.1, "temperature": 0.7, "top_p": 0.92, "top_k": 0, "top_a": 0, "typical": 1, "tfs": 1, "rep_pen_range": 320, "rep_pen_slope": 0.7, "sampler_order": [6, 0, 1, 3, 4, 2, 5], "quiet": True, "use_default_badwordsids": True}
+
 class Program(object):
     def __init__(self, chat_user="", options={}):
         self.chat_user = chat_user
@@ -30,12 +33,15 @@ class Program(object):
         return self.options.get(key, False)
         
     def getPrompt(self, conversation_history, text, system_msg = ""): # For KoboldAI Generation
-        return {"prompt": conversation_history + text + "",
+        d = {"prompt": conversation_history + text + "",
                 "memory" : system_msg, # koboldcpp special feature: will prepend this to the prompt, overwriting prompt history if necessary
                 "n": 1,
                 "max_context_length": 2048, #1024,
-                "max_length": self.options["max_length"],
-                "rep_pen": 1.1, "temperature": 0.7, "top_p": 0.92, "top_k": 0, "top_a": 0, "typical": 1, "tfs": 1, "rep_pen_range": 320, "rep_pen_slope": 0.7, "sampler_order": [6, 0, 1, 3, 4, 2, 5], "quiet": True, "use_default_badwordsids": True}            
+                "max_length": self.options["max_length"]}
+        for paramname in DEFAULT_PARAMS.keys():
+            d[paramname] = self.options[paramname]
+        return d
+            
     #        "max_context_length": 1024, "max_length": 256, "n": 1, "rep_pen": 1.8, "rep_pen_range": 2048, "rep_pen_slope": 0.7, "temperature": 0.7, "tfs": 1, "top_a": 0, "top_k": 0, "top_p": 0.9, "typical": 1, "sampler_order": [6, 0, 1, 3, 4, 2, 5], "singleline": False, "sampler_seed": 69420, "sampler_full_determinism": False, "frmttriminc": False, "frmtrmblln": False}    
 
 
@@ -49,6 +55,8 @@ def main():
     parser.add_argument("--user", type=str, default="", help="Username you wish to be called when chatting. Setting this automatically enables chat mode.")
     parser.add_argument("--streaming", type=bool, default=True, help="Enable streaming mode.")
     parser.add_argument("--cli_prompt", type=str, default="\n 🧠 ", help="String to show at the bottom as command prompt. Can be empty.")
+    for (param, value) in DEFAULT_PARAMS.items():
+        parser.add_argument("--" + param, type=type(value), default=value, help="Passed on to koboldcpp. Change during runtime with /set " + param + ".")
     
     args = parser.parse_args()
     CHAT_USER = args.user
