@@ -50,3 +50,22 @@ def showOptions(prog, argv):
     for (k, v) in prog.options.items():
         w += k + ": " + str(v) + "\n"
     return w
+
+def toggleChatMode(prog, argv):
+    # when invoked as '/chatmode' toggles off, when invoked as '/chatmode Anna', enables chat mode and sets username to Anna
+    if len(argv) > 0:
+        name = " ".join(argv)
+        prog.options["cli_prompt"] = ""
+        prog.mode = "chat"
+        prog.options["chat_user"] = name
+        return "Chat mode on."
+
+    #disable chat mode
+    prog.options["chat_user"] = ""
+    prog.mode = "default"
+    prog.options["cli_prompt"] = prog.initial_cli_prompt
+    return "Chat mode off."
+             
+        
+
+    

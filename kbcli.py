@@ -14,6 +14,7 @@ cmds = [
     ("/set", setOption),
     ("/unset", lambda prog, w: setOption(prog, "")),
     ("/lsoptions", showOptions),
+    ("/chatmode", toggleChatMode),
     ("/cont", doContinue),
         ("/continue", doContinue)
 ]
@@ -22,12 +23,19 @@ cmds = [
 DEFAULT_PARAMS = {                "rep_pen": 1.1, "temperature": 0.7, "top_p": 0.92, "top_k": 0, "top_a": 0, "typical": 1, "tfs": 1, "rep_pen_range": 320, "rep_pen_slope": 0.7, "sampler_order": [6, 0, 1, 3, 4, 2, 5], "quiet": True, "use_default_badwordsids": True}
 
 class Program(object):
-    def __init__(self, options={}):
+    def __init__(self, options={}, initial_cli_prompt=""):
         self.session = Session(chat_user=options.get("chat_user", ""))
+        self.initial_cli_prompt = initial_cli_prompt
+        self.mode = "default"
         self.streaming_done = threading.Event()
         self.stream_queue = []
         self.options = options
-
+        if self.getOption("chat_user"):
+            toggleChatMode(self, [self.getOption("chat_user")])
+        
+    def getMode(self):
+        return self.mode
+        
     def getOption(self, key):
         return self.options.get(key, False)
         
@@ -60,7 +68,7 @@ def main():
     
     args = parser.parse_args()
     CHAT_USER = ""
-    prog = Program(options=args.__dict__)
+    prog = Program(options=args.__dict__, initial_cli_prompt=args.cli_prompt)
     skip = False
     
     while True:
