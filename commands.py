@@ -49,12 +49,12 @@ def doContinue(prog, argv):
     return ""
 
 def setOption(prog, argv):
-    name = argv[0]
     if argv == []:
         return ""
-
+    name = argv[0]    
     if len(argv) == 1:
         prog.options[name] = ""
+        return ""
 
     w = " ".join(argv[1:])
     try:
@@ -83,7 +83,37 @@ def toggleChatMode(prog, argv):
     prog.mode = "default"
     prog.options["cli_prompt"] = prog.initial_cli_prompt
     return "Chat mode off."
-             
-        
 
+def toggleTTS(prog, argv):
+    prog.options["tts"] = not(prog.options["tts"])
+    if prog.options["tts"]:
+        err = prog.initializeTTS()
+        if err:
+            return err
+    return "TTS " + {True : "on.", False : "off."}[prog.options["tts"]]
+
+def ttsDebug(prog, argv):
+    if not(prog.tts):
+        return ""
+
+    prog.tts.stdout.flush()
+    while True:
+        w = prog.tts.stdout.readline()
+        if w:
+            printerr(w)
+        else:
+            break
+
+
+    prog.tts.stderr.flush()
+    while True:
+        w = prog.tts.stderr.readline()
+        if w:
+            printerr(w)
+        else:
+            break
+        
+    return ""
+    
+        
     
