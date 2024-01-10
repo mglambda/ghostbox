@@ -1,3 +1,4 @@
+import os
 from session import Session
 from kbcli_util import *
 def newSession(program, argv):
@@ -9,9 +10,21 @@ def newSession(program, argv):
             return "No path provided. Cannot Start."
 
     filepath = " ".join(argv)
-    program.session = Session(dir=filepath, chat_user=program.getOption("chat_user"))
-    program.options["character_folder"] = filepath
-    w = "Ok. Loaded " + filepath + "\n\n"
+    allpaths = [filepath] + [p + "/" + filepath for p in program.getOption("include")]
+    for path in allpaths:
+        path = os.path.normpath(path)
+        failure = False
+        try:
+            program.session = Session(dir=path, chat_user=program.getOption("chat_user"))
+            break
+        except FileNotFoundError as e:
+            # session will throw if path is not valid, we keep going through the includes
+            failure = e
+
+    if failure:
+        return "error: " + str(e)
+    program.options["character_folder"] = path
+    w = "Ok. Loaded " + path
     w += program.session.initial_prompt
     return w
 

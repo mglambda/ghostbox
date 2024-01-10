@@ -17,10 +17,10 @@ class Session(object):
         self.keys = { "{$chat_user}" : chat_user}
         self.story = []
         if self.dir is not None:
-            try:
-                self._init()
-            except:
-                printerr("Error loading dir " + dir)
+#            try:
+            self._init()
+#            except:
+#                printerr("Error loading dir " + dir)
 
     def hasTemplate(self):
         return self.template != ""
@@ -70,7 +70,7 @@ class Session(object):
     
     def _init(self):
         if not(os.path.isdir(self.dir)):
-            return
+            raise FileNotFoundError("Could not find path " + self.dir)
 
         for filepath in glob.glob(self.dir + "/*"):
             filename = os.path.split(filepath)[1]

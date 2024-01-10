@@ -58,9 +58,8 @@ class Program(object):
 
 def main():
     parser = argparse.ArgumentParser(description="kbcli - koboldcpp Command Line Interface", formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument("-I", action="append", default=["./chars/"], help="Include paths that will be searched for character folders named with the /start command or the --character_folder command line argument.")
-    parser.add_argument("--include", action="append", default=["./chars/"], help="Include paths that will be searched for character folders named with the /start command or the --character_folder command line argument.")    
-    parser.add_argument("--character_folder", type=str, default="", help="character folder to load at startup. The folder may contain templates, as well as arbitrary text files that may be injected in the templates. See the examples for more. Path is attempted to be resolved relative to the include paths, if any are provided.")
+    parser.add_argument("-I", '--include', action="append", default=["./chars/"], help="Include paths that will be searched for character folders named with the /start command or the --character_folder command line argument.")
+    parser.add_argument("-c", '--character_folder', type=str, default="", help="character folder to load at startup. The folder may contain templates, as well as arbitrary text files that may be injected in the templates. See the examples for more. Path is attempted to be resolved relative to the include paths, if any are provided.")    
     parser.add_argument("--endpoint", type=str, default="http://localhost:5001", help="Address of koboldcpp http endpoint.")
     parser.add_argument("--max_length", type=int, default=300, help="Number of tokens to request from koboldcpp for generation.")
     parser.add_argument("--chat_user", type=str, default="", help="Username you wish to be called when chatting. Setting this automatically enables chat mode. It will also replace occurrences of {chat_user} anywhere in the character files.")
@@ -72,8 +71,6 @@ def main():
     
     args = parser.parse_args()
     prog = Program(options=args.__dict__, initial_cli_prompt=args.cli_prompt)
-    prog.options["include"] = list(set(prog.options["include"]) | set(args.I))
-    del prog.options["I"]
     if args.character_folder:
         printerr(        newSession(prog, []))
     skip = False
