@@ -57,6 +57,7 @@ class Program(object):
 
 def main():
     parser = argparse.ArgumentParser(description="kbcli - koboldcpp Command Line Interface", formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser.add_argument("--character_folder", type=str, default="", help="character folder to load at startup. The folder may contain templates, as well as arbitrary text files that may be injected in the templates. See the examples for more.")
     parser.add_argument("--endpoint", type=str, default="http://localhost:5001", help="Address of koboldcpp http endpoint.")
     parser.add_argument("--max_length", type=int, default=300, help="Number of tokens to request from koboldcpp for generation.")
     parser.add_argument("--chat_user", type=str, default="", help="Username you wish to be called when chatting. Setting this automatically enables chat mode. It will also replace occurrences of {chat_user} anywhere in the character files.")
@@ -69,6 +70,8 @@ def main():
     args = parser.parse_args()
     CHAT_USER = ""
     prog = Program(options=args.__dict__, initial_cli_prompt=args.cli_prompt)
+    if args.character_folder:
+        printerr(        newSession(prog, []))
     skip = False
     
     while True:

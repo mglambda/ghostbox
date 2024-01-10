@@ -2,10 +2,15 @@ from session import Session
 from kbcli_util import *
 def newSession(program, argv):
     if argv == []:
-        return "No path provided. Cannot Start."
+        if program.getOption("character_folder"):
+            # synonymous with /restart
+            argv.append(program.getOption("character_folder"))
+        else:
+            return "No path provided. Cannot Start."
 
-    filepath = argv[0]    
+    filepath = " ".join(argv)
     program.session = Session(dir=filepath, chat_user=program.getOption("chat_user"))
+    program.options["character_folder"] = filepath
     w = "Ok. Loaded " + filepath + "\n\n"
     w += program.session.initial_prompt
     return w
