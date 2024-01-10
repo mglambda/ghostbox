@@ -9,6 +9,7 @@ from session import Session
 # these can be typed in at the CLI prompt
 cmds = [
     ("/start", newSession),
+    ("/restart", lambda prog, argv: newSession(prog, [])),
     ("/print", printStory) ,
     ("/log", lambda prog, w: printStory(prog, w, stderr=True)),
     ("/set", setOption),
