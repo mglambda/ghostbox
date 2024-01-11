@@ -14,9 +14,7 @@ cmds = [
     ("/next", nextStory),
     ("/prev", previousStory),
     ("/story", gotoStory),
-    ("/load", loadStoryFolder),
-    ("/save", saveStoryFolder),
-    ("/retry", retry),
+    ("/retry", retry),    
     ("/drop", dropEntry),
     ("/new", newStory),
     ("/log", lambda prog, w: printStory(prog, w, stderr=True)),
@@ -24,6 +22,11 @@ cmds = [
     ("/tts", toggleTTS),
     ("/set", setOption),
     ("/unset", lambda prog, argv: setOption(prog, [argv[0]])),
+    ("/saveoptions", saveConfig),
+    ("/saveconfig", saveConfig),    
+    ("/loadconfig", loadConfig),
+    ("/save", saveStoryFolder),
+    ("/load", loadStoryFolder),        
     ("/lsoptions", showOptions),
     ("/chatmode", toggleChatMode),
     ("/cont", doContinue),
@@ -46,6 +49,17 @@ class Program(object):
             toggleChatMode(self, [self.getOption("chat_user")])
         if self.getOption("tts"):
             printerr(self.initializeTTS())
+
+    def loadConfig(self, json_data):
+        d = json.loads(json_data)
+        if type(d) != type({}):
+            return "error loading config: Not a dictionary."
+
+        self.options = self.options | d
+        return ""
+        
+        
+        
             
     def getMode(self):
         return self.mode
@@ -105,7 +119,7 @@ def main():
     parser.add_argument("--tts", action=argparse.BooleanOptionalAction, default=False, help="Enable text to speech on generated text.")
     parser.add_argument("--tts_program", type=str, default="tts.sh", help="Path to a TTS (Text-to-speech) program to verbalize generated text. The TTS program should read lines from standard input.")
     parser.add_argument("--tts_subtitles", action=argparse.BooleanOptionalAction, default=False, help="Enable printing of generated text while TTS is enabled.") 
-
+    parser.add_argument("--config_file", type=str, default="", help="Path to a config fail in JSON format, containing a dictionary with OPTION : VALUE pairs to be loaded on startup. Same as /loadconfig or /loadoptions. To produce an example config-file, try /saveconfig example.json.")
     
     for (param, value) in DEFAULT_PARAMS.items():
         parser.add_argument("--" + param, type=type(value), default=value, help="Passed on to koboldcpp. Change during runtime with /set " + param + ".")
@@ -115,7 +129,9 @@ def main():
     if args.character_folder:
         printerr(        newSession(prog, []))
     skip = False
-    
+
+    if prog.getOption("config_file"):
+        printerr(loadConfig(prog, [prog.options["config_file"]]))
     while True:
         w = input(prog.getOption("cli_prompt"))
         # for convenience when chatting

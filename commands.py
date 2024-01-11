@@ -25,9 +25,14 @@ def newSession(program, argv):
 
     if failure:
         return "error: " + str(e)
+
+    w = ""
+    # try to load config.json if present
+    configpath = path + "/config.json"
+    if os.path.isfile(configpath):
+        w += loadConfig(program, [configpath]) + "\n"
     program.options["character_folder"] = path
-    w = "Ok. Loaded " + path
-    w += program.session.initial_prompt
+    w += "Ok. Loaded " + path
     return w
 
 
@@ -52,7 +57,7 @@ def doContinue(prog, argv):
 
 def setOption(prog, argv):
     if argv == []:
-        return ""
+        return showOptions(prog, [])
     name = argv[0]    
     if len(argv) == 1:
         prog.options[name] = ""
@@ -196,5 +201,31 @@ def gotoStory(prog, argv):
         return ""
     return "Could not go to branch " + str(n) + ": " + err
 
+def loadConfig(prog, argv):
+    if argv == []:
+        return "Please provide a filename for the config file to load."
+    filename = " ".join(argv)
+    try:
+        w = open(filename, "r").read()
+    except Exception as e:
+        return str(e)
+    err = prog.loadConfig(w)
+    if err:
+        return err
+    return "Loaded config " + filename
 
-        
+def saveConfig(prog, argv):
+    if argv == []:
+        name = "config-" + datetime.datetime.now().strftime("%Y-%m-%d-%H:%M:%S")
+    else:
+        name = " ".join(argv)
+
+    if not(name.endswith(".json")):
+        name = name + ".json"
+
+    filename = saveFile(name, json.dumps(prog.options, indent=4))
+    if filename:
+        return "Saved config to " + filename
+    return "error: Could not save config."
+
+    
