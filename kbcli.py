@@ -49,6 +49,10 @@ class Program(object):
             toggleChatMode(self, [self.getOption("chat_user")])
         if self.getOption("tts"):
             printerr(self.initializeTTS())
+        # formatters is to be idnexed with modes
+        self._formatters = {
+            "default" : self._defaultFormatter,
+            "chat" : self._chatFormatter}
 
     def loadConfig(self, json_data):
         d = json.loads(json_data)
@@ -104,8 +108,25 @@ class Program(object):
 
         print(w, end=end, flush=flush)
 
-        
+    def formatGeneratedText(self, w):
+        return self._formatters.get(self.mode, self._defaultFormatter)(w)
+
+    def _defaultFormatter(self, w):
+        display =trimIncompleteSentence(w)
+        raw = display + self.session.template_end
+        return (display, raw)
+
+    def _chatFormatter(self, w):
+        # point of this is to 1. always start the prompt with e.g. Gary: if the AI is called gary. This helps the LLM stay in character, but it should be hidden from the user in chat mode
+        # 2. filter out any accidental generations of Bob: if the user is called bob, i.e. don't let the LLM talk for the user.
+        ai_chat_prompt = mkChatPrompt(self.getOption("chat_ai"))
+        user_chat_prompt = mkChatPrompt(self.getOption("chat_user"))
+        display = filterLonelyPrompt(ai_chat_prompt, trimIncompleteSentence(trimChatUser(user_chat_prompt, w)))
+        txt = ai_chat_prompt + display + self.session.template_end
+        return (display, txt)
     
+
+
 def main():
     parser = argparse.ArgumentParser(description="kbcli - koboldcpp Command Line Interface", formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument("-I", '--include', action="append", default=["chars/"], help="Include paths that will be searched for character folders named with the /start command or the --character_folder command line argument.")
@@ -113,6 +134,7 @@ def main():
     parser.add_argument("--endpoint", type=str, default="http://localhost:5001", help="Address of koboldcpp http endpoint.")
     parser.add_argument("--max_length", type=int, default=300, help="Number of tokens to request from koboldcpp for generation.")
     parser.add_argument("--chat_user", type=str, default="", help="Username you wish to be called when chatting. Setting this automatically enables chat mode. It will also replace occurrences of {chat_user} anywhere in the character files.")
+    parser.add_argument("--chat_ai", type=str, default="", help="Name  the AI will have when chatting. Has various effects on the prompt when chat mode is enabled. This is usually set automatically in the config.json file of a chracter folder.")
     parser.add_argument("--streaming", action=argparse.BooleanOptionalAction, default=True, help="Enable streaming mode.")
     parser.add_argument("--streaming_flush", action=argparse.BooleanOptionalAction, default=False, help="When True, flush print buffer immediately in streaming mode (print token-by-token). When set to false, waits for newline until generated text is printed.")
     parser.add_argument("--cli_prompt", type=str, default="\n 🧠 ", help="String to show at the bottom as command prompt. Can be empty.")
@@ -158,6 +180,8 @@ def main():
             w = "" # get rid of /cont etc
             prompt = prog.getPrompt(prog.session.showStory(trim_end=True), "", system_msg = prog.session.getSystem())                
         elif prog.session.hasTemplate():
+            if prog.getMode() == "chat":
+                w = mkChatPrompt(prog.getOption("chat_user")) + w            
             w = prog.session.injectTemplate(w)
             prompt = prog.getPrompt(prog.session.showStory(), w, system_msg = prog.session.getSystem())
         else:
@@ -174,8 +198,7 @@ def main():
 
         if r.status_code == 200:
             results = r.json()['results']
-            displaytxt = filterLonelyPrompt(prog.session.prompt, trimIncompleteSentence(trimChatUser(prog.getOption("chat_user"), results[0]["text"])))
-            txt = prog.session.prompt + displaytxt + prog.session.template_end
+            (displaytxt, txt) = prog.formatGeneratedText(results[0]["text"])
             prog.session.addText(w)
             prog.session.addText(txt)
 

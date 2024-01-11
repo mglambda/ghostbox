@@ -80,7 +80,7 @@ def toggleChatMode(prog, argv):
     # when invoked as '/chatmode' toggles off, when invoked as '/chatmode Anna', enables chat mode and sets username to Anna
     if len(argv) > 0:
         name = " ".join(argv)
-        prog.options["cli_prompt"] = ""
+        prog.options["cli_prompt"] = "\n" + mkChatPrompt(name)
         prog.mode = "chat"
         prog.options["chat_user"] = name
         return "Chat mode on."
