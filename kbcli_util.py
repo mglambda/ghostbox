@@ -1,3 +1,4 @@
+import os
 import sys
 
 def printerr(w):
@@ -46,3 +47,24 @@ def filterLonelyPrompt(prompt, w):
     ws = w.split("\n")
     return "\n".join(filter(lambda v: not(v in prompt), ws))
     
+
+def saveFile(filename, w, depth=0):
+# saves w in filename, but won't overwrite existing files, appending .new; returns the successful filename, if at all possible
+    if depth > 10:
+        return "" # give up
+    
+    if os.path.isfile(filename):
+        parts = filename.split(".")
+        if len(parts) > 1:
+            newfilename = ".".join([parts[0], "new"] + parts[1:])
+        else:
+            newfilename = filename + ".new"
+        return saveFile(newfilename, w, depth=depth+1)
+
+    f = open(filename, "w")
+    f.write(w)
+    f.flush()
+    return filename
+
+        
+        

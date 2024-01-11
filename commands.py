@@ -1,6 +1,8 @@
-import os
+import os, datetime
 from session import Session
 from kbcli_util import *
+from StoryFolder import *
+
 def newSession(program, argv):
     if argv == []:
         if program.getOption("character_folder"):
@@ -43,8 +45,8 @@ def doContinue(prog, argv):
 
     # now comes some fuckery to get rid of trailing <|im_end|> etc.
     delim = prog.session.template_end
-    if prog.session.story[-1].endswith(delim):
-        prog.session.story[-1] = prog.session.story[-1][:-len(delim)]
+    if prog.session.stories.getStory()[-1].endswith(delim):
+        prog.session.stories.getStory()[-1] = prog.session.stories.getStory()[-1][:-len(delim)]
     
     return ""
 
@@ -86,11 +88,16 @@ def toggleChatMode(prog, argv):
 
 def toggleTTS(prog, argv):
     prog.options["tts"] = not(prog.options["tts"])
+    w = ""
     if prog.options["tts"]:
         err = prog.initializeTTS()
         if err:
             return err
-    return "TTS " + {True : "on.", False : "off."}[prog.options["tts"]]
+        if prog.getOption("streaming"):
+            prog.options["streaming"] = False
+            w += "Disabling streaming (this tends to work better with TTS. You can manually reenable streaming if you wish.)\n"
+            
+    return w + "TTS " + {True : "on.", False : "off."}[prog.options["tts"]]
 
 def ttsDebug(prog, argv):
     if not(prog.tts):
@@ -115,5 +122,79 @@ def ttsDebug(prog, argv):
         
     return ""
     
-        
+def nextStory(prog, argv):
+    r = prog.session.stories.nextStory()
+    if r == 1:
+        return "Cannot go to next story branch: No more branches. Create a new branch with /new or /retry."
+    return "Now on branch " + str(prog.session.stories.index)
+
+def previousStory(prog, argv):
+    r = prog.session.stories.previousStory()
+    if r == -1:
+        return "Cannot go to previous story branch: No previous branch exists."
+    return "Now on branch " + str(prog.session.stories.index)    
+
+def retry(prog, argv):
+    prog.session.stories.cloneStory()
+    prog.session.stories.dropEntry()
+    doContinue(prog, [])
+    return "Now on branch " + str(prog.session.stories.index) 
+
+def dropEntry(prog, argv):
+    prog.session.stories.cloneStory()
+    prog.session.stories.dropEntry()
+    return "Now on branch " + str(prog.session.stories.index) + " with last entry dropped."
+
     
+def newStory(prog, argv):
+    prog.session.stories.newStory()
+    return "Now on branch " + str(prog.session.stories.index) + " with a clean log."
+    
+def saveStoryFolder(prog, argv):
+    if len(argv) > 0:
+        name = " ".join(argv)
+    else:
+        name = datetime.datetime.now().strftime("%Y-%m-%d-%H:%M:%S")
+
+    if not(name.endswith(".json")):
+        name = name + ".json"
+            
+    filename = saveFile(name, prog.session.stories.toJSON())
+    if not(filename):
+        return "Could not save story folder. Maybe provide a different filename?"
+    return "Saved story folder as " + filename
+
+    
+def loadStoryFolder(prog, argv):
+    if len(argv) == 0:
+        return "Please provide a legal json filename in the story-folder format."
+    
+    filename = " ".join(argv)
+    try:
+        w = open(filename, "r").read()
+        s = StoryFolder(json_data=w)
+    except FileNotFoundError as e:
+        return "Could not load " + filename + ": file not found."
+    except Exception as e:
+        printerr(str(e))
+        return "Could not load story folder: Maybe bogus JSON?"
+    prog.session.stories = s
+    return "Ok. Restored " + filename + "\nNow on branch " + str(prog.session.stories.index)
+        
+def gotoStory(prog, argv):
+    if argv == []:
+        return "Currently on branch " + str(prog.session.stories.index)
+
+    w = " ".join(argv)
+    try:
+        n = int(w)
+    except:
+        return "Cannot go to that branch: Invalid Argument."
+    
+    err = prog.session.stories.shiftTo(n)
+    if not(err):
+        return ""
+    return "Could not go to branch " + str(n) + ": " + err
+
+
+        

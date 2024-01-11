@@ -11,6 +11,14 @@ cmds = [
     ("/start", newSession),
     ("/restart", lambda prog, argv: newSession(prog, [])),
     ("/print", printStory) ,
+    ("/next", nextStory),
+    ("/prev", previousStory),
+    ("/story", gotoStory),
+    ("/load", loadStoryFolder),
+    ("/save", saveStoryFolder),
+    ("/retry", retry),
+    ("/drop", dropEntry),
+    ("/new", newStory),
     ("/log", lambda prog, w: printStory(prog, w, stderr=True)),
     ("/ttsdebug", ttsDebug),    
     ("/tts", toggleTTS),
@@ -152,7 +160,8 @@ def main():
             results = r.json()['results']
             displaytxt = filterLonelyPrompt(prog.session.prompt, trimIncompleteSentence(trimChatUser(prog.getOption("chat_user"), results[0]["text"])))
             txt = prog.session.prompt + displaytxt + prog.session.template_end
-            prog.session.addText(w + txt)
+            prog.session.addText(w)
+            prog.session.addText(txt)
 
             if prog.getOption("streaming"):
                 # already printed it piecemeal, so skip this step
