@@ -110,10 +110,9 @@ def main():
     
     while True:
         w = input(prog.getOption("cli_prompt"))
-        if prog.getMode() == "chat":
-            # for convenience when chatting
-            if w == "":
-                w = "/cont"
+        # for convenience when chatting
+        if w == "":
+            w = "/cont"
             
             
         for (cmd, f) in cmds:
@@ -133,12 +132,12 @@ def main():
         if prog.getOption("continue"):
             setOption(prog, ["continue", "False"])
             w = "" # get rid of /cont etc
-            prompt = prog.getPrompt(prog.session.getStory(trim_end=True), "", system_msg = prog.session.getSystem())                
+            prompt = prog.getPrompt(prog.session.showStory(trim_end=True), "", system_msg = prog.session.getSystem())                
         elif prog.session.hasTemplate():
             w = prog.session.injectTemplate(w)
-            prompt = prog.getPrompt(prog.session.getStory(), w, system_msg = prog.session.getSystem())
+            prompt = prog.getPrompt(prog.session.showStory(), w, system_msg = prog.session.getSystem())
         else:
-            prompt = prog.getPrompt(prog.session.memory + prog.session.getNote() + prog.session.getStory() , w + prog.session.prompt)
+            prompt = prog.getPrompt(prog.session.memory + prog.session.getNote() + prog.session.showStory() , w + prog.session.prompt)
 
         if prog.getOption("streaming"):
             r = streamPrompt(prog, prog.getOption("endpoint") + "/api/extra/generate/stream", json=prompt)

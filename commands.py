@@ -30,7 +30,7 @@ def newSession(program, argv):
 
 
 def printStory(prog, argv, stderr=False):
-    w = prog.session.getStory()
+    w = prog.session.showStory()
 
     if stderr:
         printerr(w)

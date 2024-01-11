@@ -1,5 +1,6 @@
 import os, glob
 from kbcli_util import *
+from StoryFolder import *
 
 
 class Session(object):
@@ -15,7 +16,7 @@ class Session(object):
         self.template_end = ""
         self.chat_user = chat_user
         self.keys = { "{$chat_user}" : chat_user}
-        self.story = []
+        self.stories = StoryFolder()
         if self.dir is not None:
 #            try:
             self._init()
@@ -51,10 +52,10 @@ class Session(object):
 
     
     def addText(self, w):
-        self.story.append(w)
+        self.stories.addText(w)
 
-    def getStory(self, trim_end=False):
-        w = "".join(self.story)
+    def showStory(self, trim_end=False):
+        w = self.stories.showStory()
         if trim_end == True:
             if w.endswith(self.template_end):
                 return w[:-len(self.template_end)]
