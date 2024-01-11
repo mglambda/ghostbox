@@ -29,6 +29,7 @@ cmds = [
     ("/load", loadStoryFolder),        
     ("/lsoptions", showOptions),
     ("/chatmode", toggleChatMode),
+    ("/hide", hide),
     ("/cont", doContinue),
         ("/continue", doContinue)
 ]
