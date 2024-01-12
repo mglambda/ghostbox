@@ -31,8 +31,23 @@ def trimOn(stopword, w):
 
 def trimChatUser(chatuser, w):
     if chatuser:
-        return trimOn(mkChatPrompt(chatuser), w)
+        return trimOn(mkChatPrompt(chatuser), trimOn(mkChatPrompt(chatuser).strip(), w))
     return w
+
+
+def assertNotStartWith(assertion, w):
+    # ensures w doesn't start with assertion
+    l = len(assertion)
+    if w.startswith(assertion):
+        return w[l:]
+    return w
+
+def assertStartWith(assertion, w):
+    # makes sure w starts with assertion. This is intended for making sure strings start with a chat prompt, i.e. Bob: bla bla bla, without duplicating it, as in Bob: Bob: bla bla
+    if not(w.startswith(assertion)):
+        return assertion + w
+    return w
+
 
 def mkChatPrompt(username):
     # turns USERNAME into USERNAME:, or, iuf we decide to change it, maybe <USERNAME> etc.

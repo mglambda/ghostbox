@@ -24,7 +24,7 @@ def newSession(program, argv):
             failure = e
 
     if failure:
-        return "error: " + str(e)
+        return "error: " + str(failure)
 
     w = ""
     # try to load config.json if present
@@ -101,6 +101,7 @@ def toggleTTS(prog, argv):
         if prog.getOption("streaming"):
             prog.options["streaming"] = False
             w += "Disabling streaming (this tends to work better with TTS. You can manually reenable streaming if you wish.)\n"
+        w += "Try /hide for a more immersive experience.\n"
             
     return w + "TTS " + {True : "on.", False : "off."}[prog.options["tts"]]
 
@@ -235,4 +236,5 @@ def hide(prog, argv):
     prog.options["cli_prompt"] = ""
     prog.options["tts_subtitles"] = False
     prog.options["streaming"] = False
+    prog.options["chat_show_ai_prompt"] = False
     return ""
