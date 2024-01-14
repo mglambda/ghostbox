@@ -1,4 +1,4 @@
-#!/bin/python
+#!env/bin/python
 import requests, json, os, io, re, base64, random, sys, threading, subprocess
 import argparse
 from commands import *
@@ -27,7 +27,8 @@ cmds = [
     ("/saveconfig", saveConfig),    
     ("/loadconfig", loadConfig),
     ("/save", saveStoryFolder),
-    ("/load", loadStoryFolder),        
+    ("/load", loadStoryFolder),
+    ("/varfile", varfile),
     ("/lsoptions", showOptions),
     ("/chatmode", toggleChatMode),
     ("/hide", hide),

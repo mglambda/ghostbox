@@ -4,7 +4,7 @@ from StoryFolder import *
 
 
 class Session(object):
-    def __init__(self, dir=None, chat_user=""):
+    def __init__(self, dir=None, chat_user="", additional_keys=[]):
         self.dir = dir
         self.memory = ""
         self.note = ""
@@ -19,7 +19,7 @@ class Session(object):
         self.stories = StoryFolder()
         if self.dir is not None:
 #            try:
-            self._init()
+            self._init(additional_keys)
 #            except:
 #                printerr("Error loading dir " + dir)
 
@@ -30,7 +30,7 @@ class Session(object):
         # prompt is any user provided string, and will be replacing {$user_msg} which is supposed to be in the template somewhere
         w = self.template.replace("{$user_msg}", self.memory + self.getNote() + prompt)
         for (key, v) in self.keys.items():
-            w.replace(key, v) #replaces filenames found in dir with their conten, e.g. 'memory' has contents that will be spliced into {$memory}
+            w = w.replace(key, v) #replaces filenames found in dir with their conten, e.g. 'memory' has contents that will be spliced into {$memory}
         return w
 
     def _expandVars(self, w):
@@ -69,11 +69,13 @@ class Session(object):
     def _replaceUser(self, w):
         return w.replace("{$user}", self.chat_user)
     
-    def _init(self):
+    def _init(self, additional_keys=[]):
         if not(os.path.isdir(self.dir)):
             raise FileNotFoundError("Could not find path " + self.dir)
 
-        for filepath in glob.glob(self.dir + "/*"):
+
+        allfiles = glob.glob(self.dir + "/*") + additional_keys
+        for filepath in allfiles:
             filename = os.path.split(filepath)[1]
             if os.path.isfile(filepath):
                 self.__dict__[filename] = open(filepath, "r").read()

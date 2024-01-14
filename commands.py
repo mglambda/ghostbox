@@ -17,7 +17,7 @@ def newSession(program, argv):
         path = os.path.normpath(path)
         failure = False
         try:
-            program.session = Session(dir=path, chat_user=program.getOption("chat_user"))
+            program.session = Session(dir=path, chat_user=program.getOption("chat_user"), additional_keys=program.getOption("var_file"))
             break
         except FileNotFoundError as e:
             # session will throw if path is not valid, we keep going through the includes
@@ -238,3 +238,7 @@ def hide(prog, argv):
     prog.options["streaming"] = False
     prog.options["chat_show_ai_prompt"] = False
     return ""
+
+def varfile(prog, argv):
+    # $FIXME:
+    return "Not implemented yet. Use the -V option for now."
