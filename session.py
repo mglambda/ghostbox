@@ -12,7 +12,7 @@ class Session(object):
         self.initial_prompt = ""
         self.worldinfo = ""
         self.template_system = ""
-        self.template = ""
+        self.template = "{$user_msg}"
         self.template_end = ""
         self.chat_user = chat_user
         self.keys = { "{$chat_user}" : chat_user}

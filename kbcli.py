@@ -30,6 +30,8 @@ cmds = [
     ("/load", loadStoryFolder),
     ("/varfile", varfile),
     ("/lsoptions", showOptions),
+    ("/lschars", showChars),
+    ("/lsvars", showVars),
     ("/chatmode", toggleChatMode),
     ("/hide", hide),
     ("/cont", doContinue),
@@ -64,10 +66,7 @@ class Program(object):
 
         self.options = self.options | d
         return ""
-        
-        
-        
-            
+    
     def getMode(self):
         return self.mode
         
@@ -172,15 +171,15 @@ def main():
             setOption(prog, ["continue", "False"])
             w = "" # get rid of /cont etc
             prompt = prog.getPrompt(prog.session.showStory(trim_end=True), "", system_msg = prog.session.getSystem())                
-        elif prog.session.hasTemplate():
+        else:
             v = ""
             if prog.getMode() == "chat":
                 w = mkChatPrompt(prog.getOption("chat_user")) + w
                 v = mkChatPrompt(prog.getOption("chat_ai"))
             w = prog.session.injectTemplate(w) + v
             prompt = prog.getPrompt(prog.session.showStory(), w, system_msg = prog.session.getSystem())
-        else:
-            prompt = prog.getPrompt(prog.session.memory + prog.session.getNote() + prog.session.showStory() , w + prog.session.prompt)
+
+
 
         if prog.getOption("streaming"):
             r = streamPrompt(prog, prog.getOption("endpoint") + "/api/extra/generate/stream", json=prompt)

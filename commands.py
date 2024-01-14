@@ -1,4 +1,4 @@
-import os, datetime
+import os, datetime, glob
 from session import Session
 from kbcli_util import *
 from StoryFolder import *
@@ -75,6 +75,27 @@ def showOptions(prog, argv):
     for (k, v) in prog.options.items():
         w += k + ": " + str(v) + "\n"
     return w
+
+def showVars(prog, argv):
+    if argv == []:
+        return "\n".join([f"{key}" for key in prog.session.keys.keys()])
+
+    k = " ".join(argv)
+    return prog.session.keys.get(k, f"Could not find var '{k}'")
+
+def showChars(prog, argv):
+    allchars = []
+    for dir in prog.getOption("include"):
+        if not(os.path.isdir(dir)):
+            printerr("warning: Include path '" + dir + "' is not a directory.")
+            continue
+        for charpath in glob.glob(dir + "/*"):
+            if os.path.isfile(charpath):
+                continue
+            allchars.append(os.path.split(charpath)[1])
+
+    return "\n".join(sorted(allchars))
+
 
 def toggleChatMode(prog, argv):
     # when invoked as '/chatmode' toggles off, when invoked as '/chatmode Anna', enables chat mode and sets username to Anna
