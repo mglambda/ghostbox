@@ -54,11 +54,18 @@ class Session(object):
     def addText(self, w):
         self.stories.addText(w)
 
-    def showStory(self, trim_end=False):
+    def showStory(self, trim_end=False, apply_filter=False):
         w = self.stories.showStory()
         if trim_end == True:
             if w.endswith(self.template_end):
                 return w[:-len(self.template_end)]
+
+        if apply_filter:
+            fs = self.keys.get("{$template_filter}", "").split(';;;')
+            for filter_string in fs:
+                print(filter_string)
+                w = w.replace(filter_string, "")                
+                
         return w
 
     def getNote(self):
@@ -73,7 +80,6 @@ class Session(object):
         if not(os.path.isdir(self.dir)):
             raise FileNotFoundError("Could not find path " + self.dir)
 
-
         allfiles = glob.glob(self.dir + "/*") + additional_keys
         for filepath in allfiles:
             filename = os.path.split(filepath)[1]
@@ -82,3 +88,6 @@ class Session(object):
                 self.keys["{$" + filename + "}"] = self.__dict__[filename]
                 printerr("Found " + filename)
 
+        init_msg = self.keys.get("{$template_initial}", "")
+        if init_msg:
+            self.addText(self._expandVars(init_msg))

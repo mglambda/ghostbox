@@ -18,7 +18,7 @@ cmds = [
     ("/retry", retry),    
     ("/drop", dropEntry),
     ("/new", newStory),
-    ("/log", lambda prog, w: printStory(prog, w, stderr=True)),
+    ("/log", lambda prog, w: printStory(prog, w, stderr=True, apply_filter=False)),
     ("/ttsdebug", ttsDebug),    
     ("/tts", toggleTTS),
     ("/set", setOption),

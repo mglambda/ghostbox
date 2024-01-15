@@ -33,11 +33,15 @@ def newSession(program, argv):
         w += loadConfig(program, [configpath]) + "\n"
     program.options["character_folder"] = path
     w += "Ok. Loaded " + path
+
+    # template_initial
+    if "{$template_initial}" in program.session.keys:
+        w += "\n\n" + program.session.showStory(apply_filter=True)
     return w
 
 
-def printStory(prog, argv, stderr=False):
-    w = prog.session.showStory()
+def printStory(prog, argv, stderr=False, apply_filter=True):
+    w = prog.session.showStory(apply_filter=apply_filter)
 
     if stderr:
         printerr(w)
