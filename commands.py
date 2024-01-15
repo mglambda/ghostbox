@@ -37,6 +37,10 @@ def newSession(program, argv):
     # template_initial
     if "{$template_initial}" in program.session.keys:
         w += "\n\n" + program.session.showStory(apply_filter=True)
+
+    # config may have set the mode, but we need to go through setMode
+    program.setMode(program.getOption("mode"))
+        
     return w
 
 
@@ -101,20 +105,15 @@ def showChars(prog, argv):
     return "\n".join(sorted(allchars))
 
 
-def toggleChatMode(prog, argv):
-    # when invoked as '/chatmode' toggles off, when invoked as '/chatmode Anna', enables chat mode and sets username to Anna
-    if len(argv) > 0:
-        name = " ".join(argv)
-        prog.options["cli_prompt"] = "\n" + mkChatPrompt(name)
-        prog.mode = "chat"
-        prog.options["chat_user"] = name
-        return "Chat mode on."
+def toggleMode(prog, argv):
+    if argv == []:
+        return "Currently in " + prog.getOption("mode") + " mode."
 
-    #disable chat mode
-    prog.options["chat_user"] = ""
-    prog.mode = "default"
-    prog.options["cli_prompt"] = prog.initial_cli_prompt
-    return "Chat mode off."
+    mode = " ".join(argv)
+    if prog.isValidMode(mode):
+        prog.setMode(mode)
+        return mode + " mode on"
+    return "Not a valid mode. Possible values are 'default' or 'chat'"
 
 def toggleTTS(prog, argv):
     prog.options["tts"] = not(prog.options["tts"])

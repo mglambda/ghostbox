@@ -63,9 +63,7 @@ class Session(object):
         if apply_filter:
             fs = self.keys.get("{$template_filter}", "").split(';;;')
             for filter_string in fs:
-                print(filter_string)
                 w = w.replace(filter_string, "")                
-                
         return w
 
     def getNote(self):

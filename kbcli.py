@@ -32,7 +32,7 @@ cmds = [
     ("/lsoptions", showOptions),
     ("/lschars", showChars),
     ("/lsvars", showVars),
-    ("/chatmode", toggleChatMode),
+    ("/mode", toggleMode),
     ("/hide", hide),
     ("/cont", doContinue),
         ("/continue", doContinue)
@@ -45,20 +45,18 @@ class Program(object):
     def __init__(self, options={}, initial_cli_prompt=""):
         self.session = Session(chat_user=options.get("chat_user", ""))
         self.initial_cli_prompt = initial_cli_prompt
-        self.mode = "default"
         self.streaming_done = threading.Event()
         self.stream_queue = []
         self.tts = None
         self.options = options
-        if self.getOption("chat_user"):
-            toggleChatMode(self, [self.getOption("chat_user")])
         if self.getOption("tts"):
             printerr(self.initializeTTS())
         # formatters is to be idnexed with modes
         self._formatters = {
             "default" : self._defaultFormatter,
             "chat" : self._chatFormatter}
-
+        self.setMode(self.getOption("mode"))
+        
     def loadConfig(self, json_data):
         d = json.loads(json_data)
         if type(d) != type({}):
@@ -68,8 +66,24 @@ class Program(object):
         return ""
     
     def getMode(self):
-        return self.mode
+        w = self.getOption("mode")
+        if not(self.isValidMode(w)):
+            return 'default'
+        return w
+
+    def isValidMode(self, mode):
+        return mode in self._formatters
+
+    def setMode(self, mode):
+        if not(self.isValidMode(mode)):
+            return
         
+        self.options["mode"] = mode
+        if mode == "chat":
+            self.options["cli_prompt"] = "\n" + mkChatPrompt(self.getOption("chat_user"))            
+        else: # default
+            self.options["cli_prompt"] = self.initial_cli_prompt
+               
     def getOption(self, key):
         return self.options.get(key, False)
         
@@ -111,7 +125,7 @@ class Program(object):
         print(w, end=end, flush=flush)
 
     def formatGeneratedText(self, w):
-        return self._formatters.get(self.mode, self._defaultFormatter)(w)
+        return self._formatters.get(self.getMode(), self._defaultFormatter)(w)
 
     def _defaultFormatter(self, w):
         display =trimIncompleteSentence(w)
