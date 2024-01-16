@@ -40,6 +40,10 @@ def newSession(program, argv):
 
     # config may have set the mode, but we need to go through setMode
     program.setMode(program.getOption("mode"))
+
+    # hide if option is set
+    if program.getOption("hide"):
+        hide(program, [])
         
     return w
 
@@ -50,6 +54,18 @@ def printStory(prog, argv, stderr=False, apply_filter=True):
     if stderr:
         printerr(w)
         return ""
+    elif argv != []:
+        filename = " ".join(argv)
+        if os.path.isdir(filename):
+            return "error: Cannot write to file " + filename + ": is a directory." 
+        if os.path.isfile(filename):
+            printerr("warning: File " + filename + " exists. Appending to file.")
+            pre = open(filename, "r").read() + "\n--- new story ---"
+        else:
+            pre = ""
+        f = open(filename, "w")
+        f.write(pre + w)
+        return ""
     else:
         return w
     
@@ -58,6 +74,9 @@ def doContinue(prog, argv):
 
     # now comes some fuckery to get rid of trailing <|im_end|> etc.
     delim = prog.session.template_end
+    if delim == "":
+        return ""
+    
     if prog.session.stories.getStory()[-1].endswith(delim):
         prog.session.stories.getStory()[-1] = prog.session.stories.getStory()[-1][:-len(delim)]
     

@@ -56,7 +56,7 @@ class Session(object):
 
     def showStory(self, trim_end=False, apply_filter=False):
         w = self.stories.showStory()
-        if trim_end == True:
+        if trim_end and self.template_end != "":
             if w.endswith(self.template_end):
                 return w[:-len(self.template_end)]
 
