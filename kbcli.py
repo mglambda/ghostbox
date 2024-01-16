@@ -10,6 +10,7 @@ from session import Session
 # these can be typed in at the CLI prompt
 cmds = [
     ("/start", newSession),
+    ("/quit", exitProgram),
     ("/restart", lambda prog, argv: newSession(prog, [])),
     ("/print", printStory) ,
     ("/next", nextStory),
@@ -56,6 +57,8 @@ class Program(object):
             "default" : self._defaultFormatter,
             "chat" : self._chatFormatter}
         self.setMode(self.getOption("mode"))
+        self.running = True
+
         
     def loadConfig(self, json_data):
         d = json.loads(json_data)
@@ -160,7 +163,7 @@ def main():
         hide(prog, [])
     del prog.options["hide"]
         
-    while True:
+    while prog.running:
         w = input(prog.getOption("cli_prompt"))
         # for convenience when chatting
         if w == "":

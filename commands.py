@@ -285,3 +285,7 @@ def hide(prog, argv):
 def varfile(prog, argv):
     # $FIXME:
     return "Not implemented yet. Use the -V option for now."
+
+def exitProgram(prog, argv):
+    prog.running = False
+    return ""
