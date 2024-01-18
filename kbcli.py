@@ -45,13 +45,12 @@ DEFAULT_PARAMS = {                "rep_pen": 1.1, "temperature": 0.7, "top_p": 0
 class Program(object):
     def __init__(self, options={}, initial_cli_prompt=""):
         self.session = Session(chat_user=options.get("chat_user", ""))
+        self.tts_flag = False
         self.initial_cli_prompt = initial_cli_prompt
         self.streaming_done = threading.Event()
         self.stream_queue = []
         self.tts = None
         self.options = options
-        if self.getOption("tts"):
-            printerr(self.initializeTTS())
         # formatters is to be idnexed with modes
         self._formatters = {
             "default" : self._defaultFormatter,
@@ -104,18 +103,42 @@ class Program(object):
 
     def initializeTTS(self):
         tts_program = self.getOption("tts_program")
+        voice_dir = self.getOption("tts_voice_dir")
+        voicefile = self.getOption("tts_voice")
+        
         if not(tts_program):
             return "Cannot initialize TTS: No TTS program set."
 
-        self.tts = subprocess.Popen([os.getcwd() + "/" + tts_program], text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, stdin=subprocess.PIPE, shell=True)
+        voice_args = ""
+        if voicefile:
+            file = voice_dir + "/" + voicefile
+            if os.path.isfile(file):
+                voice_args = ["-V", file]
+            else:
+                #FIXME: this crashes if the file doesn't exist. maybe that's ok
+                voice_args = ["-V", voicefile]
+
+        #self.tts = subprocess.Popen([os.getcwd() + "/" + tts_program] +  voice_args, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, stdin=subprocess.PIPE, shell=True)
+        #cmd = ["python", "/home/marius/prog/ai/TTS/test/loop.py"] + voice_args
+        cmd = [os.getcwd() + "/" + tts_program] +  voice_args        
+#        print(" ".join(cmd))
+        #self.tts = subprocess.Popen(cmd, text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, stdin=subprocess.PIPE, shell=True)
+        cmdstring = " ".join(cmd)
+        self.tts = subprocess.Popen(cmdstring, text=True, stdin=subprocess.PIPE, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         return ""
 
     def communicateTTS(self, w):
         if not(self.getOption("tts")):
             return ""
 
-        self.tts.stdin.write(w)
+        # this is crazy
         self.tts.stdin.flush()
+        self.tts.stdout.flush()
+        self.tts.stderr.flush()        
+        self.tts.stdin.write(w + "\n")
+        self.tts.stdin.flush()
+        self.tts.stdout.flush()
+        self.tts.stderr.flush()
         return w
 
     def print(self, w, end="\n", flush=False):
@@ -164,6 +187,13 @@ def main():
     del prog.options["hide"]
         
     while prog.running:
+        # have to do TTS here for complex reasons; flag means to reinitialize tts, which can happen e.g. due to voice change
+        if prog.tts_flag:
+            prog.tts_flag = False            
+            prog.options["tts"] = False
+            printerr(toggleTTS(prog, []))
+
+        
         w = input(prog.getOption("cli_prompt"))
         # for convenience when chatting
         if w == "":
@@ -217,7 +247,7 @@ def main():
                 # already printed it piecemeal, so skip this step
                 continue
             else:
-                prog.print(displaytxt)
+                prog.print(displaytxt, end="")
         else:
             print(str(r.status_code))
         

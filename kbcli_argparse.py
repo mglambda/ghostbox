@@ -1,4 +1,4 @@
-import argparse
+import argparse, os
 
 def makeArgParser(default_params):
     # default_params are only the hyperparameters (temp, etc.), not command line parameters
@@ -15,12 +15,14 @@ def makeArgParser(default_params):
     parser.add_argument("--cli_prompt", type=str, default="\n 🧠 ", help="String to show at the bottom as command prompt. Can be empty.")
     parser.add_argument("--tts", action=argparse.BooleanOptionalAction, default=False, help="Enable text to speech on generated text.")
     parser.add_argument("--tts_program", type=str, default="tts.sh", help="Path to a TTS (Text-to-speech) program to verbalize generated text. The TTS program should read lines from standard input.")
-    parser.add_argument("--tts_subtitles", action=argparse.BooleanOptionalAction, default=True, help="Enable printing of generated text while TTS is enabled.") 
+    parser.add_argument("--tts_voice_dir", type=str, default=os.getcwd() + "/voices/", help="Directory to check first for voice file.")
+    parser.add_argument("-V", "--tts_voice", type=str, default="", help="Voice file to use for TTS.")
+    parser.add_argument("--tts_subtitles", action=argparse.BooleanOptionalAction, default=True, help="Enable printing of generated text while TTS is enabled.")     
     parser.add_argument("--config_file", type=str, default="", help="Path to a config fail in JSON format, containing a dictionary with OPTION : VALUE pairs to be loaded on startup. Same as /loadconfig or /loadoptions. To produce an example config-file, try /saveconfig example.json.")
     parser.add_argument("--chat_show_ai_prompt", type=str, default=True, help="Controls wether to show AI prompt in chat mode. Specifically, assuming chat_ai = 'Bob', setting chat_show_ai_prompt to True will show 'Bob: ' in front of the AI's responses. Note that this is always sent to the back-end (in chat mode), this parameter merely controls wether it is shown. This parameter is automatically set to false when enabling TTS.")
     parser.add_argument("--hide", action=argparse.BooleanOptionalAction, default=False, help="Hides some unnecessary output, providing a more immersive experience. Same as starting with /hide.")
     parser.add_argument("--expand_user_input", action=argparse.BooleanOptionalAction, default=True, help="Expand variables in user input. E.g. {$var} will be replaced with content of var. Variables are initialized from character folders (i.e. file 'memory' will be {$memory}), or can be set manually with the /varfile command or --varfile option.")
-    parser.add_argument("-V", '--var_file', action="append", default=[], help="Files that will be added to the list of variables that can be expanded. E.g. -Vmemory means {$memory} will be expanded to the contents of file memory, provided expand_user_input is set. Can be used to override values set in character folders.")
+    parser.add_argument("-x", '--var_file', action="append", default=[], help="Files that will be added to the list of variables that can be expanded. E.g. -Vmemory means {$memory} will be expanded to the contents of file memory, provided expand_user_input is set. Can be used to override values set in character folders.")
 
 
     for (param, value) in default_params.items():

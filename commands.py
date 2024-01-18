@@ -44,6 +44,10 @@ def newSession(program, argv):
     # hide if option is set
     if program.getOption("hide"):
         hide(program, [])
+
+    # init tts at this point, since config may have had tts vars
+    if program.getOption("tts"):
+        program.tts_flag = True
         
     return w
 
@@ -162,7 +166,7 @@ def ttsDebug(prog, argv):
 
 
     prog.tts.stderr.flush()
-    while True:
+    while False:
         w = prog.tts.stderr.readline()
         if w:
             printerr(w)
