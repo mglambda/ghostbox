@@ -1,11 +1,10 @@
-#!env/bin/python
 import requests, json, os, io, re, base64, random, sys, threading, subprocess
 import argparse
-from commands import *
-from kbcli_util import *
-from kbcli_argparse import *
-from kbcli_streaming import streamPrompt
-from session import Session
+from ghostbox.commands import *
+from ghostbox.util import *
+from ghostbox._argparse import *
+from ghostbox.streaming import streamPrompt
+from ghostbox.session import Session
 
 # these can be typed in at the CLI prompt
 cmds = [

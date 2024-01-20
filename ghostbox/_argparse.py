@@ -2,7 +2,7 @@ import argparse, os
 
 def makeArgParser(default_params):
     # default_params are only the hyperparameters (temp, etc.), not command line parameters
-    parser = argparse.ArgumentParser(description="kbcli - koboldcpp Command Line Interface", formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser = argparse.ArgumentParser(description="ghostbox - koboldcpp Command Line Interface", formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument("-I", '--include', action="append", default=["chars/"], help="Include paths that will be searched for character folders named with the /start command or the --character_folder command line argument.")
     parser.add_argument("-c", '--character_folder', type=str, default="", help="character folder to load at startup. The folder may contain templates, as well as arbitrary text files that may be injected in the templates. See the examples for more. Path is attempted to be resolved relative to the include paths, if any are provided.")    
     parser.add_argument("--endpoint", type=str, default="http://localhost:5001", help="Address of koboldcpp http endpoint.")

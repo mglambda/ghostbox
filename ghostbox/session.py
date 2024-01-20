@@ -1,6 +1,6 @@
 import os, glob
-from kbcli_util import *
-from StoryFolder import *
+from ghostbox.util import *
+from ghostbox.StoryFolder import *
 
 
 class Session(object):

@@ -1,7 +1,7 @@
 import os, datetime, glob
-from session import Session
-from kbcli_util import *
-from StoryFolder import *
+from ghostbox.session import Session
+from ghostbox.util import *
+from ghostbox.StoryFolder import *
 
 def newSession(program, argv):
     if argv == []:

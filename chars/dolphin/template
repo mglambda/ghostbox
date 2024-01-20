@@ -1,0 +1,3 @@
+<|im_start|>user
+{$user_msg}<|im_end|>
+<|im_start|>assistant
