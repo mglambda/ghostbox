@@ -31,6 +31,7 @@ cmds = [
     ("/varfile", varfile),
     ("/lsoptions", showOptions),
     ("/lschars", showChars),
+    ("/lsvoices", showVoices),
     ("/lsvars", showVars),
     ("/mode", toggleMode),
     ("/hide", hide),
@@ -218,7 +219,7 @@ def main():
             #FIXME: the startswith is dicey because it now makes the order of cmds defined above relevant, i.e. longer commands must be specified before shorter ones. 
             if w.startswith(cmd):
                 v = f(prog, w.split(" ")[1:])
-                printerr(v)
+                printerr(v, prefix="")
                 if not(prog.getOption("continue")):
                     # skip means we don't send a prompt this iteration, which we don't want to do when user issues a command, except for the /continue command
                     skip = True
@@ -267,4 +268,5 @@ def main():
         
 if __name__ == "__main__":
     main()
+
 
