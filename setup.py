@@ -12,6 +12,6 @@ setup(
     description="Ghostbox is a command line interface to local LLM (large language model) server applications, such as koboldcpp or llama.cpp. It's primary purpose is to give a simple, stripped-down way to engage with AI chat bots.",
     long_description=README,
     long_description_content_type="text/markdown",
-    scripts=["scripts/ghostbox"],
+    scripts=["scripts/ghostbox", "scripts/ghostbox-tts-polly"],
     packages=find_packages(include=['ghostbox'])
 )

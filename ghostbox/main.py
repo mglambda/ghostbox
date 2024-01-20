@@ -58,11 +58,19 @@ class Program(object):
         self.running = True
 
         
-    def loadConfig(self, json_data):
+    def loadConfig(self, json_data, override=True):
         d = json.loads(json_data)
         if type(d) != type({}):
             return "error loading config: Not a dictionary."
 
+        if not(override):
+            # drop keys in the config that can be found in the command line arguments
+            for arg in sys.argv:
+                key = stripLeadingHyphens(arg)
+                if key in d:
+                    print(key)
+                    del d[key]
+                
         self.options = self.options | d
         return ""
     
@@ -87,7 +95,14 @@ class Program(object):
                
     def getOption(self, key):
         return self.options.get(key, False)
+
+    def setOption(self, name, value):
+        self.options[name] = value
+        # for some options we do extra stuff
+        if name == "tts_voice":
+            self.tts_flag = True #restart TTS
         
+    
     def getPrompt(self, conversation_history, text, system_msg = ""): # For KoboldAI Generation
         d = {"prompt": conversation_history + text + "",
                 "memory" : system_msg, # koboldcpp special feature: will prepend this to the prompt, overwriting prompt history if necessary
@@ -102,6 +117,10 @@ class Program(object):
 
     def initializeTTS(self):
         tts_program = self.getOption("tts_program")
+        candidate = os.getcwd() + "/" + tts_program
+        if os.path.isfile(candidate):
+            tts_program = candidate
+            
         voice_dir = self.getOption("tts_voice_dir")
         voicefile = self.getOption("tts_voice")
         
@@ -117,11 +136,7 @@ class Program(object):
                 #FIXME: this crashes if the file doesn't exist. maybe that's ok
                 voice_args = ["-V", voicefile]
 
-        #self.tts = subprocess.Popen([os.getcwd() + "/" + tts_program] +  voice_args, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, stdin=subprocess.PIPE, shell=True)
-        #cmd = ["python", "/home/marius/prog/ai/TTS/test/loop.py"] + voice_args
-        cmd = [os.getcwd() + "/" + tts_program] +  voice_args        
-#        print(" ".join(cmd))
-        #self.tts = subprocess.Popen(cmd, text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, stdin=subprocess.PIPE, shell=True)
+        cmd = [tts_program] +  voice_args        
         cmdstring = " ".join(cmd)
         self.tts = subprocess.Popen(cmdstring, text=True, stdin=subprocess.PIPE, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         return ""

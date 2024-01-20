@@ -14,7 +14,7 @@ def makeArgParser(default_params):
     parser.add_argument("--streaming_flush", action=argparse.BooleanOptionalAction, default=False, help="When True, flush print buffer immediately in streaming mode (print token-by-token). When set to false, waits for newline until generated text is printed.")
     parser.add_argument("--cli_prompt", type=str, default="\n 🧠 ", help="String to show at the bottom as command prompt. Can be empty.")
     parser.add_argument("--tts", action=argparse.BooleanOptionalAction, default=False, help="Enable text to speech on generated text.")
-    parser.add_argument("--tts_program", type=str, default="tts.sh", help="Path to a TTS (Text-to-speech) program to verbalize generated text. The TTS program should read lines from standard input.")
+    parser.add_argument("--tts_program", type=str, default="ghostbox-tts-polly", help="Path to a TTS (Text-to-speech) program to verbalize generated text. The TTS program should read lines from standard input.")
     parser.add_argument("--tts_voice_dir", type=str, default=os.getcwd() + "/voices/", help="Directory to check first for voice file.")
     parser.add_argument("-V", "--tts_voice", type=str, default="", help="Voice file to use for TTS.")
     parser.add_argument("--tts_subtitles", action=argparse.BooleanOptionalAction, default=True, help="Enable printing of generated text while TTS is enabled.")     

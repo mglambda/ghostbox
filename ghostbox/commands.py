@@ -1,4 +1,4 @@
-import os, datetime, glob
+import os, datetime, glob, sys
 from ghostbox.session import Session
 from ghostbox.util import *
 from ghostbox.StoryFolder import *
@@ -30,7 +30,7 @@ def newSession(program, argv):
     # try to load config.json if present
     configpath = path + "/config.json"
     if os.path.isfile(configpath):
-        w += loadConfig(program, [configpath]) + "\n"
+        w += loadConfig(program, [configpath], override=False) + "\n"
     program.options["character_folder"] = path
     w += "Ok. Loaded " + path
 
@@ -91,12 +91,12 @@ def setOption(prog, argv):
         return showOptions(prog, [])
     name = argv[0]    
     if len(argv) == 1:
-        prog.options[name] = ""
+        prog.setOption(name, "")
         return ""
 
     w = " ".join(argv[1:])
     try:
-        prog.options[name] = eval(w)
+        prog.setOption(name, eval(w))
     except:
         return "Couldn't set " + name + " to " + w + ". Couldn't evaluate."
     return ""
@@ -249,7 +249,8 @@ def gotoStory(prog, argv):
         return ""
     return "Could not go to branch " + str(n) + ": " + err
 
-def loadConfig(prog, argv):
+def loadConfig(prog, argv, override=True):
+    # loads a config file, which may be a user config, or a config supplied by a character folder. if override is false, the config may not override command line arguments that have been manually supplied (in the long form)
     if argv == []:
         return "Please provide a filename for the config file to load."
     filename = " ".join(argv)
@@ -257,7 +258,7 @@ def loadConfig(prog, argv):
         w = open(filename, "r").read()
     except Exception as e:
         return str(e)
-    err = prog.loadConfig(w)
+    err = prog.loadConfig(w, override=override)
     if err:
         return err
     return "Loaded config " + filename

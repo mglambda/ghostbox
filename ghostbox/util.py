@@ -1,8 +1,11 @@
 import os
 import sys
 
-def printerr(w):
-    print(w, file=sys.stderr)
+def printerr(w, prefix=" # "):
+    if w == "":
+        return
+    
+    print(prefix + w, file=sys.stderr)
     
 def trimIncompleteSentence(w):
     if w == "":
@@ -87,3 +90,16 @@ def saveFile(filename, w, depth=0):
 
         
         
+
+
+def stripLeadingHyphens(w):
+    #FIXME: this is hacky
+    w = w.split("=")[0]
+    
+    if w.startswith("--"):
+        return w[2:]
+
+    if w.startswith("-"):
+        return w[1:]
+
+    return w
