@@ -69,7 +69,6 @@ class Program(object):
             for arg in sys.argv:
                 key = stripLeadingHyphens(arg)
                 if key in d:
-                    print(key)
                     del d[key]
                 
         self.options = self.options | d
@@ -208,6 +207,9 @@ def main():
             prog.options["tts"] = False
             printerr(toggleTTS(prog, []))
 
+        if prog.initial_print_flag:
+            prog.initial_print_flag = False
+            print("\n\n" + prog.session.showStory(apply_filter=True), end="")
         
         w = input(prog.getOption("cli_prompt"))
         # for convenience when chatting

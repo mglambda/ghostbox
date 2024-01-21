@@ -36,8 +36,8 @@ def newSession(program, argv):
 
     # template_initial
     if "{$template_initial}" in program.session.keys:
-        w += "\n\n" + program.session.showStory(apply_filter=True)
-
+        program.initial_print_flag = True
+        
     # config may have set the mode, but we need to go through setMode
     program.setMode(program.getOption("mode"))
 

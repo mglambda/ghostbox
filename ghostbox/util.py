@@ -4,7 +4,10 @@ import sys
 def printerr(w, prefix=" # "):
     if w == "":
         return
-    
+
+    # prepend all lines with prefix
+    ws = w.split("\n")
+    w = ("\n" + prefix).join(ws)
     print(prefix + w, file=sys.stderr)
     
 def trimIncompleteSentence(w):
