@@ -15,9 +15,11 @@ cmds = [
     ("/next", nextStory),
     ("/prev", previousStory),
     ("/story", gotoStory),
-    ("/retry", retry),    
+    ("/retry", retry),
+    ("/resend", lambda prog, argv: retry(prog, argv, lambda item: item["text"] != "" and item["user_generated"] == True)),
     ("/drop", dropEntry),
     ("/new", newStory),
+    ("/clone", cloneStory),
     ("/log", lambda prog, w: printStory(prog, w, stderr=True, apply_filter=False)),
     ("/ttsdebug", ttsDebug),    
     ("/tts", toggleTTS),
@@ -221,7 +223,7 @@ def main():
             #FIXME: the startswith is dicey because it now makes the order of cmds defined above relevant, i.e. longer commands must be specified before shorter ones. 
             if w.startswith(cmd):
                 v = f(prog, w.split(" ")[1:])
-                printerr(v, prefix="")
+                printerr(v)
                 if not(prog.getOption("continue")):
                     # skip means we don't send a prompt this iteration, which we don't want to do when user issues a command, except for the /continue command
                     skip = True
@@ -257,8 +259,8 @@ def main():
         if r.status_code == 200:
             results = r.json()['results']
             (displaytxt, txt) = prog.formatGeneratedText(results[0]["text"])
-            prog.session.addText(w)
-            prog.session.addText(txt)
+            prog.session.addUserText(w)
+            prog.session.addAIText(txt)
 
             if prog.getOption("streaming"):
                 # already printed it piecemeal, so skip this step

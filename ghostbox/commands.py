@@ -56,7 +56,7 @@ def printStory(prog, argv, stderr=False, apply_filter=True):
     w = prog.session.showStory(apply_filter=apply_filter)
 
     if stderr:
-        printerr(w)
+        printerr(w, prefix="")
         return ""
     elif argv != []:
         filename = " ".join(argv)
@@ -75,14 +75,17 @@ def printStory(prog, argv, stderr=False, apply_filter=True):
     
 def doContinue(prog, argv):
     setOption(prog, ["continue", "1"])
-
+    if prog.session.stories.empty():
+        return ""
+    
     # now comes some fuckery to get rid of trailing <|im_end|> etc.
+    # FIXME: this doesn't work for other prompt templates than chat-ml
     delim = prog.session.template_end
     if delim == "":
         return ""
     
-    if prog.session.stories.getStory()[-1].endswith(delim):
-        prog.session.stories.getStory()[-1] = prog.session.stories.getStory()[-1][:-len(delim)]
+    if prog.session.stories.getStory()[-1]["text"].endswith(delim):
+        prog.session.stories.getStory()[-1]["text"] = prog.session.stories.getStory()[-1]["text"][:-len(delim)]
     
     return ""
 
@@ -201,11 +204,12 @@ def previousStory(prog, argv):
         return "Cannot go to previous story branch: No previous branch exists."
     return "Now on branch " + str(prog.session.stories.index)    
 
-def retry(prog, argv):
+def retry(prog, argv, predicate=lambda item: item["user_generated"] == True):
     prog.session.stories.cloneStory()
-    prog.session.stories.dropEntry()
+    prog.session.stories.dropEntriesUntil(predicate)
     doContinue(prog, [])
-    return "Now on branch " + str(prog.session.stories.index) 
+    printerr("Now on branch " + str(prog.session.stories.index) )
+    return ""
 
 def dropEntry(prog, argv):
     prog.session.stories.cloneStory()
@@ -216,7 +220,13 @@ def dropEntry(prog, argv):
 def newStory(prog, argv):
     prog.session.stories.newStory()
     return "Now on branch " + str(prog.session.stories.index) + " with a clean log."
-    
+
+def cloneStory(prog, argv):
+    prog.session.stories.cloneStory()
+    return "Now on branch " + str(prog.session.stories.index) + " with a copy of the last branch."
+
+
+
 def saveStoryFolder(prog, argv):
     if len(argv) > 0:
         name = " ".join(argv)

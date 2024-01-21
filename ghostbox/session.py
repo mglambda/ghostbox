@@ -3,6 +3,7 @@ from ghostbox.util import *
 from ghostbox.StoryFolder import *
 
 
+        
 class Session(object):
     def __init__(self, dir=None, chat_user="", additional_keys=[]):
         self.dir = dir
@@ -51,9 +52,12 @@ class Session(object):
 
 
     
-    def addText(self, w):
-        self.stories.addText(w)
+    def addUserText(self, w):
+        self.stories.addText(w, user_generated=True)
 
+    def addAIText(self, w):
+        self.stories.addText(w, user_generated=False)
+            
     def showStory(self, trim_end=False, apply_filter=False):
         w = self.stories.showStory()
         if trim_end and self.template_end != "":
@@ -88,4 +92,4 @@ class Session(object):
 
         init_msg = self.keys.get("{$template_initial}", "")
         if init_msg:
-            self.addText(self._expandVars(init_msg))
+            self.addAIText(self._expandVars(init_msg))
