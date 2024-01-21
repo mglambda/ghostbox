@@ -5,7 +5,7 @@ with open("README.md", "r", encoding="utf-8") as readme_file:
 
 setup(
     name='ghostbox',
-    version='0.2.0',
+    version='0.2.1',
     url="https://github.com/mglambda/ghostbox",
     author="Marius Gerdes",
     author_email="integr@gmail.com",
