@@ -5,7 +5,7 @@ with open("README.md", "r", encoding="utf-8") as readme_file:
 
 setup(
     name='ghostbox',
-    version='0.1.0',
+    version='0.2.0',
     url="https://github.com/mglambda/ghostbox",
     author="Marius Gerdes",
     author_email="integr@gmail.com",
@@ -13,5 +13,6 @@ setup(
     long_description=README,
     long_description_content_type="text/markdown",
     scripts=["scripts/ghostbox", "scripts/ghostbox-tts-polly"],
-    packages=find_packages(include=['ghostbox'])
+    packages=find_packages(include=['ghostbox']),
+    install_requires=["requests","requests_html","boto3"] 
 )
