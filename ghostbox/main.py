@@ -6,8 +6,24 @@ from ghostbox._argparse import *
 from ghostbox.streaming import streamPrompt
 from ghostbox.session import Session
 
+
+def showHelp(prog, argv):
+    """
+    List commands, their arguments, and a short description."""
+    
+    w = ""
+    for (cmd_name, f) in cmds:
+        if f.__doc__ is None:
+            docstring = cmds_additional_docs.get(cmd_name, "")
+        else:
+            docstring = str(f.__doc__) 
+        w += cmd_name + " " + docstring + "\n"
+    printerr(w, prefix="")
+    return ""
+
 # these can be typed in at the CLI prompt
 cmds = [
+    ("/help", showHelp),
     ("/start", newSession),
     ("/quit", exitProgram),
     ("/restart", lambda prog, argv: newSession(prog, [])),
@@ -41,6 +57,7 @@ cmds = [
         ("/continue", doContinue)
 ]
 
+    
 #defined here for convenience. Can all be changed through cli parameters or with / commands
 DEFAULT_PARAMS = {                "rep_pen": 1.1, "temperature": 0.7, "top_p": 0.92, "top_k": 0, "top_a": 0, "typical": 1, "tfs": 1, "rep_pen_range": 320, "rep_pen_slope": 0.7, "sampler_order": [6, 0, 1, 3, 4, 2, 5], "quiet": True, "use_default_badwordsids": True}
 
@@ -48,6 +65,7 @@ class Program(object):
     def __init__(self, options={}, initial_cli_prompt=""):
         self.session = Session(chat_user=options.get("chat_user", ""))
         self.tts_flag = False
+        self.initial_print_flag = False
         self.initial_cli_prompt = initial_cli_prompt
         self.streaming_done = threading.Event()
         self.stream_queue = []
