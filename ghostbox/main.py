@@ -209,17 +209,20 @@ def main():
     parser = makeArgParser(DEFAULT_PARAMS)
     args = parser.parse_args()
     prog = Program(options=args.__dict__, initial_cli_prompt=args.cli_prompt)
-    if args.character_folder:
-        printerr(        newSession(prog, []))
-    skip = False
-
+    if userConfigFile():    
+        prog.setOption("user_config", userConfigFile())
+        printerr(loadConfig(prog, [userConfigFile()]))
+    
     if prog.getOption("config_file"):
         printerr(loadConfig(prog, [prog.options["config_file"]]))
+    
+    if args.character_folder:
+        printerr(        newSession(prog, []))
 
     if prog.getOption("hide"):
         hide(prog, [])
     del prog.options["hide"]
-        
+    skip = False        
     while prog.running:
         # have to do TTS here for complex reasons; flag means to reinitialize tts, which can happen e.g. due to voice change
         if prog.tts_flag:

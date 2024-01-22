@@ -365,7 +365,8 @@ def loadConfig(prog, argv, override=True):
     You can create an example config with /saveconfig example.conf.json.
     You can also load a config file at startup with the --config_file command line argument.
     If it exists, the ~/.ghostbox.conf.json will also be loaded at startup.
-    Options set in config files may be overriden by command line arguments, or config files in character folders."""
+    The order of config file loading is as follows .ghostconf.conf.json > --config_file > conf.json (from character folder). Config files that are loaded later will override settings from earlier files."""
+
     # loads a config file, which may be a user config, or a config supplied by a character folder. if override is false, the config may not override command line arguments that have been manually supplied (in the long form)
     if argv == []:
         return "Please provide a filename for the config file to load."
@@ -403,9 +404,8 @@ def hide(prog, argv):
     Hide various program outputs and change some variables for a less verbose display.
     This does nothing that you cannot achieve by manually setting several options, it just bundles an eclectic mix of them in one command.
     I like to use this with TTS for a more immersive experience."""
-    
     # this is just convenient shorthand for when I want my screen reader to be less spammy
-    prog.options["cli_prompt"] = ""
+    prog.options["cli_prompt"] = "\n"
     prog.options["tts_subtitles"] = False
     prog.options["streaming"] = False
     prog.options["chat_show_ai_prompt"] = False

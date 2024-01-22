@@ -106,3 +106,12 @@ def stripLeadingHyphens(w):
         return w[1:]
 
     return w
+
+
+def userConfigFile():
+    # return location of ~/.ghostbox.conf.json, or "" if not found
+    userconf = ".ghostbox.conf.json"
+    path = os.path.expanduser("~/" + userconf)
+    if os.path.isfile(path):
+        return path
+    return ""

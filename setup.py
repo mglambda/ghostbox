@@ -1,5 +1,5 @@
 from setuptools import setup, find_packages
-GHOSTBOX_VERSION='0.2.2' 
+GHOSTBOX_VERSION='0.2.3'
 with open("README.md", "r", encoding="utf-8") as readme_file:
     README = readme_file.read()
 
