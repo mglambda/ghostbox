@@ -184,8 +184,13 @@ class Program(object):
 
         print(w, end=end, flush=flush)
 
+    def replaceForbidden(self, w):
+        for forbidden in self.getOption("forbid_strings"):
+            w = w.replace(forbidden, "")
+        return w
+       
     def formatGeneratedText(self, w):
-        return self._formatters.get(self.getMode(), self._defaultFormatter)(w)
+        return self._formatters.get(self.getMode(), self._defaultFormatter)(self.replaceForbidden(w))
 
     def _defaultFormatter(self, w):
         display =trimIncompleteSentence(w)
