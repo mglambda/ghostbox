@@ -1,11 +1,11 @@
 from setuptools import setup, find_packages
-
+GHOSTBOX_VERSION='0.2.2' 
 with open("README.md", "r", encoding="utf-8") as readme_file:
     README = readme_file.read()
 
 setup(
     name='ghostbox',
-    version='0.2.1',
+    version=GHOSTBOX_VERSION,
     url="https://github.com/mglambda/ghostbox",
     author="Marius Gerdes",
     author_email="integr@gmail.com",

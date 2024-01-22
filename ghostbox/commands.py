@@ -55,8 +55,9 @@ def newSession(program, argv):
 
 
 def printStory(prog, argv, stderr=False, apply_filter=True):
-    """
-    Print the current story.""" 
+    """[FILENAME]
+    Print the current story.
+    If FILENAME is provided, save the story to that file.""" 
     w = prog.session.showStory(apply_filter=apply_filter)
 
     if stderr:
@@ -75,7 +76,9 @@ def printStory(prog, argv, stderr=False, apply_filter=True):
         f.write(pre + w)
         return ""
     else:
-        return w
+        # if stderr=False, we actually want this to go to stdout
+        print(w, end="")
+        return ""
     
 def doContinue(prog, argv):
     """
