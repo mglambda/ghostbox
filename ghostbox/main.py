@@ -1,4 +1,4 @@
-import requests, json, os, io, re, base64, random, sys, threading, subprocess
+import requests, json, os, io, re, base64, random, sys, threading, subprocess, signal
 import argparse
 from ghostbox.commands import *
 from ghostbox.util import *
@@ -119,7 +119,7 @@ class Program(object):
     def setOption(self, name, value):
         self.options[name] = value
         # for some options we do extra stuff
-        if name == "tts_voice":
+        if name == "tts_voice" or name == "tts_volume":
             self.tts_flag = True #restart TTS
         
     
@@ -147,7 +147,7 @@ class Program(object):
         if not(tts_program):
             return "Cannot initialize TTS: No TTS program set."
 
-        voice_args = ""
+        voice_args = [""]
         if voicefile:
             file = voice_dir + "/" + voicefile
             if os.path.isfile(file):
@@ -156,9 +156,22 @@ class Program(object):
                 #FIXME: this crashes if the file doesn't exist. maybe that's ok
                 voice_args = ["-V", voicefile]
 
-        cmd = [tts_program] +  voice_args        
+
+        if self.tts is not None:
+            # since shell=true spawns child processes that may still be running , we have to terminate by sending kill signal to entire process group
+            # FIXME: this doesn't work on windows
+            os.killpg(os.getpgid(self.tts.pid), signal.SIGTERM)
+
+                    
+        cmd = [tts_program] + voice_args + ["--volume=" + str(self.getOption("tts_volume"))]
         cmdstring = " ".join(cmd)
-        self.tts = subprocess.Popen(cmdstring, text=True, stdin=subprocess.PIPE, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        self.tts = subprocess.Popen(cmdstring,
+                                    text=True,
+                                    stdin=subprocess.PIPE,
+                                    shell=True,
+                                    preexec_fn=os.setsid,
+                                    stdout=subprocess.PIPE,
+                                    stderr=subprocess.PIPE)
         return ""
 
     def communicateTTS(self, w):

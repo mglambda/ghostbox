@@ -13,7 +13,8 @@ import pygame
 
 pygame.mixer.init()
 parser = argparse.ArgumentParser(description="ghostbox-tts-polly - ghostbox TTS script for Amazon Web Services Polly")
-parser.add_argument("-V", "--tts_voice", type=str, default="Joanna", help="Voice ID to use.")
+parser.add_argument("-V", "--tts_voice", type=str, default="Joey", help="Voice ID to use.")
+parser.add_argument("--volume", type=float, default=1.0, help="Volume adjustment for the voice.")
 args = parser.parse_args()
 
 # Create a client using the credentials and region defined in the [adminuser]
@@ -56,6 +57,7 @@ while True:
         sys.exit(-1)
     # play the audio using pygame
     snd = pygame.mixer.Sound(output)
+    snd.set_volume(args.volume)
     snd.play()
     # wait till playback finishes until processing next input line
     while pygame.mixer.get_busy():
