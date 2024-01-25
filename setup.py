@@ -1,5 +1,10 @@
 from setuptools import setup, find_packages
-GHOSTBOX_VERSION='0.3.0'
+import os
+
+
+GHOSTBOX_VERSION='0.3.1'
+
+
 with open("README.md", "r", encoding="utf-8") as readme_file:
     README = readme_file.read()
 
@@ -13,7 +18,8 @@ setup(
     long_description=README,
     long_description_content_type="text/markdown",
     license_files=["LICENSE"],
-    scripts=["scripts/ghostbox", "scripts/ghostbox-tts-polly"],
+    scripts=["scripts/ghostbox", "scripts/ghostbox-tts-polly", "scripts/ghostbox-install"],
     packages=find_packages(include=['ghostbox']),
-    install_requires=["requests","requests_html","boto3"] 
+    install_requires=["requests","requests_html","boto3", "appdirs"] 
 )
+

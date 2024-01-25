@@ -1,4 +1,5 @@
-import os
+import os, getpass, shutil
+import appdirs
 import sys
 
 def printerr(w, prefix=" # "):
@@ -108,10 +109,38 @@ def stripLeadingHyphens(w):
     return w
 
 
-def userConfigFile():
+def userConfigFile(force=False):
     # return location of ~/.ghostbox.conf.json, or "" if not found
-    userconf = ".ghostbox.conf.json"
-    path = os.path.expanduser("~/" + userconf)
-    if os.path.isfile(path):
+    userconf = "ghostbox.conf"
+    path = appdirs.user_config_dir() + "/" + userconf
+    if os.path.isfile(path) or force:
         return path
     return ""
+
+def userCharDir():
+    return appdirs.user_data_dir() + "/ghostbox/chars"
+
+
+def userSetup():
+    if not(os.path.isfile(userConfigFile())):
+        print("Creating config file " + userConfigFile(force=True))
+        f = open(userConfigFile(force=True), "w")
+        f.write('{\n"chat_user" : "' + getpass.getuser() +'"\n}\n')
+        f.flush()
+        
+    if not(os.path.isdir(userCharDir())):
+        print("Creating char dir " + userCharDir())
+        os.makedirs(userCharDir())
+
+    # try copying some example chars
+    chars = "chat-ml dolphin dolphin-kitten joshu minsk".split(" ")
+    try:
+        for char in chars:
+            if os.path.isdir(userCharDir() + "/" + char):
+                continue
+            print("Installing char " + char)
+            shutil.copytree("chars/" + char, userCharDir() + "/" + char)
+    except:
+        print("Warning: Couldn't copy example chars.")
+          
+    
