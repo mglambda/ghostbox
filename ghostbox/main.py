@@ -72,12 +72,32 @@ class Program(object):
         self.tts = None
         self.multiline_buffer = ""
         self.options = options
+        if self.getOption("json"):
+            self.setOption("grammar", getJSONGrammar())
+            del self.options["json"]
+        elif self.getOption("grammar_file"):
+            self.loadGrammar(self.getOption("grammar_file"))
+        else:
+            self.setOption("grammar", "")
+        
         # formatters is to be idnexed with modes
         self._formatters = {
             "default" : self._defaultFormatter,
             "chat" : self._chatFormatter}
         self.setMode(self.getOption("mode"))
         self.running = True
+
+
+    def loadGrammar(self, grammar_file):
+        if os.path.isfile(grammar_file):
+            w = open(grammar_file, "r").read()
+            self.setOption("grammar", w)
+        else:
+            self.setOption("grammar", "")
+            printerr("warning: grammar file " + grammar_file + " could not be loaded: file not found.")
+            
+
+
 
         
     def loadConfig(self, json_data, override=True):
@@ -131,16 +151,15 @@ class Program(object):
     
     def getPrompt(self, conversation_history, text, system_msg = ""): # For KoboldAI Generation
         d = {"prompt": conversation_history + text + "",
-                "memory" : system_msg, # koboldcpp special feature: will prepend this to the prompt, overwriting prompt history if necessary
-                "n": 1,
-                "max_context_length": 2048, #1024,
-                "max_length": self.options["max_length"]}
+             "grammar" : self.getOption("grammar"),
+             "memory" : system_msg, # koboldcpp special feature: will prepend this to the prompt, overwriting prompt history if necessary
+             "n": 1,
+             "max_context_length": self.getOption("max_context_length"),
+             "max_length": self.options["max_length"]}
         for paramname in DEFAULT_PARAMS.keys():
             d[paramname] = self.options[paramname]
         return d
             
-    #        "max_context_length": 1024, "max_length": 256, "n": 1, "rep_pen": 1.8, "rep_pen_range": 2048, "rep_pen_slope": 0.7, "temperature": 0.7, "tfs": 1, "top_a": 0, "top_k": 0, "top_p": 0.9, "typical": 1, "sampler_order": [6, 0, 1, 3, 4, 2, 5], "singleline": False, "sampler_seed": 69420, "sampler_full_determinism": False, "frmttriminc": False, "frmtrmblln": False}    
-
     def initializeTTS(self):
         tts_program = self.getOption("tts_program")
         candidate = os.getcwd() + "/" + tts_program
