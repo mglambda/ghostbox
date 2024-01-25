@@ -12,7 +12,7 @@ def makeArgParser(default_params):
     parser.add_argument("-m", "--mode", type=str, default="default", help="Mode of operation. Changes various things behind-the-scenes. Values are currently 'default', or 'chat'.")
     parser.add_argument("--chat_ai", type=str, default="", help="Name  the AI will have when chatting. Has various effects on the prompt when chat mode is enabled. This is usually set automatically in the config.json file of a chracter folder.")
     parser.add_argument("--streaming", action=argparse.BooleanOptionalAction, default=True, help="Enable streaming mode.")
-    parser.add_argument("--streaming_flush", action=argparse.BooleanOptionalAction, default=False, help="When True, flush print buffer immediately in streaming mode (print token-by-token). When set to false, waits for newline until generated text is printed.")
+    parser.add_argument("--streaming_flush", action=argparse.BooleanOptionalAction, default=True, help="When True, flush print buffer immediately in streaming mode (print token-by-token). When set to false, waits for newline until generated text is printed.")
     parser.add_argument("--cli_prompt", type=str, default="\n 🧠 ", help="String to show at the bottom as command prompt. Can be empty.")
     parser.add_argument("--tts", action=argparse.BooleanOptionalAction, default=False, help="Enable text to speech on generated text.")
     parser.add_argument("--tts_program", type=str, default="ghostbox-tts-polly", help="Path to a TTS (Text-to-speech) program to verbalize generated text. The TTS program should read lines from standard input.")

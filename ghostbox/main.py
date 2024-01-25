@@ -70,6 +70,7 @@ class Program(object):
         self.streaming_done = threading.Event()
         self.stream_queue = []
         self.tts = None
+        self.multiline_buffer = ""
         self.options = options
         # formatters is to be idnexed with modes
         self._formatters = {
@@ -93,6 +94,11 @@ class Program(object):
                 
         self.options = self.options | d
         return ""
+
+    def showCLIPrompt(self):
+        if self.isMultilineBuffering():
+            return ""
+        return self.getOption("cli_prompt")
     
     def getMode(self):
         w = self.getOption("mode")
@@ -201,7 +207,19 @@ class Program(object):
         for forbidden in self.getOption("forbid_strings"):
             w = w.replace(forbidden, "")
         return w
-       
+
+    def bufferMultilineInput(self, w):
+        #expects strings with \ at the end
+        self.multiline_buffer += w[:-1] + "\n"
+    def isMultilineBuffering(self):
+        return self.multiline_buffer != ""
+            
+    def flushMultilineBuffer(self):
+        w = self.multiline_buffer
+        self.multiline_buffer = ""
+        return w
+        
+    
     def formatGeneratedText(self, w):
         return self._formatters.get(self.getMode(), self._defaultFormatter)(self.replaceForbidden(w))
 
@@ -252,7 +270,14 @@ def main():
             prog.initial_print_flag = False
             print("\n\n" + prog.session.showStory(apply_filter=True), end="")
         
-        w = input(prog.getOption("cli_prompt"))
+        w = input(prog.showCLIPrompt())
+        # check for multiline
+        if w.endswith("\\") and not(w.endswith("\\\\")):
+            prog.bufferMultilineInput(w)
+            continue
+        elif prog.isMultilineBuffering():
+            w = prog.flushMultilineBuffer() + w
+        
         # for convenience when chatting
         if w == "":
             w = "/cont"
