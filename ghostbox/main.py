@@ -97,9 +97,10 @@ class Program(object):
 
     def _newTranscriber(self):
         # makes a lazy WhisperTranscriber, because model loading can be slow
-        return Proxy(lambda: WhisperTranscriber(model_name = self.getOption("whisper_model")))
+        return Proxy(lambda: WhisperTranscriber(model_name = self.getOption("whisper_model"),
+                                                input_func=lambda: printerr("Started Recording. Hit enter to stop.")))
 
-    def continueWith(self, newUserInput):
+    def    continueWith(self, newUserInput):
         # FIXME: the entire 'continue' architecture is a trashfire. This should be refactored along with other modeswitching/input rewriting stuff in the main loop
         self.setOption("continue","1")
         self.continue_with = newUserInput

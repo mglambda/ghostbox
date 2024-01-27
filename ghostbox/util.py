@@ -2,7 +2,10 @@ import os, getpass, shutil
 import appdirs
 import sys
 
-def printerr(w, prefix=" # "):
+def getErrorPrefix():
+    return " # "
+
+def printerr(w, prefix=getErrorPrefix()):
     if w == "":
         return
 

@@ -97,12 +97,16 @@ of the phrase."""
         
 
 class WhisperTranscriber(object):
-    def __init__(self, model_name="base.en", silence_threshold=2500):
+    def __init__(self, model_name="base.en", silence_threshold=2500, input_func=None):
+        """model_name is the name of a whisper model, e.g. 'base.en' or 'tiny.en'.
+        silence_threshold is an integer value describing a decibel threshold at which recording starts in the case of continuous transcribing.
+input_func is a 0-argument function or None. If not None, it is called before transcribing, though only with the one-shot 'transcribe' method, not with transcribeContinuously. You can use this to print to stdout, or play a sound or do anything to signal to the user that recording has started."""
         self.model = loadModel(model_name)
         self.silence_threshold = silence_threshold
+        self.input_func = input_func
         
 
-    def transcribe(self, input_msg=""):
+    def transcribe(self, input_msg="", input_func=None):
         """Records audio directly from the microphone and then transcribes it to text using Whisper, returning that transcription."""    
         # Create a temporary file to store the recorded audio (this will be deleted once we've finished transcription)
         temp_file = tempfile.NamedTemporaryFile(suffix=".wav")
@@ -133,30 +137,35 @@ class WhisperTranscriber(object):
         asound.snd_lib_error_set_handler(c_error_handler)
 
         # Initialize PyAudio
+        audio = None
         with ignoreStderr():    
             audio = pyaudio.PyAudio()
 
-            # Start recording audio
-            stream = audio.open(format=audio_format,
-                                channels=channels,
-                                rate=sample_rate,
-                                input=True,
-                                frames_per_buffer=chunk_size,
-                                stream_callback=callback)
+        # Start recording audio
+        stream = audio.open(format=audio_format,
+                            channels=channels,
+                            rate=sample_rate,
+                            input=True,
+                            frames_per_buffer=chunk_size,
+                            stream_callback=callback)
 
-            input(input_msg)
-            # Stop and close the audio stream
-            stream.stop_stream()
-            stream.close()
-            audio.terminate()
+        if self.input_func:
+            self.input_func()
+        if input_func:
+            input_func()
+        input(input_msg)
+        # Stop and close the audio stream
+        stream.stop_stream()
+        stream.close()
+        audio.terminate()
 
-            # Close the wave file
-            wav_file.close()
+        # Close the wave file
+        wav_file.close()
 
-            # And transcribe the audio to text (suppressing warnings about running on a CPU)
-            result = getWhisperTranscription(temp_file.name, self.model)
-            temp_file.close()
-            return result
+        # And transcribe the audio to text (suppressing warnings about running on a CPU)
+        result = getWhisperTranscription(temp_file.name, self.model)
+        temp_file.close()
+        return result
 
     def transcribeContinuously(self):
         """Starts recording continuously, transcribing audio when a given volume threshold is reached.
