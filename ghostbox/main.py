@@ -1,10 +1,12 @@
 import requests, json, os, io, re, base64, random, sys, threading, subprocess, signal
+from lazy_object_proxy import Proxy
 import argparse
 from ghostbox.commands import *
 from ghostbox.util import *
 from ghostbox._argparse import *
 from ghostbox.streaming import streamPrompt
 from ghostbox.session import Session
+from ghostbox.transcribe import WhisperTranscriber
 
 
 def showHelp(prog, argv):
@@ -37,6 +39,8 @@ cmds = [
     ("/new", newStory),
     ("/clone", cloneStory),
     ("/log", lambda prog, w: printStory(prog, w, stderr=True, apply_filter=False)),
+    ("!",  transcribe),
+    ("/transcribe", transcribe),
     ("/ttsdebug", ttsDebug),    
     ("/tts", toggleTTS),
     ("/set", setOption),
@@ -69,6 +73,7 @@ class Program(object):
         self.initial_cli_prompt = initial_cli_prompt
         self.streaming_done = threading.Event()
         self.stream_queue = []
+        self.continue_with = ""
         self.tts = None
         self.multiline_buffer = ""
         self.options = options
@@ -79,7 +84,10 @@ class Program(object):
             self.loadGrammar(self.getOption("grammar_file"))
         else:
             self.setOption("grammar", "")
-        
+
+            # whisper stuff. We do this with a special init function because it's lazy
+        self.whisper = self._newTranscriber()
+            
         # formatters is to be idnexed with modes
         self._formatters = {
             "default" : self._defaultFormatter,
@@ -87,7 +95,22 @@ class Program(object):
         self.setMode(self.getOption("mode"))
         self.running = True
 
+    def _newTranscriber(self):
+        # makes a lazy WhisperTranscriber, because model loading can be slow
+        return Proxy(lambda: WhisperTranscriber(model_name = self.getOption("whisper_model")))
 
+    def continueWith(self, newUserInput):
+        # FIXME: the entire 'continue' architecture is a trashfire. This should be refactored along with other modeswitching/input rewriting stuff in the main loop
+        self.setOption("continue","1")
+        self.continue_with = newUserInput
+        
+    def popContinueString(self):
+        self.setOption("continue", False)
+        tmp = self.continue_with
+        self.continue_with = ""
+        return tmp
+    
+    
     def loadGrammar(self, grammar_file):
         if os.path.isfile(grammar_file):
             w = open(grammar_file, "r").read()
@@ -147,8 +170,9 @@ class Program(object):
         # for some options we do extra stuff
         if name == "tts_voice" or name == "tts_volume":
             self.tts_flag = True #restart TTS
+        elif name == "whisper_model":
+            self.whisper = self._newTranscriber()
         
-    
     def getPrompt(self, conversation_history, text, system_msg = ""): # For KoboldAI Generation
         d = {"prompt": conversation_history + text + "",
              "grammar" : self.getOption("grammar"),
@@ -316,19 +340,21 @@ def main():
             skip = False
             continue
 
-        if prog.getOption("continue"):
+        if prog.getOption("continue") and prog.continue_with == "":
             setOption(prog, ["continue", "False"])
-            w = "" # get rid of /cont etc
+            w = "" # gets rid of /cont etc
             prompt = prog.getPrompt(prog.session.showStory(trim_end=True), "", system_msg = prog.session.getSystem())                
         else:
+            if prog.continue_with != "":
+                # user input has been replaced with something else, e.g. a transcription
+                w = prog.popContinueString()
+                
             v = ""
             if prog.getMode() == "chat":
                 w = mkChatPrompt(prog.getOption("chat_user")) + w
                 v = mkChatPrompt(prog.getOption("chat_ai"))
             w = prog.session.injectTemplate(w) + v
             prompt = prog.getPrompt(prog.session.showStory(), w, system_msg = prog.session.getSystem())
-
-
 
         if prog.getOption("streaming"):
             r = streamPrompt(prog, prog.getOption("endpoint") + "/api/extra/generate/stream", json=prompt)

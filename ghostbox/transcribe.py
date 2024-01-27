@@ -97,12 +97,12 @@ of the phrase."""
         
 
 class WhisperTranscriber(object):
-    def __init__(self, model, silence_threshold=2500):
-        self.model = model
+    def __init__(self, model_name="base.en", silence_threshold=2500):
+        self.model = loadModel(model_name)
         self.silence_threshold = silence_threshold
         
 
-    def TranscribeDirectly(self, input_msg=""):
+    def transcribe(self, input_msg=""):
         """Records audio directly from the microphone and then transcribes it to text using Whisper, returning that transcription."""    
         # Create a temporary file to store the recorded audio (this will be deleted once we've finished transcription)
         temp_file = tempfile.NamedTemporaryFile(suffix=".wav")
@@ -158,7 +158,7 @@ class WhisperTranscriber(object):
             temp_file.close()
             return result
 
-    def TranscribeContinuously(self):
+    def transcribeContinuously(self):
         """Starts recording continuously, transcribing audio when a given volume threshold is reached.
         This function is non-blocking, but returns a ContinuousTranscriber object, which runs asynchronously and must be polled to get the latest transcription (if any)."""
         return ContinuousTranscriber(self.model, self.silence_threshold)
