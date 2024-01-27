@@ -1,5 +1,5 @@
 import whisper
-import time, os, sys, contextlib
+import time, os, sys, contextlib, threading
 import wave
 import tempfile
 from ctypes import *
@@ -9,9 +9,8 @@ import audioop
 import math
 from collections import deque
 
-
-# Load the Whisper model once
-model = whisper.load_model("tiny.en")
+def loadModel(name="base.en"):
+    return whisper.load_model(name)
 
 def getWhisperTranscription(filename, model):
     result = model.transcribe(filename, fp16=False)
@@ -169,21 +168,48 @@ class ContinuousTranscriber(object):
         self.model = model
         self.silence_threshold = silence_threshold
         self.buffer = []
-        self._init()
+        self.running = False
+        self.resume_flag = threading.event()
+        self.payload_flag = threading.Event()
+        self._spawnThread()
 
-    def _init(self):
-        
-        
-    
-if __name__=="__main__":
-    while True:
+    def _spawnThread(self):
+        self.running = True
+        self.resume_flag.set()
+        self.payload_flag.clear()
+        thread = threading.Thread(target=self._recordLoop, args=())
+        thread.start()
+
+def _recordLoop(self):
+    while self.running:
+        self.resume_flag.wait()
         temp_file = tempfile.NamedTemporaryFile(suffix=".wav")
-        tmpfile = temp_file.name        
-        record_on_detect(tmpfile)
-        print(getWhisperTranscription(tmpfile))
-          
+        self.buffer.append(record_on_detect(temp_file.name))
+        self.payload_flag.set()
+        
+def pause(self):
+    self.resume_flag.clear()
 
-#    w = transcribe_directly()
-#        print(w)
+def resume(self):
+    self.resume_flag.set()
+
+def stop(self):
+    # FIXME: what if resume_flag is false and thread is waiting on the flag? this might be a memory issue (thread never gets GCed). But if we set() the flag here, it records again and behaviour might be weird
+    self.running = False
+
+    def pop(self):
+        """Returns a list of strings that were recorded and transcribed since the last time poll or pop was called.
+        This function is non-blocking."""
+        tmp = self.buffer
+        self.buffer = [] #FIXME: race condition?
+        return tmp
+
+    def poll(self):
+        """Returns a list of strings that were recorded and transcribed since the last time poll or pop was called. 
+This function will block until new input is recorded."""
+        self.payload_flag.wait()
+        self.payload_flag.clear()
+        return self.pop()
     
-    
+        
+                               
