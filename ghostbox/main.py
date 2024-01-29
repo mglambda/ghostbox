@@ -191,6 +191,8 @@ class Program(object):
 
     def _transcriptionCallback(self, w):
         (modified_w, prompt) = self.buildPrompt(w)
+        if self.getOption("audio_show_transcript"):
+            print(w)
         self.communicate(modified_w, prompt)
         print(self.showCLIPrompt(), end="")
         
@@ -349,6 +351,9 @@ class Program(object):
         prompt - String to send to the backend."""
         if prog.getOption("streaming"):
             r = streamPrompt(prog, prog.getOption("endpoint") + "/api/extra/generate/stream", json=prompt)
+            #FIXME: find a better way to do this (print of ai prompt with colon etc.)
+            if prog.getOption("chat_show_ai_prompt"):
+                print(mkChatPrompt(prog.getOption("chat_ai")), end="")
             prog.streaming_done.wait()
             prog.streaming_done.clear()
             r.json = lambda ws=prog.stream_queue: {"results" : [{"text" : "".join(ws)}]}

@@ -1,0 +1,45 @@
+#!/usr/bin/env python
+from ghostbox.transcribe import *
+from ghostbox.util import printerr
+import argparse
+import signal
+from time import sleep
+
+parser = argparse.ArgumentParser(description="ghostbox-transcribe - Audio transcription to standard output.", formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+parser.add_argument("--continuous", action=argparse.BooleanOptionalAction, default=True, help="Will listen for audio signal above threshold and then begin transcription, until a pause of relative silence is encountered, at which point the transcript is printed to stdout. This is the default. If --no--continuous is given, will prompt for a newline before each recording.")
+parser.add_argument("-t", "--threshold", type=int, default=2500, help="Integer denoting silence threshold at which point to begin recording in continuous mode. Default is 2500.")
+parser.add_argument("-m", "--model", type=str, default="base.en", help="OpenAI whisper model name to use. Default is 'base.en'")
+args = parser.parse_args()
+
+running = True
+wt = WhisperTranscriber(model_name=args.model, silence_threshold=args.threshold)
+
+ct = None
+def pauseHandler(signal, frame):
+    printerr("Paused recording. CTRL + c  to resume.")
+    ct.pause()
+    signal.signal(signal.SIGINT, resumeHandler)
+
+def resumeHandler(signal, frame):
+    printerr("Resumed recording. CTRL + c to pause.")
+    ct.resume()
+    signal.signal(signal.SIGINT, pauseHandler)
+    
+
+if args.continuous:
+    printerr("Beginning recording. CTRL + c to pause.")
+    ct = wt.transcribeContinuously()
+    signal.signal(signal.SIGINT, pauseHandler)    
+else:
+    printerr("Recording started. Hit enter to transcribe.")
+    
+while running:
+    if args.continuous:
+        w = "\n".join(ct.poll())
+    else:
+        w = wt.transcribe()
+        
+    print(w)
+    
+
+        

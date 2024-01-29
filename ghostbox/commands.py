@@ -406,6 +406,7 @@ def hide(prog, argv):
     I like to use this with TTS for a more immersive experience."""
     # this is just convenient shorthand for when I want my screen reader to be less spammy
     prog.options["cli_prompt"] = "\n"
+    prog.options["audio_show_transcript"] = False
     prog.options["tts_subtitles"] = False
     prog.options["streaming"] = False
     prog.options["chat_show_ai_prompt"] = False
