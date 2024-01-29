@@ -419,6 +419,7 @@ def exitProgram(prog, argv):
     """
     Quit the program. Chat history (story folder) is discarded. All options are lost.
     See also /save, /saveoptions, /saveconfig"""
+    prog.stopAudioTranscription()
     prog.running = False
     return ""
 
@@ -432,8 +433,15 @@ The model will be automatically downloaded the first time you transcribe with it
     prog.continueWith(w)
     return ""
 
-    
-    
+def toggleAudio(prog, argv):
+    """Enable/disable audio input. This means the program will automatically record audio and transcribe it using the openai whisper model. A query is send to the backend with transcribed speech whenever a longish pause is detected in the input audio.
+See whisper_model for the model used for transcribing."""
+    if prog.isAudioTranscribing():
+        prog.stopAudioTranscription()
+    else:
+        prog.startAudioTranscription()
+    return ""
+
 
     
 
@@ -447,8 +455,5 @@ cmds_additional_docs = {
     "/rephrase" : retry.__doc__,
     "/restart" : """
     Restarts the current character folder. Note that this will wipe the current story folder, i.e. your chat history, so you may want to /save.
-    /restart is equivalent to /start CURRENT_CHAR_FOLDER.""",
-    "/text" : """Set the input_method to text. This reads lines of text from standard input, which is the default.""",
-    "/audio" : """Set the input_method to audio. This means the program will automatically record audio and transcribe it using the openai whisper model. A query is send to the backend with transcribed speech whenever a longish pause is detected in the input audio.
-See whisper_model for the model used for transcribing.""",    
+    /restart is equivalent to /start CURRENT_CHAR_FOLDER."""    
     }

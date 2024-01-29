@@ -22,77 +22,13 @@ def ignoreStderr():
     devnull = os.open(os.devnull, os.O_WRONLY)
     old_stderr = os.dup(2)
     sys.stderr.flush()
-#    os.dup2(devnull, 2)
+    os.dup2(devnull, 2)
     os.close(devnull)
     try:
         yield
     finally:
         os.dup2(old_stderr, 2)
         os.close(old_stderr)
-
-
-
-def record_on_detect(file_name, silence_limit=1, silence_threshold=2500, chunk=1024, rate=44100, prev_audio=1):
-    """ Silence limit in seconds. The max ammount of seconds where
-only silence is recorded. When this time passes the
-recording finishes and the file is delivered.
-
-The silence threshold intensity that defines silence
-and noise signal (an int. lower than THRESHOLD is silence).
-Previous audio (in seconds) to prepend. When noise
-is detected, how much of previously recorded audio is
-prepended. This helps to prevent chopping the beginning
-of the phrase."""
-    
-    CHANNELS = 2
-    FORMAT = pyaudio.paInt16
-    with ignoreStderr():      
-        p = pyaudio.PyAudio()
-        stream = p.open(format=p.get_format_from_width(2),
-                        channels=CHANNELS,
-                        rate=rate,
-                        input=True,
-                        output=False,
-                        frames_per_buffer=chunk)
-        listen = True
-        started = False
-        rel = rate/chunk
-        frames = []
-
-        prev_audio = deque(maxlen=int(prev_audio * rel))
-        slid_window = deque(maxlen=int(silence_limit * rel))
-        while listen:
-
-            data = stream.read(chunk)
-            slid_window.append(math.sqrt(abs(audioop.avg(data, 4))))
-
-            if(sum([x > silence_threshold for x in slid_window]) > 0):
-                if(not started):
-                    # recording starts here
-                    started = True
-            elif (started is True):
-                started = False
-                listen = False
-                prev_audio = deque(maxlen=int(0.5 * rel))
-
-            if (started is True):
-                frames.append(data)
-            else:
-                prev_audio.append(data)
-
-        stream.stop_stream()
-        stream.close()
-
-        p.terminate()
-
-    wf = wave.open(file_name, 'wb')
-    wf.setnchannels(CHANNELS)
-    wf.setsampwidth(p.get_sample_size(FORMAT))
-    wf.setframerate(rate)
-    wf.writeframes(b''.join(list(prev_audio)))
-    wf.writeframes(b''.join(frames))
-    wf.close()
-        
 
 class WhisperTranscriber(object):
     def __init__(self, model_name="base.en", silence_threshold=2500, input_func=None):
@@ -193,10 +129,13 @@ class ContinuousTranscriber(object):
         while self.running:
             self.resume_flag.wait()
             temp_file = tempfile.NamedTemporaryFile(suffix=".wav")
-            record_on_detect(temp_file.name, silence_threshold=self.silence_threshold)
+            if self.record_on_detect(temp_file.name, silence_threshold=self.silence_threshold):
+                continue
             self.buffer.append(getWhisperTranscription(temp_file.name, self.model))
+            if self.callback:
+                self.callback(self.buffer[-1])
             self.payload_flag.set()
-        
+                
     def pause(self):
         self.resume_flag.clear()
 
@@ -224,5 +163,67 @@ This function will block until new input is recorded."""
         self.payload_flag.clear()
         return self.pop()
     
+    def record_on_detect(self, file_name, silence_limit=1, silence_threshold=2500, chunk=1024, rate=44100, prev_audio=1):
+        """Returns False on error or if stopped.
+Silence limit in seconds. The max ammount of seconds where
+only silence is recorded. When this time passes the
+recording finishes and the file is delivered.
+
+The silence threshold intensity that defines silence
+and noise signal (an int. lower than THRESHOLD is silence).
+Previous audio (in seconds) to prepend. When noise
+is detected, how much of previously recorded audio is
+prepended. This helps to prevent chopping the beginning
+of the phrase."""
+    
+        CHANNELS = 2
+        FORMAT = pyaudio.paInt16
+        with ignoreStderr():      
+            p = pyaudio.PyAudio()
+        stream = p.open(format=p.get_format_from_width(2),
+                        channels=CHANNELS,
+                        rate=rate,
+                        input=True,
+                        output=False,
+                        frames_per_buffer=chunk)
+        listen = True
+        started = False
+        rel = rate/chunk
+        frames = []
+        prev_audio = deque(maxlen=int(prev_audio * rel))
+        slid_window = deque(maxlen=int(silence_limit * rel))
+        while listen:
+            if not(self.running):
+                return True
+                
+            data = stream.read(chunk)
+            slid_window.append(math.sqrt(abs(audioop.avg(data, 4))))
+
+            if(sum([x > silence_threshold for x in slid_window]) > 0):
+                if(not started):
+                    # recording starts here
+                    started = True
+            elif (started is True):
+                started = False
+                listen = False
+                prev_audio = deque(maxlen=int(0.5 * rel))
+
+            if (started is True):
+                frames.append(data)
+            else:
+                prev_audio.append(data)
+
+        stream.stop_stream()
+        stream.close()
+        p.terminate()
+            
+        wf = wave.open(file_name, 'wb')
+        wf.setnchannels(CHANNELS)
+        wf.setsampwidth(p.get_sample_size(FORMAT))
+        wf.setframerate(rate)
+        wf.writeframes(b''.join(list(prev_audio)))
+        wf.writeframes(b''.join(frames))
+        wf.close()
+        return False
         
                                

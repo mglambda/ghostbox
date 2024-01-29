@@ -41,8 +41,7 @@ cmds = [
     ("/log", lambda prog, w: printStory(prog, w, stderr=True, apply_filter=False)),
     ("!",  transcribe),
     ("/transcribe", transcribe),
-    ("/text", lambda prog,argv: prog.setOption("input_method", "text")),
-    ("/audio", lambda prog, argv: prog.setOption("input_method", "audio")),
+    ("/audio", toggleAudio),
     ("/ttsdebug", ttsDebug),    
     ("/tts", toggleTTS),
     ("/set", setOption),
@@ -194,20 +193,27 @@ class Program(object):
 
     def _transcriptionCallback(self, w):
         (modified_w, prompt) = self.buildPrompt(w)
-        self.communicate(wmodified_w, prompt)
+        self.communicate(modified_w, prompt)
+        print(self.showCLIPrompt(), end="")
         
-    def setInputMethod(self, input_method="text"):
-        if input_method == "audio":
-            printerr("Beginning automatic transcription. CTRL + c to pause.")
-            if self.ct:
-                self.ct.stop()
-            self.ct = self.whisper.transcribeContinuously(callback=self._transcriptionCallback)
-            signal.signal(signal.SIGINT, self._ctPauseHandler)
-        elif input_method == "text":
-            if self.ct:
-                self.ct.stop()
-            self.ct = None
-            signal.signal(signal.SIGINT, self._defaultSIGINTHandler)
+        
+    def isAudioTranscribing(self):
+        return self.ct is not None and self.ct.running
+        
+        
+    def startAudioTranscription(self):
+        printerr("Beginning automatic transcription. CTRL + c to pause.")
+        if self.ct:
+            self.ct.stop()
+        self.ct = self.whisper.transcribeContinuously(callback=self._transcriptionCallback)
+        signal.signal(signal.SIGINT, self._ctPauseHandler)
+
+    def stopAudioTranscription(self):
+        if self.ct:
+            printerr("Stopping automatic audio transcription.")            
+            self.ct.stop()
+        self.ct = None
+        signal.signal(signal.SIGINT, self._defaultSIGINTHandler)
             
             
             
@@ -396,7 +402,7 @@ def main():
             prog.initial_print_flag = False
             print("\n\n" + prog.session.showStory(apply_filter=True), end="")
 
-        if (prog.getOption("input_method") == "text") or (prog.ct is not None) and (prog.ct.isPaused()):
+        if True or (prog.getOption("input_method") == "text") or (prog.ct is not None) and (prog.ct.isPaused()):
             w = input(prog.showCLIPrompt())
             # check for multiline
             if w.endswith("\\") and not(w.endswith("\\\\")):
