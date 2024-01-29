@@ -176,8 +176,6 @@ class Program(object):
             self.tts_flag = True #restart TTS
         elif name == "whisper_model":
             self.whisper = self._newTranscriber()
-        elif name == "input_method":
-            self.setInputMethod(value)
 
         return ""
 
@@ -390,6 +388,11 @@ def main():
     if prog.getOption("hide"):
         hide(prog, [])
     del prog.options["hide"]
+
+    if prog.getOption("audio"):
+        prog.startAudioTranscription()
+    del prog.options["audio"]
+
     skip = False        
     while prog.running:
         # have to do TTS here for complex reasons; flag means to reinitialize tts, which can happen e.g. due to voice change
@@ -402,19 +405,17 @@ def main():
             prog.initial_print_flag = False
             print("\n\n" + prog.session.showStory(apply_filter=True), end="")
 
-        if True or (prog.getOption("input_method") == "text") or (prog.ct is not None) and (prog.ct.isPaused()):
-            w = input(prog.showCLIPrompt())
-            # check for multiline
-            if w.endswith("\\") and not(w.endswith("\\\\")):
-                prog.bufferMultilineInput(w)
-                continue
-            elif prog.isMultilineBuffering():
-                w = prog.flushMultilineBuffer() + w
+        w = input(prog.showCLIPrompt())
+        # check for multiline
+        if w.endswith("\\") and not(w.endswith("\\\\")):
+            prog.bufferMultilineInput(w)
+            continue
+        elif prog.isMultilineBuffering():
+            w = prog.flushMultilineBuffer() + w
        
         # for convenience when chatting
         if w == "":
             w = "/cont"
-            
             
         for (cmd, f) in cmds:
             #FIXME: the startswith is dicey because it now makes the order of cmds defined above relevant, i.e. longer commands must be specified before shorter ones. 
