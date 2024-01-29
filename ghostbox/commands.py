@@ -422,6 +422,18 @@ def exitProgram(prog, argv):
     prog.running = False
     return ""
 
+    
+def transcribe(prog, argv):
+    """Records using the microphone until you hit enter. The recording is then transcribed using openai's whisper, and inserted into the current line at the CLI.
+THe precise model to be used for transcribing is determined using the 'whisper_model' option. Larger models transcribe more accurately, and may handle more languages, but also consume more resources. See https://huggingface.co/openai/whisper-large for a list of model names. The default is 'base.en'.
+The model will be automatically downloaded the first time you transcribe with it. This may take a moment, but will only happen once for each model."""
+    w = prog.whisper.transcribe()
+    sys.stdout.write("\r" + w + "\n")
+    prog.continueWith(w)
+    return ""
+
+    
+    
 
     
 
@@ -436,16 +448,7 @@ cmds_additional_docs = {
     "/restart" : """
     Restarts the current character folder. Note that this will wipe the current story folder, i.e. your chat history, so you may want to /save.
     /restart is equivalent to /start CURRENT_CHAR_FOLDER.""",
+    "/text" : """Set the input_method to text. This reads lines of text from standard input, which is the default.""",
+    "/audio" : """Set the input_method to audio. This means the program will automatically record audio and transcribe it using the openai whisper model. A query is send to the backend with transcribed speech whenever a longish pause is detected in the input audio.
+See whisper_model for the model used for transcribing.""",    
     }
-    
-def transcribe(prog, argv):
-    """Records using the microphone until you hit enter. The recording is then transcribed using openai's whisper, and inserted into the current line at the CLI.
-THe precise model to be used for transcribing is determined using the 'whisper_model' option. Larger models transcribe more accurately, and may handle more languages, but also consume more resources. See https://huggingface.co/openai/whisper-large for a list of model names. The default is 'base.en'.
-The model will be automatically downloaded the first time you transcribe with it. This may take a moment, but will only happen once for each model."""
-    w = prog.whisper.transcribe()
-    sys.stdout.write("\r" + w + "\n")
-    prog.continueWith(w)
-    return ""
-
-    
-    

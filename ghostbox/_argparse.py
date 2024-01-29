@@ -12,6 +12,7 @@ def makeArgParser(default_params):
     parser.add_argument("--max_context_length", type=int, default=2048, help="Maximum tokens to keep in context.")
     parser.add_argument("-u", "--chat_user", type=str, default="user", help="Username you wish to be called when chatting in 'chat' mode. It will also replace occurrences of {chat_user} anywhere in the character files.")
     parser.add_argument("-m", "--mode", type=str, default="default", help="Mode of operation. Changes various things behind-the-scenes. Values are currently 'default', or 'chat'.")
+    parser.add_argument("-input_method", type=str, default="text", help="How the program gets its input to send to the backend. Values are 'text' (default), or 'audio'. Text reads lines from standard input, while audio enables automatic, continuous transcription using openai whisper. These can also be enabled during runtime with /text or /audio, respectively.") 
     parser.add_argument("-g", "--grammar_file", type=str, default="", help="Grammar file used to restrict generation output. Grammar format is GBNF.") 
     parser.add_argument("--chat_ai", type=str, default="", help="Name  the AI will have when chatting. Has various effects on the prompt when chat mode is enabled. This is usually set automatically in the config.json file of a chracter folder.")
     parser.add_argument("--streaming", action=argparse.BooleanOptionalAction, default=True, help="Enable streaming mode.")

@@ -22,7 +22,7 @@ def ignoreStderr():
     devnull = os.open(os.devnull, os.O_WRONLY)
     old_stderr = os.dup(2)
     sys.stderr.flush()
-    os.dup2(devnull, 2)
+#    os.dup2(devnull, 2)
     os.close(devnull)
     try:
         yield
@@ -46,7 +46,6 @@ of the phrase."""
     
     CHANNELS = 2
     FORMAT = pyaudio.paInt16
-
     with ignoreStderr():      
         p = pyaudio.PyAudio()
         stream = p.open(format=p.get_format_from_width(2),
@@ -55,7 +54,6 @@ of the phrase."""
                         input=True,
                         output=False,
                         frames_per_buffer=chunk)
-
         listen = True
         started = False
         rel = rate/chunk
@@ -63,8 +61,8 @@ of the phrase."""
 
         prev_audio = deque(maxlen=int(prev_audio * rel))
         slid_window = deque(maxlen=int(silence_limit * rel))
-
         while listen:
+
             data = stream.read(chunk)
             slid_window.append(math.sqrt(abs(audioop.avg(data, 4))))
 
@@ -167,18 +165,20 @@ input_func is a 0-argument function or None. If not None, it is called before tr
         temp_file.close()
         return result
 
-    def transcribeContinuously(self):
+    def transcribeContinuously(self, callback=None):
         """Starts recording continuously, transcribing audio when a given volume threshold is reached.
-        This function is non-blocking, but returns a ContinuousTranscriber object, which runs asynchronously and must be polled to get the latest transcription (if any)."""
-        return ContinuousTranscriber(self.model, self.silence_threshold)
+        This function is non-blocking, but returns a ContinuousTranscriber object, which runs asynchronously and can be polled to get the latest transcription (if any).
+        Alternatively or in addition to polling, you can allso supply a callback, which gets called whenever a string is transcribed with the string as argument."""
+        return ContinuousTranscriber(self.model, self.silence_threshold, callback=callback)
 
 class ContinuousTranscriber(object):
-    def __init__(self, model, silence_threshold):
+    def __init__(self, model, silence_threshold, callback=None):
         self.model = model
+        self.callback = callback
         self.silence_threshold = silence_threshold
         self.buffer = []
         self.running = False
-        self.resume_flag = threading.event()
+        self.resume_flag = threading.Event()
         self.payload_flag = threading.Event()
         self._spawnThread()
 
@@ -189,22 +189,26 @@ class ContinuousTranscriber(object):
         thread = threading.Thread(target=self._recordLoop, args=())
         thread.start()
 
-def _recordLoop(self):
-    while self.running:
-        self.resume_flag.wait()
-        temp_file = tempfile.NamedTemporaryFile(suffix=".wav")
-        self.buffer.append(record_on_detect(temp_file.name))
-        self.payload_flag.set()
+    def _recordLoop(self):
+        while self.running:
+            self.resume_flag.wait()
+            temp_file = tempfile.NamedTemporaryFile(suffix=".wav")
+            record_on_detect(temp_file.name, silence_threshold=self.silence_threshold)
+            self.buffer.append(getWhisperTranscription(temp_file.name, self.model))
+            self.payload_flag.set()
         
-def pause(self):
-    self.resume_flag.clear()
+    def pause(self):
+        self.resume_flag.clear()
 
-def resume(self):
-    self.resume_flag.set()
+    def isPaused(self):
+        return not(self.resume_flag.is_set())
+    
+    def resume(self):
+        self.resume_flag.set()
 
-def stop(self):
-    # FIXME: what if resume_flag is false and thread is waiting on the flag? this might be a memory issue (thread never gets GCed). But if we set() the flag here, it records again and behaviour might be weird
-    self.running = False
+    def stop(self):
+        # FIXME: what if resume_flag is false and thread is waiting on the flag? this might be a memory issue (thread never gets GCed). But if we set() the flag here, it records again and behaviour might be weird
+        self.running = False
 
     def pop(self):
         """Returns a list of strings that were recorded and transcribed since the last time poll or pop was called.

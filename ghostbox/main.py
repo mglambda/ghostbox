@@ -41,6 +41,8 @@ cmds = [
     ("/log", lambda prog, w: printStory(prog, w, stderr=True, apply_filter=False)),
     ("!",  transcribe),
     ("/transcribe", transcribe),
+    ("/text", lambda prog,argv: prog.setOption("input_method", "text")),
+    ("/audio", lambda prog, argv: prog.setOption("input_method", "audio")),
     ("/ttsdebug", ttsDebug),    
     ("/tts", toggleTTS),
     ("/set", setOption),
@@ -87,6 +89,8 @@ class Program(object):
 
             # whisper stuff. We do this with a special init function because it's lazy
         self.whisper = self._newTranscriber()
+        self.ct = None
+        self._defaultSIGINTHandler = signal.getsignal(signal.SIGINT)        
             
         # formatters is to be idnexed with modes
         self._formatters = {
@@ -173,6 +177,40 @@ class Program(object):
             self.tts_flag = True #restart TTS
         elif name == "whisper_model":
             self.whisper = self._newTranscriber()
+        elif name == "input_method":
+            self.setInputMethod(value)
+
+        return ""
+
+    def _ctPauseHandler(self, sig, frame):
+        printerr("Recording paused. CTRL + c to resume, /text to stop.")
+        self.ct.pause()
+        signal.signal(signal.SIGINT, self._ctResumeHandler)
+        
+    def _ctResumeHandler(self, sig, frame):
+        printerr("Recording resumed. CTRL + c to interrupt.")
+        self.ct.resume()
+        signal.signal(signal.SIGINT, self._ctPauseHandler)
+
+    def _transcriptionCallback(self, w):
+        (modified_w, prompt) = self.buildPrompt(w)
+        self.communicate(wmodified_w, prompt)
+        
+    def setInputMethod(self, input_method="text"):
+        if input_method == "audio":
+            printerr("Beginning automatic transcription. CTRL + c to pause.")
+            if self.ct:
+                self.ct.stop()
+            self.ct = self.whisper.transcribeContinuously(callback=self._transcriptionCallback)
+            signal.signal(signal.SIGINT, self._ctPauseHandler)
+        elif input_method == "text":
+            if self.ct:
+                self.ct.stop()
+            self.ct = None
+            signal.signal(signal.SIGINT, self._defaultSIGINTHandler)
+            
+            
+            
         
     def getPrompt(self, conversation_history, text, system_msg = ""): # For KoboldAI Generation
         d = {"prompt": conversation_history + text + "",
@@ -283,6 +321,50 @@ class Program(object):
             display = ai_chat_prompt + display        
         return (display, txt)
     
+    def buildPrompt(prog, w):
+        """Takes user input (w), returns pair of (modified user input, prompt)"""
+        if prog.getOption("continue") and prog.continue_with == "":
+            setOption(prog, ["continue", "False"])
+            w = "" # gets rid of /cont etc
+            return (w, prog.getPrompt(prog.session.showStory(trim_end=True), "", system_msg = prog.session.getSystem())                )
+
+        if prog.continue_with != "":
+            # user input has been replaced with something else, e.g. a transcription
+            w = prog.popContinueString()
+        
+        v = ""
+        if prog.getMode() == "chat":
+            w = mkChatPrompt(prog.getOption("chat_user")) + w
+            v = mkChatPrompt(prog.getOption("chat_ai"))
+        w = prog.session.injectTemplate(w) + v
+        return (w, prog.getPrompt(prog.session.showStory(), w, system_msg = prog.session.getSystem()))
+
+    def communicate(prog, w, prompt):
+        """Sends prompt to the backend and prints results.
+        w - User supplied input. Used for what is printed back out. Not actually send to backend.
+        prompt - String to send to the backend."""
+        if prog.getOption("streaming"):
+            r = streamPrompt(prog, prog.getOption("endpoint") + "/api/extra/generate/stream", json=prompt)
+            prog.streaming_done.wait()
+            prog.streaming_done.clear()
+            r.json = lambda ws=prog.stream_queue: {"results" : [{"text" : "".join(ws)}]}
+            prog.stream_queue = []
+        else:
+            r = requests.post(prog.getOption("endpoint") + "/api/v1/generate", json=prompt)
+
+        if r.status_code == 200:
+            results = r.json()['results']
+            (displaytxt, txt) = prog.formatGeneratedText(results[0]["text"])
+            prog.session.addUserText(w)
+            prog.session.addAIText(txt)
+
+            if prog.getOption("streaming"):
+                # already printed it piecemeal, so skip this step
+                return
+            else:
+                prog.print(displaytxt, end="")
+        else:
+            print(str(r.status_code))
 
 
 def main():
@@ -313,15 +395,16 @@ def main():
         if prog.initial_print_flag:
             prog.initial_print_flag = False
             print("\n\n" + prog.session.showStory(apply_filter=True), end="")
-        
-        w = input(prog.showCLIPrompt())
-        # check for multiline
-        if w.endswith("\\") and not(w.endswith("\\\\")):
-            prog.bufferMultilineInput(w)
-            continue
-        elif prog.isMultilineBuffering():
-            w = prog.flushMultilineBuffer() + w
-        
+
+        if (prog.getOption("input_method") == "text") or (prog.ct is not None) and (prog.ct.isPaused()):
+            w = input(prog.showCLIPrompt())
+            # check for multiline
+            if w.endswith("\\") and not(w.endswith("\\\\")):
+                prog.bufferMultilineInput(w)
+                continue
+            elif prog.isMultilineBuffering():
+                w = prog.flushMultilineBuffer() + w
+       
         # for convenience when chatting
         if w == "":
             w = "/cont"
@@ -341,45 +424,9 @@ def main():
             skip = False
             continue
 
-        if prog.getOption("continue") and prog.continue_with == "":
-            setOption(prog, ["continue", "False"])
-            w = "" # gets rid of /cont etc
-            prompt = prog.getPrompt(prog.session.showStory(trim_end=True), "", system_msg = prog.session.getSystem())                
-        else:
-            if prog.continue_with != "":
-                # user input has been replaced with something else, e.g. a transcription
-                w = prog.popContinueString()
-                
-            v = ""
-            if prog.getMode() == "chat":
-                w = mkChatPrompt(prog.getOption("chat_user")) + w
-                v = mkChatPrompt(prog.getOption("chat_ai"))
-            w = prog.session.injectTemplate(w) + v
-            prompt = prog.getPrompt(prog.session.showStory(), w, system_msg = prog.session.getSystem())
+        (modified_w, prompt) = prog.buildPrompt(w)
+        prog.communicate(modified_w, prompt)
 
-        if prog.getOption("streaming"):
-            r = streamPrompt(prog, prog.getOption("endpoint") + "/api/extra/generate/stream", json=prompt)
-            prog.streaming_done.wait()
-            prog.streaming_done.clear()
-            r.json = lambda ws=prog.stream_queue: {"results" : [{"text" : "".join(ws)}]}
-            prog.stream_queue = []
-        else:
-            r = requests.post(prog.getOption("endpoint") + "/api/v1/generate", json=prompt)
-
-        if r.status_code == 200:
-            results = r.json()['results']
-            (displaytxt, txt) = prog.formatGeneratedText(results[0]["text"])
-            prog.session.addUserText(w)
-            prog.session.addAIText(txt)
-
-            if prog.getOption("streaming"):
-                # already printed it piecemeal, so skip this step
-                continue
-            else:
-                prog.print(displaytxt, end="")
-        else:
-            print(str(r.status_code))
-        
 if __name__ == "__main__":
     main()
 
