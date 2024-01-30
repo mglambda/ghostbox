@@ -11,35 +11,49 @@ parser.add_argument("-t", "--threshold", type=int, default=2500, help="Integer d
 parser.add_argument("-m", "--model", type=str, default="base.en", help="OpenAI whisper model name to use. Default is 'base.en'")
 args = parser.parse_args()
 
-running = True
 wt = WhisperTranscriber(model_name=args.model, silence_threshold=args.threshold)
-
 ct = None
-def pauseHandler(signal, frame):
+def pauseHandler(sig, frame):
     printerr("Paused recording. CTRL + c  to resume.")
     ct.pause()
     signal.signal(signal.SIGINT, resumeHandler)
 
-def resumeHandler(signal, frame):
+def resumeHandler(sig, frame):
     printerr("Resumed recording. CTRL + c to pause.")
     ct.resume()
     signal.signal(signal.SIGINT, pauseHandler)
-    
 
 if args.continuous:
-    printerr("Beginning recording. CTRL + c to pause.")
-    ct = wt.transcribeContinuously()
-    signal.signal(signal.SIGINT, pauseHandler)    
+    printerr("Beginning recording. CTRL + c to pause. Type /quit or EOF to quit.")
+    ct = wt.transcribeContinuously(callback=print)
+#    signal.signal(signal.SIGINT, pauseHandler)    
 else:
-    printerr("Recording started. Hit enter to transcribe.")
-    
-while running:
-    if args.continuous:
-        w = "\n".join(ct.poll())
-    else:
-        w = wt.transcribe()
-        
-    print(w)
-    
+    printerr("Recording started. Hit enter to transcribe. EOF or /quit to quit.")
 
-        
+
+w = "" # user input() string
+def setInput(user_msg):
+    global w
+    w = user_msg
+
+v = "" # will hold transcript in case of non-continuous mode
+while True:
+    try:
+        if not(args.continuous):
+            if v:
+                print(v)
+            v = wt.transcribeWithPrompt(input_handler=setInput)
+        else:
+            setInput(input())
+    except EOFError:
+        break
+
+    if w.startswith("/quit"):
+        break
+
+# cleanup running thread or program won't exit        
+if ct:
+    ct.stop()
+
+
+

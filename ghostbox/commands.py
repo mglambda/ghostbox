@@ -429,7 +429,7 @@ def transcribe(prog, argv):
     """Records using the microphone until you hit enter. The recording is then transcribed using openai's whisper, and inserted into the current line at the CLI.
 THe precise model to be used for transcribing is determined using the 'whisper_model' option. Larger models transcribe more accurately, and may handle more languages, but also consume more resources. See https://huggingface.co/openai/whisper-large for a list of model names. The default is 'base.en'.
 The model will be automatically downloaded the first time you transcribe with it. This may take a moment, but will only happen once for each model."""
-    w = prog.whisper.transcribe()
+    w = prog.whisper.transcribeWithPrompt()
     sys.stdout.write("\r" + w + "\n")
     prog.continueWith(w)
     return ""

@@ -40,8 +40,14 @@ input_func is a 0-argument function or None. If not None, it is called before tr
         self.input_func = input_func
         
 
-    def transcribe(self, input_msg="", input_func=None):
-        """Records audio directly from the microphone and then transcribes it to text using Whisper, returning that transcription."""    
+    def transcribeWithPrompt(self, input_msg="", input_func=None, input_handler=lambda w: w):
+        """Records audio directly from the microphone and then transcribes it to text using Whisper, returning that transcription.
+input_msg - String that will be shown at the prompt.
+input_func - 0-argument callback function that will be called immediately before prompt. This will be called in addition to, and immediately after, WhisperTranscriber.input_func
+input_handler - Function that takes the user supplied input string as argument. This is most often unused as the user just presses enter, but sometimes you may use this to check for /quit etc.
+        Returns - String signifying the transcript of the recorded audio.
+This function will record from the point it is called and until the user hits enter, as per the builtin input() function."""
+
         # Create a temporary file to store the recorded audio (this will be deleted once we've finished transcription)
         temp_file = tempfile.NamedTemporaryFile(suffix=".wav")
 
@@ -87,7 +93,8 @@ input_func is a 0-argument function or None. If not None, it is called before tr
             self.input_func()
         if input_func:
             input_func()
-        input(input_msg)
+                
+        input_handler(input(input_msg))
         # Stop and close the audio stream
         stream.stop_stream()
         stream.close()
@@ -193,9 +200,10 @@ of the phrase."""
         prev_audio = deque(maxlen=int(prev_audio * rel))
         slid_window = deque(maxlen=int(silence_limit * rel))
         while listen:
-            if not(self.running):
+            if not(self.running) or self.isPaused():
                 return True
-                
+
+            
             data = stream.read(chunk)
             slid_window.append(math.sqrt(abs(audioop.avg(data, 4))))
 
