@@ -94,7 +94,8 @@ class Program(object):
         # formatters is to be idnexed with modes
         self._formatters = {
             "default" : self._defaultFormatter,
-            "chat" : self._chatFormatter}
+            "chat" : self._chatFormatter,
+            "chat-thoughts" : self._chatThoughtsFormatter}
         self.setMode(self.getOption("mode"))
         self.running = True
 
@@ -161,7 +162,7 @@ class Program(object):
             return
         
         self.options["mode"] = mode
-        if mode == "chat":
+        if mode.startswith("chat"):
             self.options["cli_prompt"] = "\n" + mkChatPrompt(self.getOption("chat_user"))            
         else: # default
             self.options["cli_prompt"] = self.initial_cli_prompt
@@ -219,6 +220,10 @@ class Program(object):
             
         
     def getPrompt(self, conversation_history, text, system_msg = ""): # For KoboldAI Generation
+        if self.getOption("warn_trailing_space"):
+            if text.endswith(" "):
+                printerr("warning: Prompt ends with a trailing space. This messes with tokenization, and can cause the model to start its responses with emoticons. If this is what you want, you can turn off this warning by setting 'warn_trailing_space' to False.")
+            
         d = {"prompt": conversation_history + text + "",
              "grammar" : self.getOption("grammar"),
              "memory" : system_msg, # koboldcpp special feature: will prepend this to the prompt, overwriting prompt history if necessary
@@ -327,6 +332,18 @@ class Program(object):
             display = ai_chat_prompt + display        
         return (display, txt)
     
+    def _chatThoughtsFormatter(self, w):
+        # this is different from chat because we want a stream of internal thoughts to be carried along with everything else, so it must start with thoughtstr, and hide it from the user
+        # 2. filter out any accidental generations of Bob: if the user is called bob, i.e. don't let the LLM talk for the user.
+        ai_chat_prompt = mkChatPrompt(self.getOption("chat_ai"))
+        user_chat_prompt = mkChatPrompt(self.getOption("chat_user"))
+        thought_prompt = mkChatPrompt(self.session.getVar("thoughtstr"))
+
+        clean = filterLonelyPrompt(ai_chat_prompt, trimIncompleteSentence(trimChatUser(self.getOption("chat_user"), w))).strip()
+        txt = clean + self.session.template_end
+        display = discardFirstLine(clean)
+        return (display, txt)
+    
     def buildPrompt(prog, w):
         """Takes user input (w), returns pair of (modified user input, prompt)"""
         if prog.getOption("continue") and prog.continue_with == "":
@@ -341,7 +358,11 @@ class Program(object):
         v = ""
         if prog.getMode() == "chat":
             w = mkChatPrompt(prog.getOption("chat_user")) + w
-            v = mkChatPrompt(prog.getOption("chat_ai"))
+            v = mkChatPrompt(prog.getOption("chat_ai"), space=False)
+        elif prog.getMode() == "chat-thoughts":
+            w = mkChatPrompt(prog.getOption("chat_user")) + w
+            # have to start with Internal Thought: etc, FIXME: refactor
+            v = mkChatPrompt(prog.session.getVar("thoughtstr"), space=False)
         w = prog.session.injectTemplate(w) + v
         return (w, prog.getPrompt(prog.session.showStory(), w, system_msg = prog.session.getSystem()))
 
@@ -364,6 +385,7 @@ class Program(object):
         if r.status_code == 200:
             results = r.json()['results']
             (displaytxt, txt) = prog.formatGeneratedText(results[0]["text"])
+            
             prog.session.addUserText(w)
             prog.session.addAIText(txt)
 

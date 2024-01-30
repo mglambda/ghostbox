@@ -15,6 +15,7 @@ def makeArgParser(default_params):
     parser.add_argument("-g", "--grammar_file", type=str, default="", help="Grammar file used to restrict generation output. Grammar format is GBNF.") 
     parser.add_argument("--chat_ai", type=str, default="", help="Name  the AI will have when chatting. Has various effects on the prompt when chat mode is enabled. This is usually set automatically in the config.json file of a chracter folder.")
     parser.add_argument("--streaming", action=argparse.BooleanOptionalAction, default=True, help="Enable streaming mode.")
+    parser.add_argument("--warn_trailing_space", action=argparse.BooleanOptionalAction, default=True, help="Warn if the prompt that is sent to the backend ends on a space. This can cause e.g. excessive emoticon use by the model.")
     parser.add_argument("--json", action=argparse.BooleanOptionalAction, default=False, help="Force generation output to be in JSON format. This is equivalent to using -g with a json.gbnf grammar file, but this option is provided for convenience.") 
     parser.add_argument("--streaming_flush", action=argparse.BooleanOptionalAction, default=True, help="When True, flush print buffer immediately in streaming mode (print token-by-token). When set to false, waits for newline until generated text is printed.")
     parser.add_argument("--cli_prompt", type=str, default="\n 🧠 ", help="String to show at the bottom as command prompt. Can be empty.")

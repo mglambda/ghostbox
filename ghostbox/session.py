@@ -34,6 +34,14 @@ class Session(object):
             w = w.replace(key, v) #replaces filenames found in dir with their conten, e.g. 'memory' has contents that will be spliced into {$memory}
         return w
 
+    def getVar(self, var):
+        w = "{$" + var + "}"
+        if w not in self.keys:
+            printerr("warning: session.getVar: Key not defined '" + w + "'. Did you forget to create " + self.dir + "/" + var + "?")
+            return ""
+        return self.keys[w]
+    
+    
     def _expandVars(self, w):
         # recursively expand all {$var} occurences if t hey are in keys
         n = 0
