@@ -385,6 +385,10 @@ class Program(object):
         if r.status_code == 200:
             results = r.json()['results']
             (displaytxt, txt) = prog.formatGeneratedText(results[0]["text"])
+
+            if prog.getMode().startswith("chat"):
+                #FIXME: this isn't very clean, but the colon thing is annoying
+                w = ensureColonSpace(w, txt)
             
             prog.session.addUserText(w)
             prog.session.addAIText(txt)
