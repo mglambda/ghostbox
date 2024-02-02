@@ -102,6 +102,7 @@ class Program(object):
     def _newTranscriber(self):
         # makes a lazy WhisperTranscriber, because model loading can be slow
         return Proxy(lambda: WhisperTranscriber(model_name = self.getOption("whisper_model"),
+                                                silence_threshold = self.getOption("audio_silence_threshold"),
                                                 input_func=lambda: printerr("Started Recording. Hit enter to stop.")))
 
     def    continueWith(self, newUserInput):
@@ -223,13 +224,24 @@ class Program(object):
         if self.getOption("warn_trailing_space"):
             if text.endswith(" "):
                 printerr("warning: Prompt ends with a trailing space. This messes with tokenization, and can cause the model to start its responses with emoticons. If this is what you want, you can turn off this warning by setting 'warn_trailing_space' to False.")
+        backend = self.getOption("backend")
+        if backend == "koboldcpp":
+            d = {"prompt": conversation_history + text + "",
+                 "grammar" : self.getOption("grammar"),
+                 "n": 1,
+                 "max_context_length": self.getOption("max_context_length"),
+                 "max_length": self.options["max_length"]}
+        elif backend == "llama.cpp":
+            d = {"prompt": system_msg + conversation_history + text + "",
+                 "grammar" : self.getOption("grammar"),
+                 "max_context_length": self.getOption("max_context_length"),
+                 "cache_prompt" : True,
+                 "n_predict": self.options["max_length"]}            
+        else:
+            printerr("error: backend not recognized.")
+            d = {}
+
             
-        d = {"prompt": conversation_history + text + "",
-             "grammar" : self.getOption("grammar"),
-             "memory" : system_msg, # koboldcpp special feature: will prepend this to the prompt, overwriting prompt history if necessary
-             "n": 1,
-             "max_context_length": self.getOption("max_context_length"),
-             "max_length": self.options["max_length"]}
         for paramname in DEFAULT_PARAMS.keys():
             d[paramname] = self.options[paramname]
         return d
@@ -277,6 +289,17 @@ class Program(object):
         if not(self.getOption("tts")):
             return ""
 
+        #fixmE: don't speak out "Bob: " etc. bit of a hack while we experiment with chat-thought mode
+        if self.getMode() == "chat-thoughts":
+            prompt = mkChatPrompt(self.getOption("chat_ai"), space=False)
+            ws = w.split("\n")
+            vs = []
+            for v in ws:
+                if v.startswith(prompt):
+                    v = v[len(prompt):]
+                vs.append(v)
+            w = "\n".join(vs)
+                    
         # this is crazy
         self.tts.stdin.flush()
         self.tts.stdout.flush()
@@ -380,11 +403,11 @@ class Program(object):
             r.json = lambda ws=prog.stream_queue: {"results" : [{"text" : "".join(ws)}]}
             prog.stream_queue = []
         else:
-            r = requests.post(prog.getOption("endpoint") + "/api/v1/generate", json=prompt)
+            r = requests.post(prog.getOption("endpoint") + prog.getGenerateApi(), json=prompt)
 
         if r.status_code == 200:
-            results = r.json()['results']
-            (displaytxt, txt) = prog.formatGeneratedText(results[0]["text"])
+            results = prog.getResults(r)
+            (displaytxt, txt) = prog.formatGeneratedText(results)
 
             if prog.getMode().startswith("chat"):
                 #FIXME: this isn't very clean, but the colon thing is annoying
@@ -401,7 +424,20 @@ class Program(object):
         else:
             print(str(r.status_code))
 
+    def getGenerateApi(self):
+        backend = self.getOption("backend")
+        if backend == "llama.cpp":
+            return "/completion"
+        else:
+            return "/api/v1/generate"
 
+    def getResults(self, r):
+        backend = self.getOption("backend")
+        if backend == "llama.cpp":
+            return r.json()['content']
+        else:
+            return r.json()['results'][0]["text"]
+        
 def main():
     parser = makeArgParser(DEFAULT_PARAMS)
     args = parser.parse_args()
