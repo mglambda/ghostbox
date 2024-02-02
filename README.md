@@ -6,11 +6,13 @@ Ghostbox was made to be blind-accessible, and is fully compatible with any scree
 ## Features
 
  - Command line interface that plays well with standard input and output
- - Character folders to define AI characters in a simple, file based manner
-  - Template system to quickly and dynamically create and alter AI characters
+ - Character templates to define AI characters in a simple, file based manner
  - Includes prompt templates for many popular formats (like chat-ml)
  - Chat functionality, including retrying or rewriting prompts, and a chat history that can be saved and reloaded
  - Live audio transcription using OpenAI's Whisper model
+ - Multimodal support for images (llava), including automatic descriptions for screenshots or arbitrary image files.
+ - Painless JSON output (just do --json)
+ - Grammars to arbitrarily restrict token output 
  - TTS (text-to-speech) capabilities (experimental) 
  - Token streaming
  - Model hyperparameter control (temperature, top p, etc.), including with config-files
@@ -28,13 +30,12 @@ Try `ghostbox --help` or type `/help` at the CLI for additional information.
 ## Installation
 ### Requirements
 
-Ghostbox requires an LLM backend. I like koboldcpp, and that is the only one I have tested so far.
+Ghostbox requires an LLM backend. Currently supported backends are
+ - Llama.cpp (currently prefered, find it at https://github.com/ggerganov/llama.cpp )  
+ - Koboldcpp ( https://github.com/LostRuins/koboldcpp )
 
-```
-git clone https://github.com/LostRuins/koboldcpp
-```
+Clone either repository, build the project and run the backend server. Make sure you start ghostbox with the --endpoint parameter to the endpoint provided by the backend. This is http://localhost:8080 for Llama.cpp (default), or http://localhost:5001 for koboldcpp, at least by default.
 
-Follow the koboldcpp installation instructions, then run it with a model of your choice. Make sure it provides an http endpoint (it does by default). If you change the endpoint from localhost:5000, you must tell ghostbox with the `--endpoint` command line argument. 
 
 ### Amazon Polly
 
@@ -46,6 +47,30 @@ aws configure
 ```
 
 and you will be asked for your keys. To test if it works, you can either run ghostbox with the `--tts` option, activate TTS by typing `/tts` at the ghostbox CLI, or try the `scripts/ghostbox-tts-polly` script in the repository.
+### Multimodal Image Description
+
+Acquire the latest Llava model from huggingface. You will need a gguf file and a mmproj file with model projections for the underlying LLM (e.g. `mmproj-model-f16.gguf`). You can then start Llama.cpp like this
+
+```
+cd ~/llama.cpp/build/bin 
+./server --ctx-size 2048 --parallel 1 --mlock --no-mmap -m llava-v1.6-mistral-7b.Q5_K_M.gguf --mmproj mmproj-model-f16.gguf
+```
+
+assuming you built the project in `llama.cpp/build`. You may then do either 
+```
+ghostbox -cdolphin
+/image ~/Pictures.paris.png
+Here is a picture of paris. [img-1] Can you please describe it?
+```
+
+or, for automatically describing the screen when you make a screenshot
+
+```
+ghostbox -cdolphin --image_watch
+```
+
+assuming screenshots are stored in `~/Pictures/Screenshots/`, which is the default for the gnome-screenshot utility.
+Note that multimodal support is currently working with Llama.cpp only.
 
 ### Python Package
 The repository can be installed as a python package.
@@ -71,7 +96,7 @@ Run
 
 To create data folders with some example characters in `~/.local/share/ghostbox` and a default config file `~.config/ghostbox.conf`.
 
-After a successful installation, while koboldcpp is running, try
+After a successful installation, while a backend is running, try
 ```
 ghostbox -cdolphin
 ```

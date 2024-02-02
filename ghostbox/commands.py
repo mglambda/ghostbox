@@ -421,6 +421,7 @@ def exitProgram(prog, argv):
     Quit the program. Chat history (story folder) is discarded. All options are lost.
     See also /save, /saveoptions, /saveconfig"""
     prog.stopAudioTranscription()
+    prog.stopImageWatch()
     prog.running = False
     return ""
 
