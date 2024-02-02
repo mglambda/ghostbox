@@ -1,4 +1,4 @@
-import os, getpass, shutil
+import os, getpass, shutil, base64
 import appdirs
 import sys
 
@@ -236,3 +236,26 @@ number ::= ("-"? ([0-9] | [1-9] [0-9]*)) ("." [0-9]+)? ([eE] [-+]? [0-9]+)? ws
 # Optional space: by convention, applied in this grammar after literal chars when allowed
 ws ::= ([ \t\n] ws)?
 """
+
+
+
+
+def loadImageData(image_path):
+    with open(image_path, 'rb') as image_file:
+        base64_bytes = base64.b64encode(image_file.read())
+        return base64_bytes
+
+def packageImageDataLlamacpp(data_base64, id):
+    return {"data" : data_base64.decode("utf-8"), "id" : id}
+    
+def mkImageEmbeddingString(image_id):
+    return "[img-" + str(image_id) + "]"
+
+
+def maybeReadInt(w):
+    try:
+        n = int(w)
+    except:
+        return None
+    return n
+    

@@ -443,8 +443,41 @@ See whisper_model for the model used for transcribing."""
         prog.startAudioTranscription()
     return ""
 
+def image(prog, argv):
+    """[--id=IMAGE_ID] IMAGE_PATH
+Add images for multimodal models that can handle them. You can refer to images by their id in the form of `[img-ID]`. If --id is omitted, id= 1 is assumed. Examples:
+```
+    /image ~/Pictures.test.png
+Please describe [img-1].
+    ```
 
-    
+    Alternatively, with multiple images:
+    ```
+    /image --id=1 ~/Pictures.paris.png
+    /image --id=2 ~/Pictures/berlin.png
+Can you compare [img-1] and [img-2]?
+    ```"""
+
+    if argv == []:
+        ws = []
+        for (id, imagedata) in sorted(prog.images.items()):
+            ws.append(mkImageEmbeddingString(id) + "\t" + imagedata["url"])
+        return "\n".join(ws)
+
+    if argv[0].startswith("--id="):
+        id = maybeReadInt(argv[0].replace("--id=", ""))
+        if id is None:
+            return "error: Please specify a valid integer as id."
+        url = " ".join(argv[1:])
+    else:
+        id = 1
+        url = " ".join(argv)
+
+    prog.loadImage(url, id)
+    return ""
+        
+            
+        
 
 
 cmds_additional_docs = {

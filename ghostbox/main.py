@@ -42,6 +42,7 @@ cmds = [
     ("!",  transcribe),
     ("/transcribe", transcribe),
     ("/audio", toggleAudio),
+    ("/image", image),
     ("/ttsdebug", ttsDebug),    
     ("/tts", toggleTTS),
     ("/set", setOption),
@@ -74,6 +75,7 @@ class Program(object):
         self.initial_cli_prompt = initial_cli_prompt
         self.streaming_done = threading.Event()
         self.stream_queue = []
+        self. images = {}
         self.continue_with = ""
         self.tts = None
         self.multiline_buffer = ""
@@ -220,7 +222,7 @@ class Program(object):
             
             
         
-    def getPrompt(self, conversation_history, text, system_msg = ""): # For KoboldAI Generation
+    def getPrompt(self, conversation_history, text, system_msg = ""): 
         if self.getOption("warn_trailing_space"):
             if text.endswith(" "):
                 printerr("warning: Prompt ends with a trailing space. This messes with tokenization, and can cause the model to start its responses with emoticons. If this is what you want, you can turn off this warning by setting 'warn_trailing_space' to False.")
@@ -236,7 +238,10 @@ class Program(object):
                  "grammar" : self.getOption("grammar"),
                  "max_context_length": self.getOption("max_context_length"),
                  "cache_prompt" : True,
-                 "n_predict": self.options["max_length"]}            
+                 "n_predict": self.options["max_length"]}
+
+            if self.hasImages():
+                d["image_data"] = [packageImageDataLlamacpp(d["data"], id) for (id, d) in self.images.items()]
         else:
             printerr("error: backend not recognized.")
             d = {}
@@ -437,6 +442,21 @@ class Program(object):
             return r.json()['content']
         else:
             return r.json()['results'][0]["text"]
+
+    def hasImages(self):
+        return bool(self.images)
+        
+    def loadImage(self, url, id):
+        url = os.path.expanduser(url)
+        if not(os.path.isfile(url)):
+            printerr("warning: Could not load image '" + url + "'. File not found.")
+            return
+
+        self.images[id] = {"url" : url,
+                           "data" : loadImageData(url)}
+
+        
+        
         
 def main():
     parser = makeArgParser(DEFAULT_PARAMS)
