@@ -259,3 +259,6 @@ def maybeReadInt(w):
         return None
     return n
     
+def isImageFile(file):
+    # good enuff
+    return file.endswith(".png")

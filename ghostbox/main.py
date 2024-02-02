@@ -2,6 +2,7 @@ import requests, json, os, io, re, base64, random, sys, threading, subprocess, s
 from lazy_object_proxy import Proxy
 import argparse
 from ghostbox.commands import *
+from ghostbox.autoimage import *
 from ghostbox.util import *
 from ghostbox._argparse import *
 from ghostbox.streaming import streamPrompt
@@ -92,7 +93,10 @@ class Program(object):
         self.whisper = self._newTranscriber()
         self.ct = None
         self._defaultSIGINTHandler = signal.getsignal(signal.SIGINT)        
-            
+
+        #imagewatching
+        self.image_watch = None
+        
         # formatters is to be idnexed with modes
         self._formatters = {
             "default" : self._defaultFormatter,
@@ -193,6 +197,21 @@ class Program(object):
         self.ct.resume()
         signal.signal(signal.SIGINT, self._ctPauseHandler)
 
+    def _imageWatchCallback(self, image_path, image_id):
+        #FIXME: this is only temporary until we fix the context being exceeded with llamacpp. This happens very quickly with image data, and so we frequently restart the session to get the system message in.
+        newSession(prog, [])
+        
+        
+        w = self.getOption("image_watch_msg")
+        if w == "":
+            return
+        
+        self.loadImage(image_path, image_id)
+        (modified_w, prompt) = self.buildPrompt(w)
+        self.communicate(modified_w, prompt)
+        print(self.showCLIPrompt(), end="")
+
+        
     def _transcriptionCallback(self, w):
         (modified_w, prompt) = self.buildPrompt(w)
         if self.getOption("audio_show_transcript"):
@@ -204,7 +223,13 @@ class Program(object):
     def isAudioTranscribing(self):
         return self.ct is not None and self.ct.running
         
+
+    def startImageWatch(self):
+        dir = self.getOption("image_watch_dir")
+        printerr("Watching for new images in " + dir + ".")
+        self.image_watch = AutoImageProvider(dir, self._imageWatchCallback)
         
+    
     def startAudioTranscription(self):
         printerr("Beginning automatic transcription. CTRL + c to pause.")
         if self.ct:
@@ -212,6 +237,13 @@ class Program(object):
         self.ct = self.whisper.transcribeContinuously(callback=self._transcriptionCallback)
         signal.signal(signal.SIGINT, self._ctPauseHandler)
 
+
+    def stopIMageWatch(self):
+        if self.image_watch:
+            self.image_watch.stop()
+            
+        
+        
     def stopAudioTranscription(self):
         if self.ct:
             printerr("Stopping automatic audio transcription.")            
@@ -480,6 +512,11 @@ def main():
         prog.startAudioTranscription()
     del prog.options["audio"]
 
+    if prog.getOption("image_watch"):
+        prog.startImageWatch()
+        del prog.options["image_watch"]
+        
+    
     skip = False        
     while prog.running:
         # have to do TTS here for complex reasons; flag means to reinitialize tts, which can happen e.g. due to voice change
@@ -523,5 +560,6 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
