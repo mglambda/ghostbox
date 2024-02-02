@@ -75,7 +75,7 @@ Note that multimodal support is currently working with Llama.cpp only.
 ### Python Package
 The repository can be installed as a python package.
 
-````
+```
 git clone https://github.com/mglambda/ghostbox
 cd ghostbox
 python -m venv env
