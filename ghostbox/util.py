@@ -1,4 +1,4 @@
-import os, getpass, shutil, base64
+import os, getpass, shutil, base64, requests
 import appdirs
 import sys
 
@@ -262,3 +262,11 @@ def maybeReadInt(w):
 def isImageFile(file):
     # good enuff
     return file.endswith(".png")
+
+    
+
+def dirtyGetJSON(url):
+    r = requests.get(url)
+    if r.status_code == 200:
+        return r.json()
+    return {}

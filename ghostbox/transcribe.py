@@ -153,9 +153,9 @@ class ContinuousTranscriber(object):
         self.resume_flag.set()
 
     def stop(self):
-        # FIXME: what if resume_flag is false and thread is waiting on the flag? this might be a memory issue (thread never gets GCed). But if we set() the flag here, it records again and behaviour might be weird
         self.running = False
-
+        self.resume()
+        
     def pop(self):
         """Returns a list of strings that were recorded and transcribed since the last time poll or pop was called.
         This function is non-blocking."""

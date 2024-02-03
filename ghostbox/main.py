@@ -44,6 +44,9 @@ cmds = [
     ("/transcribe", transcribe),
     ("/audio", toggleAudio),
     ("/image", image),
+    ("/time", showTime),
+    ("/status", showStatus),
+    ("/debuglast", debuglast),
     ("/ttsdebug", ttsDebug),    
     ("/tts", toggleTTS),
     ("/set", setOption),
@@ -71,6 +74,7 @@ DEFAULT_PARAMS = {                "rep_pen": 1.1, "temperature": 0.7, "top_p": 0
 class Program(object):
     def __init__(self, options={}, initial_cli_prompt=""):
         self.session = Session(chat_user=options.get("chat_user", ""))
+        self.lastResult = {}
         self.tts_flag = False
         self.initial_print_flag = False
         self.initial_cli_prompt = initial_cli_prompt
@@ -252,7 +256,8 @@ class Program(object):
         signal.signal(signal.SIGINT, self._defaultSIGINTHandler)
             
             
-            
+
+        
         
     def getPrompt(self, conversation_history, text, system_msg = ""): 
         if self.getOption("warn_trailing_space"):
@@ -268,7 +273,7 @@ class Program(object):
         elif backend == "llama.cpp":
             d = {"prompt": system_msg + conversation_history + text + "",
                  "grammar" : self.getOption("grammar"),
-                 "max_context_length": self.getOption("max_context_length"),
+                 #"n_ctx": self.getOption("max_context_length"), # this is sort of undocumented in llama.cpp server
                  "cache_prompt" : True,
                  "n_predict": self.options["max_length"]}
 
@@ -468,8 +473,23 @@ class Program(object):
         else:
             return "/api/v1/generate"
 
+
+    def getHealthEndpoint(self):
+        backend = self.getOption("backend")
+        if backend == "llama.cpp":
+            return self.getOption("endpoint") + "/health"
+        else:
+            return self.getOption("endpoint") + "/api/v1/health"
+
+    def getHealthResult(self):
+        r = requests.get(self.getHealthEndpoint())
+        if r.status_code == 200:
+            return r.json()["status"]
+        return "error " + str(r.status_code)
+        
     def getResults(self, r):
         backend = self.getOption("backend")
+        self.lastResult = r.json()        
         if backend == "llama.cpp":
             return r.json()['content']
         else:
@@ -506,7 +526,8 @@ def main():
 
     if prog.getOption("hide"):
         hide(prog, [])
-    del prog.options["hide"]
+        # FIXME: this shouldn't be deleted so that it stays persistent when user does /start or /restart, but it's also a useless option. implement a emchanism for hidden options?
+    #del prog.options["hide"]
 
     if prog.getOption("audio"):
         prog.startAudioTranscription()

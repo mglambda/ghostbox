@@ -33,6 +33,7 @@ image_id - The id of the image. This is relevant as it will inform the tokens us
         self.image_id = image_id
         self.callback = on_new_image_func
         self.latestFile = mostRecentFile(self.watch_dir) # this is pair (filename, modtime)
+        self.running = False
         self._initWatchLoop()
 
     def _initWatchLoop(self):

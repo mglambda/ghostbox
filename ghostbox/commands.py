@@ -1,4 +1,4 @@
-import os, datetime, glob, sys
+import os, datetime, glob, sys, requests
 from ghostbox.session import Session
 from ghostbox.util import *
 from ghostbox.StoryFolder import *
@@ -478,7 +478,123 @@ Can you compare [img-1] and [img-2]?
     return ""
         
             
+def debuglast(prog, argv):
+    """
+    Dumps a bunch of information about the last request send. Note that this won't do anything if you haven't sent a request to a working backend server that answered you."""
+    r = prog.lastResult
+    if not(r):
+        return "Nothing."
+
+    acc = []
+    for (k, v) in r.items():
+        acc.append(k + ": " + str(v))
+    return "\n".join(acc)
+
+def showTime(prog, argv):
+    """
+Show some performance stats for the last request."""
+    r = prog.lastResult
+    if not(r):
+        return "No time statistics. Either no request has been sent yet, or the backend doesn't support timing."
+    dt = r["timings"]
+    # timings: {'predicted_ms': 4115.883, 'predicted_n': 300, 'predicted_per_second': 72.88836927580303, 'predicted_per_token_ms': 13.71961, 'prompt_ms': 25.703, 'prompt_n': 0, 'prompt_per_second': 0.0, 'prompt_per_token_ms': None}
+    factor = 1/1000
+    unit = "s"
+    prep = lambda u: str(round(u*factor, 2)) 
+    w = prep(dt["prompt_ms"]) + unit + " spent processing prompt.\n"
+    w += prep(dt["predicted_ms"]) + unit + " spent generating.\n"
+    w += prep(dt["predicted_ms"] + dt["prompt_ms"]) + unit + " total processing time for" + str(dt["predicted_n"]) + "tokens.\n"
+    w += str(round(dt["predicted_per_second"], 2)) + "T/s, " + prep(dt["predicted_per_token_ms"]) + unit + "/T"
+    return w
+
+def showStatus(prog, argv):
+    """
+Give an overall report about the program and some subprocesses."""
+    if argv == []:
+        topics = set("backend mode tts audio image_watch streaming".split(" "))
+    else:
+        topics = set(argv)
+
+    w = ""
+    if "backend" in topics:
+        w += "backend: " + prog.getOption("backend") + " at " + prog.getOption("endpoint") + "\n"
+        w += "backend status: " + str(prog.getHealthResult()) + "\n"
+        w += " models\n"
+        models =         dirtyGetJSON(prog.getOption("endpoint") + "/v1/models").get("data", [])
+        for m in models:
+            w += " .. " + m["id"] + "\n\n"
+
+    if "mode" in topics:
+        w += "mode: " + prog.getOption("mode") + "\n"
+        w += "\n"
+        # FIXME: more mode stuff here
+
+    if "tts" in topics:
+        w += "tts: " + str(prog.getOption("tts")) + "\n"
+        w += "tts_program: " + prog.getOption("tts_program") + "\n"
+        w += "tts status: "
+        # this is tricky
+        tts = prog.getOption("tts")
+        if not(tts):
+            # tts is false so it hasn't been started or it has been stopped
+            if prog.tts is None:
+                w += "N/A\n"
+            else:
+                # this is a weird case
+                w += "shutting down\n"
+        else:
+            # tts was true so someone started it, now we need to know about the process
+            r = prog.tts.poll()
+            if r is None:
+                w += "running\n"
+            else:
+                w += "exited with status " + str(r) + "\n"
+        w += "\n"
+
+    if "audio" in topics:
+        w += "audio transcription: " + str(prog.getOption("audio")) + "\n"
+        w += "whisper_model: " + prog.getOption("whisper_model") + "\n"
+        w += "continuous record / transcribe status: "
+        if prog.ct is None:
+            w += "N/A\n"
+        else:
+            if prog.ct.running:
+                w += "running"
+                if prog.ct.isPaused():
+                    w += " (paused)"
+                w += "\n"
+            else:
+                w += "stopped\n"
+        w += "\n"
+                
+    if "image_watch" in topics:
+        w += "image_watch: " + str(prog.getOption("image_watch")) + "\n"
+        w += "image_watch_dir: " + prog.getOption("image_watch_dir") + "\n"
+        w += "status: "
         
+        if prog.image_watch is None:
+            w += "N/A\n"
+        else:
+            if prog.image_watch.running:
+                w += "running\n"
+            else:
+                w += "halted"
+        w += "\n"
+
+        if "streaming" in topics:
+            w += "streaming: " + str(prog.getOption("streaming")) + "\n\n"
+        
+    return w.strip()
+    
+
+
+
+
+
+            
+            
+
+
 
 
 cmds_additional_docs = {
