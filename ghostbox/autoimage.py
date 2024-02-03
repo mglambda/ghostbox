@@ -59,7 +59,3 @@ image_id - The id of the image. This is relevant as it will inform the tokens us
         (file, time) = self.latestFile
         self.callback(file, self.image_id)
                 
-def testFunc(file, id):
-    print(f"{file=}\n{id=}")
-    
-x = AutoImageProvider("/home/marius/Picturescreenshots", testFunc)
