@@ -189,7 +189,7 @@ class Program(object):
         return self.options.get(key, False)
 
     def optionDiffers(self, name, newValue):
-        if name not in self.option:
+        if name not in self.options:
             return True
         return self.getOption(name) == newValue
 
@@ -429,26 +429,36 @@ class Program(object):
     
     def buildPrompt(prog, w):
         """Takes user input (w), returns pair of (modified user input, prompt)"""
-        if prog.getOption("continue") and prog.continue_with == "":
+        if prog.getOption("continue") and prog.continue_with == "": # user entered /cont or equivalent
             setOption(prog, ["continue", "False"])
-            w = "" # gets rid of /cont etc
-            return (w, prog.getPrompt(prog.session.showStory(trim_end=True), "", system_msg = prog.session.getSystem())                )
+            return ("", prog.getPrompt(prog.session.showStory(trim_end=True), "", system_msg = prog.session.getSystem())                )
 
-        if prog.continue_with != "":
-            # user input has been replaced with something else, e.g. a transcription
+        if prog.continue_with != "":# user input has been replaced with something else, e.g. a transcription
             w = prog.popContinueString()
         
-        v = ""
-        if prog.getMode() == "chat":
-            w = mkChatPrompt(prog.getOption("chat_user")) + w
-            v = mkChatPrompt(prog.getOption("chat_ai"), space=False)
-        elif prog.getMode() == "chat-thoughts":
-            w = mkChatPrompt(prog.getOption("chat_user")) + w
-            # have to start with Internal Thought: etc, FIXME: refactor
-            v = mkChatPrompt(prog.session.getVar("thoughtstr"), space=False)
-        w = prog.session.injectTemplate(w) + v
+        (w, ai_msg_start) = prog.adjustForChat(w)
+        w = prog.session.injectTemplate(w) + ai_msg_start
+        w = prog.adjustForContext(w)
         return (w, prog.getPrompt(prog.session.showStory(), w, system_msg = prog.session.getSystem()))
 
+    def adjustForContext(self, w):
+        """Takes an input string w and returns the full history (including system msg) + w, but adjusted to fit into the context given by max_context_length. This is done in a complicated but very smart way.
+w - A (usually user supplied) input string.
+returns - A string ready to be sent to the backend, including the full conversation history, and guaranteed to carry the system msg."""
+        return w
+    
+    def adjustForChat(self, w):
+        """Takes user input w and returns a pair (w1, v) where w1 is the modified user input and v is the beginning of the AI message. Both of these carry adjustments for chat mode, such as adding 'Bob: ' and similar. This has no effect if there is no chat mode set, and v is empty string in this case."""
+        v = ""
+        if self.getMode() == "chat":
+            w = mkChatPrompt(self.getOption("chat_user")) + w
+            v = mkChatPrompt(self.getOption("chat_ai"), space=False)
+        elif self.getMode() == "chat-thoughts":
+            w = mkChatPrompt(self.getOption("chat_user")) + w
+            # have to start with Internal Thought: etc, FIXME: refactor
+            v = mkChatPrompt(self.session.getVar("thoughtstr"), space=False)
+        return (w, v)
+    
     def communicate(prog, w, prompt):
         """Sends prompt to the backend and prints results.
         w - User supplied input. Used for what is printed back out. Not actually send to backend.
@@ -534,7 +544,18 @@ class Program(object):
             
             
         
-        
+
+    def tokenize(self, w):
+        # returns list of tokens
+        if self.getOption("backend") != "llama.cpp":
+            # this doesn't work
+            return []
+
+        r = requests.post(self.getOption("endpoint") + "/tokenize", json= {"content" : w})
+        if r.status_code == 200:
+            return r["tokens"]
+        return []
+    
 def main():
     parser = makeArgParser(DEFAULT_PARAMS)
     args = parser.parse_args()
