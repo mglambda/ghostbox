@@ -150,8 +150,13 @@ class Program(object):
                 key = stripLeadingHyphens(arg)
                 if key in d:
                     del d[key]
-                
-        self.options = self.options | d
+
+
+        # used to be
+        #self.options = self.options | d
+        # which is nice, but unfortunately we have to go through setOption
+        for (k, v) in d.items():
+            self.setOption(k, v)
         return ""
 
     def showCLIPrompt(self):
@@ -188,6 +193,8 @@ class Program(object):
             self.tts_flag = True #restart TTS
         elif name == "whisper_model":
             self.whisper = self._newTranscriber()
+        elif name == "cli_prompt":
+            self.initial_cli_prompt = value
 
         return ""
 

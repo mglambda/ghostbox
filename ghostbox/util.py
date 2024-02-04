@@ -187,6 +187,13 @@ def userCharDir():
     return appdirs.user_data_dir() + "/ghostbox/chars"
 
 
+def inputChoice(msg, choices):
+    while True:
+        w = input(msg)
+        if w in choices:
+            return w
+        
+
 def userSetup():
     if not(os.path.isfile(userConfigFile())):
         print("Creating config file " + userConfigFile(force=True))
@@ -200,12 +207,16 @@ def userSetup():
 
     # try copying some example chars
     chars = "chat-ml dolphin dolphin-kitten joshu minsk".split(" ")
+    choice = ""
     try:
         for char in chars:
-            if os.path.isdir(userCharDir() + "/" + char):
-                continue
+            chardir = userCharDir() + "/" + char
+            if os.path.isdir(chardir) and choice != "a":
+                choice = inputChoice(chardir + " exists. Overwrite? (y/n/a): ", "y n a".split(" "))
+                if choice == "n":
+                    continue
             print("Installing char " + char)
-            shutil.copytree("chars/" + char, userCharDir() + "/" + char)
+            shutil.copytree("chars/" + char, chardir, dirs_exist_ok=True)
     except:
         print("Warning: Couldn't copy example chars.")
           

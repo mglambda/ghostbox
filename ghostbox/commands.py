@@ -48,8 +48,10 @@ def newSession(program, argv):
         hide(program, [])
 
     # init tts at this point, since config may have had tts vars
-    if program.getOption("tts"):
-        program.tts_flag = True
+    # removed because  this should be taken care of by setOption
+    #
+    #if program.getOption("tts"):
+        #program.tts_flag = True
         
     return w
 
