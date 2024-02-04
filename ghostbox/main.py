@@ -433,16 +433,15 @@ class Program(object):
         """Takes user input (w), returns pair of (modified user input, prompt)"""
         if prog.getOption("continue") and prog.continue_with == "": # user entered /cont or equivalent
             setOption(prog, ["continue", "False"])
-            return ("", prog.getPrompt(prog.session.showStory(trim_end=True), "", system_msg = prog.session.getSystem())                )
+            return ("", prog.getPrompt("", prog.adjustForContext("", trim_end=True)))
 
         if prog.continue_with != "":# user input has been replaced with something else, e.g. a transcription
             w = prog.popContinueString()
         
         (w, ai_msg_start) = prog.adjustForChat(w)
         w = prog.session.injectTemplate(w) + ai_msg_start
-        w = prog.adjustForContext(w)
-        return (w, prog.getPrompt("", w))
-#        return (w, prog.getPrompt(prog.session.showStory(), w, system_msg = prog.session.getSystem()))
+        return (w, prog.getPrompt("", prog.adjustForContext(w)))
+
 
 
     def getSystemTokenCount(self):
@@ -451,9 +450,10 @@ class Program(object):
             self._systemTokenCount = len(self.tokenize(self.session.getSystem())) + 1
         return self._systemTokenCount
         
-    def adjustForContext(self, w):
+    def adjustForContext(self, w, trim_end=False):
         """Takes an input string w and returns the full history (including system msg) + w, but adjusted to fit into the context given by max_context_length. This is done in a complicated but very smart way.
 w - A (usually user supplied) input string.
+trim_end - This is passed on to the session object that tracks the story, and will cause the automatically appended end tokens to be omitted. Note that this has no effect for prompt formats without such end tokens.
 returns - A string ready to be sent to the backend, including the full conversation history, and guaranteed to carry the system msg."""
         # problem: the llm can only process text equal to or smaller than the context window
         # dumb solution (ds): make a ringbuffer, append at end, throw away the beginning until it fits into context window
@@ -472,17 +472,18 @@ returns - A string ready to be sent to the backend, including the full conversat
         
         if budget < 0:
             #shit the bed
-            return self.session.getSystem() + self.session.showStory() + w
+            return self.session.getSystem() + self.session.showStory(trim_end=trim_end) + w
 
         # now we need a smart story history that fits into budget
         sf = self.session.stories.copyFolder(only_active=True)
+        # FIXME: should showstory have trim_end?
         while len(self.tokenize(sf.showStory())) > budget and not(sf.empty()):
             # drop some items from the story, smartly, and without changing original
             self._smartShifted = True
             item = sf.popEntry(0)
             #FIXME: this is missing the smart part!
 
-        return self.session.getSystem() + self.session.showStory(w=sf.showStory()) + w
+        return self.session.getSystem() + self.session.showStory(w=sf.showStory(), trim_end=trim_end) + w
 
     def adjustForChat(self, w):
         """Takes user input w and returns a pair (w1, v) where w1 is the modified user input and v is the beginning of the AI message. Both of these carry adjustments for chat mode, such as adding 'Bob: ' and similar. This has no effect if there is no chat mode set, and v is empty string in this case."""
