@@ -43,6 +43,7 @@ cmds = [
     ("!",  transcribe),
     ("/transcribe", transcribe),
     ("/audio", toggleAudio),
+    ("/image_watch", toggleImageWatch),    
     ("/image", image),
     ("/time", showTime),
     ("/status", showStatus),
@@ -81,6 +82,7 @@ class Program(object):
         self.streaming_done = threading.Event()
         self.stream_queue = []
         self. images = {}
+        self._dirtyContextLlama = False
         self.continue_with = ""
         self.tts = None
         self.multiline_buffer = ""
@@ -186,15 +188,24 @@ class Program(object):
     def getOption(self, key):
         return self.options.get(key, False)
 
+    def optionDiffers(self, name, newValue):
+        if name not in self.option:
+            return True
+        return self.getOption(name) == newValue
+
     def setOption(self, name, value):
         self.options[name] = value
         # for some options we do extra stuff
         if name == "tts_voice" or name == "tts_volume":
-            self.tts_flag = True #restart TTS
+            # we don't want to restart tts on /restart
+            if self.optionDiffers(name, value):
+                self.tts_flag = True #restart TTS
         elif name == "whisper_model":
             self.whisper = self._newTranscriber()
         elif name == "cli_prompt":
             self.initial_cli_prompt = value
+        elif name == "max_context_length":
+            self._dirtyContextLlama = False
 
         return ""
 
@@ -496,7 +507,7 @@ class Program(object):
         
     def getResults(self, r):
         backend = self.getOption("backend")
-        self.lastResult = r.json()        
+        self.setLastResult(r.json())        
         if backend == "llama.cpp":
             return r.json()['content']
         else:
@@ -514,7 +525,14 @@ class Program(object):
         self.images[id] = {"url" : url,
                            "data" : loadImageData(url)}
 
-        
+    def setLastResult(self, result):
+        self.lastResult = result
+        if self.getOption("backend") == "llama.cpp":
+            # llama does not allow to set the context size by clients, instead it dictates it server side. however i have not found a way to query it directly, it just gets set after the first request
+            self.setOption("max_context_length", result["generation_settings"]["n_ctx"])
+            self._dirtyContextLlama = True # context has been set by llama
+            
+            
         
         
 def main():
@@ -536,6 +554,9 @@ def main():
         # FIXME: this shouldn't be deleted so that it stays persistent when user does /start or /restart, but it's also a useless option. implement a emchanism for hidden options?
     #del prog.options["hide"]
 
+    if prog.getOption("tts"):
+        prog.tts_flag = True
+    
     if prog.getOption("audio"):
         prog.startAudioTranscription()
     del prog.options["audio"]

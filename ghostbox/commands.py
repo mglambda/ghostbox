@@ -498,14 +498,25 @@ Show some performance stats for the last request."""
     r = prog.lastResult
     if not(r):
         return "No time statistics. Either no request has been sent yet, or the backend doesn't support timing."
-    dt = r["timings"]
-    # timings: {'predicted_ms': 4115.883, 'predicted_n': 300, 'predicted_per_second': 72.88836927580303, 'predicted_per_token_ms': 13.71961, 'prompt_ms': 25.703, 'prompt_n': 0, 'prompt_per_second': 0.0, 'prompt_per_token_ms': None}
+
+    if prog.getOption("backend") != "llama.cpp":
+        return "Timings are not implemented yet for this backend."
+    
+    w = ""
+    # timings: {'predicted_ms': 4115.883, 'predicted_n': 300, 'predicted_per_second': 72.88836927580303, 'predicted_per_token_ms': 13.71961, 'prompt_ms': 25.703, 'prompt_n': 0, 'prompt_per_second': 0.0, 'prompt_per_token_ms': None}    
+    dt = r["timings"]    
+    #caching etc
+    w += "generated: " + str(dt["predicted_n"]) 
+    w += ", evaluated: " + str(r["tokens_evaluated"])
+    w += ", cached: " + str(r["tokens_cached"]) + "\n"
+    w += "context exceeded: " + str(r["truncated"]) + "\n"
+    
     factor = 1/1000
     unit = "s"
     prep = lambda u: str(round(u*factor, 2)) 
-    w = prep(dt["prompt_ms"]) + unit + " spent processing prompt.\n"
+    w += prep(dt["prompt_ms"]) + unit + " spent evaluating prompt.\n"
     w += prep(dt["predicted_ms"]) + unit + " spent generating.\n"
-    w += prep(dt["predicted_ms"] + dt["prompt_ms"]) + unit + " total processing time for" + str(dt["predicted_n"]) + "tokens.\n"
+    w += prep(dt["predicted_ms"] + dt["prompt_ms"]) + unit + " total processing time.\n"  
     w += str(round(dt["predicted_per_second"], 2)) + "T/s, " + prep(dt["predicted_per_token_ms"]) + unit + "/T"
     return w
 
@@ -521,6 +532,13 @@ Give an overall report about the program and some subprocesses."""
     if "backend" in topics:
         w += "backend: " + prog.getOption("backend") + " at " + prog.getOption("endpoint") + "\n"
         w += "backend status: " + str(prog.getHealthResult()) + "\n"
+        w += "max_context_length: " + str(prog.getOption("max_context_length"))
+        if prog._dirtyContextLlama:
+            # context has been changed by llama server
+            w += " (set by llama.cpp)\n"
+        else:
+            w += "\n"
+        
         w += " models\n"
         models =         dirtyGetJSON(prog.getOption("endpoint") + "/v1/models").get("data", [])
         for m in models:
@@ -546,11 +564,14 @@ Give an overall report about the program and some subprocesses."""
                 w += "shutting down\n"
         else:
             # tts was true so someone started it, now we need to know about the process
-            r = prog.tts.poll()
-            if r is None:
-                w += "running\n"
+            if prog.tts is None:
+                w += "failed to start\n"
             else:
-                w += "exited with status " + str(r) + "\n"
+                r = prog.tts.poll()
+                if r is None:
+                    w += "running\n"
+                else:
+                    w += "exited with status " + str(r) + "\n"
         w += "\n"
 
     if "audio" in topics:
@@ -587,17 +608,33 @@ Give an overall report about the program and some subprocesses."""
             w += "streaming: " + str(prog.getOption("streaming")) + "\n\n"
         
     return w.strip()
-    
 
+def toggleImageWatch(prog, argv):
+    """[DIR]
+Enable / disable automatic watching for images in a specified folder.
+    When new images are created / modified in image_watch_dir, a message (image_watch_msg)is automatically sent to the backend.
+    If DIR is provided to this command, image_watch_dir will be set to DIR. Otherwise, the preexisting image_watch_dir is used, which defaults to the user's standard screenshot folder.
+    This allows you to e.g. take screenshots and have the TTS automatically describe them without having to switch back to this program.
+    Check status with /status image_watch."""
+    dir = " ".join(argv)
+    if dir != "":
+        if not(os.path.isdir(dir)):
+            return "error: Could not start image_watch: " + dir + " is not a directory."
+        prog.setOption("image_watch", dir)
+        
+    # toggle
+    prog.options["image_watch"] = not(prog.getOption("image_watch"))
+    if prog.getOption("image_watch"):
+        prog.startImageWatch()
+    else:
+        prog.stopImageWatch()
+        return "image_watch off."
+    return ""
+        
 
+        
 
-
-
-            
-            
-
-
-
+        
 
 cmds_additional_docs = {
     "/log" : """
