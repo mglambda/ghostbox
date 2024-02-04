@@ -35,11 +35,26 @@ class StoryFolder(object):
             self.stories.append(copy.deepcopy(self.stories[index]))
             self.index = l
 
+    def copyFolder(self, only_active=False):
+        sf = StoryFolder()
+        if only_active:
+            sf.stories = copy.deepcopy(self.stories[self.index:self.index+1])
+        else:
+            sf.stories = copy.deepcopy(self.stories)
+            sf.index = self.index
+        return sf
+        
+    def popEntry(self, n=-1):
+        """Removes an entry from position n if there is one, and then returns it. Will throw indexerror if index is not valid."""
+        return self.stories[self.index].pop(n)
+
+    
+        
     def dropEntry(self):
         self.stories[self.index] = self.stories[self.index][0:-1]
 
     def dropEntriesUntil(self, predicate):
-        # unwinds the story history until predicate is true or beginning is reached
+        """unwinds the story history until predicate is true or beginning is reached. Predicate takes story items as argument."""
         end = len(self.stories[self.index])
         for i in range(end - 1, -1, -1):
             if predicate(self.stories[self.index][i]):

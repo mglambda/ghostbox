@@ -83,6 +83,8 @@ class Program(object):
         self.stream_queue = []
         self. images = {}
         self._dirtyContextLlama = False
+        self._smartShifted = False
+        self._systemTokenCount = None
         self.continue_with = ""
         self.tts = None
         self.multiline_buffer = ""
@@ -439,14 +441,49 @@ class Program(object):
         (w, ai_msg_start) = prog.adjustForChat(w)
         w = prog.session.injectTemplate(w) + ai_msg_start
         w = prog.adjustForContext(w)
-        return (w, prog.getPrompt(prog.session.showStory(), w, system_msg = prog.session.getSystem()))
+        return (w, prog.getPrompt("", w))
+#        return (w, prog.getPrompt(prog.session.showStory(), w, system_msg = prog.session.getSystem()))
 
+
+    def getSystemTokenCount(self):
+        """Returns the number of tokens in system msg. The value is cached per session. Note that this adds +1 for the BOS token."""
+        if self._systemTokenCount is None:
+            self._systemTokenCount = len(self.tokenize(self.session.getSystem())) + 1
+        return self._systemTokenCount
+        
     def adjustForContext(self, w):
         """Takes an input string w and returns the full history (including system msg) + w, but adjusted to fit into the context given by max_context_length. This is done in a complicated but very smart way.
 w - A (usually user supplied) input string.
 returns - A string ready to be sent to the backend, including the full conversation history, and guaranteed to carry the system msg."""
-        return w
-    
+        # problem: the llm can only process text equal to or smaller than the context window
+        # dumb solution (ds): make a ringbuffer, append at end, throw away the beginning until it fits into context window
+        # problem with dumb solution: the system msg gets thrown out and the AI forgets the basics of who it is
+        # slightly less dumb solution (slds): keep the system_msg at all costs, throw first half of the rest away when context is exceeded this is llama.cpp solution, but only if you supply n_keep = tokens of system_msg koboldcpp does this too, but they seem to be a bit smarter about it and make it more convenient.
+        # problem with slds: This can cut off the story at awkward moments, especially if it's in the middle of sentence or prompt format relevant tokens, which can really throw some models off, especially in chat mode where we rely on proper formatting a lot
+        # ghostbox (brilliant) solution (gbs): use metadata in the story history to semantically determine good cut-off points. usually, this is after an AI message, since those are more often closing-the-action than otherwise. Use template files to ensure syntactic correctness (e.g. no split prompt format tokens).
+        # honorable mention of degenerate cases: If the system_msg is longer than the context itself, or users pull similar jokes, it is ok to shit the bed and let the backend truncate the prompt.
+        self._smartShifted = False #debugging
+        
+        gamma = self.getOption("max_context_length")        
+        k = self.getSystemTokenCount()
+        wc = len(self.tokenize(w))
+        n = self.getOption("max_length")
+        budget = gamma - (k + wc + n)
+        
+        if budget < 0:
+            #shit the bed
+            return self.session.getSystem() + self.session.showStory() + w
+
+        # now we need a smart story history that fits into budget
+        sf = self.session.stories.copyFolder(only_active=True)
+        while len(self.tokenize(sf.showStory())) > budget and not(sf.empty()):
+            # drop some items from the story, smartly, and without changing original
+            self._smartShifted = True
+            item = sf.popEntry(0)
+            #FIXME: this is missing the smart part!
+
+        return self.session.getSystem() + self.session.showStory(w=sf.showStory()) + w
+
     def adjustForChat(self, w):
         """Takes user input w and returns a pair (w1, v) where w1 is the modified user input and v is the beginning of the AI message. Both of these carry adjustments for chat mode, such as adding 'Bob: ' and similar. This has no effect if there is no chat mode set, and v is empty string in this case."""
         v = ""
@@ -553,7 +590,7 @@ returns - A string ready to be sent to the backend, including the full conversat
 
         r = requests.post(self.getOption("endpoint") + "/tokenize", json= {"content" : w})
         if r.status_code == 200:
-            return r["tokens"]
+            return r.json()["tokens"]
         return []
     
 def main():

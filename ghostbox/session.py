@@ -66,8 +66,9 @@ class Session(object):
     def addAIText(self, w):
         self.stories.addText(w, user_generated=False)
             
-    def showStory(self, trim_end=False, apply_filter=False):
-        w = self.stories.showStory()
+    def showStory(self, w=None, trim_end=False, apply_filter=False):
+        if w is None:
+            w = self.stories.showStory()
         if trim_end and self.template_end != "":
             if w.endswith(self.template_end):
                 return w[:-len(self.template_end)]

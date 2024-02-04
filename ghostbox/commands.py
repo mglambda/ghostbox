@@ -509,7 +509,14 @@ Show some performance stats for the last request."""
     w += "generated: " + str(dt["predicted_n"]) 
     w += ", evaluated: " + str(r["tokens_evaluated"])
     w += ", cached: " + str(r["tokens_cached"]) + "\n"
-    w += "context exceeded: " + str(r["truncated"]) + "\n"
+    w += "context: " + str(r["tokens_evaluated"] + dt["predicted_n"]) + " / " +  str(prog.getOption("max_context_length")) + ", exceeded: " + str(r["truncated"])
+    if prog._smartShifted:
+        w += "(smart shifted)\n"
+    else:
+        w += "\n"
+        
+
+
     
     factor = 1/1000
     unit = "s"
