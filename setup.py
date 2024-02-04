@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 import os
 
 
-GHOSTBOX_VERSION='0.6.3'
+GHOSTBOX_VERSION='0.6.4'
 
 
 with open("README.md", "r", encoding="utf-8") as readme_file:
