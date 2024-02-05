@@ -47,6 +47,8 @@ cmds = [
     ("/image", image),
     ("/time", showTime),
     ("/status", showStatus),
+    ("/tokenize", tokenize),
+    ("/raw", showRaw),
     ("/debuglast", debuglast),
     ("/ttsdebug", ttsDebug),    
     ("/tts", toggleTTS),
@@ -82,6 +84,7 @@ class Program(object):
         self.streaming_done = threading.Event()
         self.stream_queue = []
         self. images = {}
+        self._lastPrompt = ""
         self._dirtyContextLlama = False
         self._smartShifted = False
         self._systemTokenCount = None
@@ -279,7 +282,9 @@ class Program(object):
 
         
         
-    def getPrompt(self, conversation_history, text, system_msg = ""): 
+    def getPrompt(self, conversation_history, text, system_msg = ""):
+        self._lastPrompt = text
+        
         if self.getOption("warn_trailing_space"):
             if text.endswith(" "):
                 printerr("warning: Prompt ends with a trailing space. This messes with tokenization, and can cause the model to start its responses with emoticons. If this is what you want, you can turn off this warning by setting 'warn_trailing_space' to False.")

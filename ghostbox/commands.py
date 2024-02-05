@@ -639,9 +639,21 @@ Enable / disable automatic watching for images in a specified folder.
     return ""
         
 
-        
+def showRaw(prog, argv):
+    """
+    Displays the raw output for the last prompt that was sent to the backend."""
+    printerr(prog._lastPrompt, prefix="")
+    return ""
 
-        
+def tokenize(prog, argv):
+    """MSG
+    Send a tokenize request to the server. Will print raw tokens to standard output, one per line. This is mostly used to debug prompts."""
+    ts = prog.tokenize("".join(argv))
+    for t in ts:
+        print(t)
+    return ""
+    
+
 
 cmds_additional_docs = {
     "/log" : """
