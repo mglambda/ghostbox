@@ -467,12 +467,12 @@ class Program(object):
     def showSystem(self):
         return self.getTemplate().header(**self.session.getVars())
 
-    def showStory(self, story_folder=None):
+    def showStory(self, story_folder=None, append_hint=True):
         if story_folder is None:
             sf = self.session.stories
         else:
             sf = story_folder
-        return self.getTemplate().body(sf.get(), **self.session.getVars())
+        return self.getTemplate().body(sf.get(), append_hint, **self.session.getVars())
         
     def buildPrompt(self,hint=""):
         """Takes an input string w and returns the full history (including system msg) + w, but adjusted to fit into the context given by max_context_length. This is done in a complicated but very smart way.
@@ -539,11 +539,9 @@ returns - A string ready to be sent to the backend, including the full conversat
             r.json = lambda ws=prog.stream_queue: {"results" : [{"text" : "".join(ws)}]}
             prog.stream_queue = []
         else:
-            print("posting")
             r = requests.post(prog.getOption("endpoint") + prog.getGenerateApi(), json=prompt)
 
         if r.status_code == 200:
-            print("200")
             results = prog.getResults(r)
             (displaytxt, txt) = prog.formatGeneratedText(results)
             prog.session.stories.get().addAssistantText(txt)
@@ -616,7 +614,6 @@ returns - A string ready to be sent to the backend, including the full conversat
             return []
 
         r = requests.post(self.getOption("endpoint") + "/tokenize", json= {"content" : w})
-        print("done")
         if r.status_code == 200:
             return r.json()["tokens"]
         return []

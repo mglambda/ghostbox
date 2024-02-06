@@ -59,8 +59,13 @@ def newSession(program, argv):
 def printStory(prog, argv, stderr=False, apply_filter=True):
     """[FILENAME]
     Print the current story.
-    If FILENAME is provided, save the story to that file.""" 
-    w = prog.session.showStory(apply_filter=apply_filter)
+    If FILENAME is provided, save the story to that file."""
+    # apply_filter basically means make it pretty
+    if apply_filter:
+        # FIXME: this needs a proper refactor as well
+        w = "\n".join([item["content"] for item in prog.session.stories.get().getData()])
+    else:
+        w = prog.showStory(append_hint=False)
 
     if stderr:
         printerr(w, prefix="")
