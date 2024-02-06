@@ -487,11 +487,14 @@ returns - A string ready to be sent to the backend, including the full conversat
         while len(self.tokenize(sf.showStory())) > budget and not(sf.empty()):
             # drop some items from the story, smartly, and without changing original
             self._smartShifted = True
-            item = sf.popEntry(0)
+            item = sf.get().pop(0)
             #FIXME: this can be way better, needs moretesting!
 
         return self.session.getSystem() + self.session.showStory(w=sf.showStory(), trim_end=trim_end) + w
 
+    def applyTemplate(self, template, story, system_prompt=""):
+        """Assembles an actual, properly formatted string from a prompt-format template, a Story object, and an optional system_prompt that is prepended to the front. Returns a string that can be send to a backend as prompt."""
+        
     def adjustForChat(self, w):
         """Takes user input w and returns a pair (w1, v) where w1 is the modified user input and v is the beginning of the AI message. Both of these carry adjustments for chat mode, such as adding 'Bob: ' and similar. This has no effect if there is no chat mode set, and v is empty string in this case."""
         v = ""

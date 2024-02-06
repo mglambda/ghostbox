@@ -1,6 +1,7 @@
 import os, getpass, shutil, base64, requests
 import appdirs
 import sys
+from functools import *
 
 def getErrorPrefix():
     return " # "
@@ -281,3 +282,6 @@ def dirtyGetJSON(url):
     if r.status_code == 200:
         return r.json()
     return {}
+
+def replaceFromDict(w, d, key_func=lambda k: k):
+    return reduce(lambda v, pair: v.replace(key_func(pair[0]), pair[1]), d.items(), w)

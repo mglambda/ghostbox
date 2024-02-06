@@ -1,9 +1,8 @@
 import jsonpickle
 from ghostbox.Story import *
 
-
-
 class StoryFolder(object):
+    """Thin wrapper around a list of Story objects."""
     def __init__(self, json_data=None):
         self.stories = [Story()]
         self.index = 0 # points to where to append next
@@ -11,15 +10,11 @@ class StoryFolder(object):
             self.stories = jsonpickle.loads(json_data) # throw if illegal json
             # FIXME: this will crash and burn if json is bogus, but oh well
 
-            
     def empty(self):
         return self.stories[self.index] == []
             
     def getStory(self):
         return self.stories[self.index]
-
-    def showStory(self):
-        return "".join([item["text"] for item in self.getStory()])
     
     def newStory(self):
         self.stories.append([])
@@ -43,30 +38,6 @@ class StoryFolder(object):
             sf.stories = copy.deepcopy(self.stories)
             sf.index = self.index
         return sf
-        
-    def popEntry(self, n=-1):
-        """Removes an entry from position n if there is one, and then returns it. Will throw indexerror if index is not valid."""
-        return self.stories[self.index].pop(n)
-
-    
-        
-    def dropEntry(self):
-        self.stories[self.index] = self.stories[self.index][0:-1]
-
-    def dropEntriesUntil(self, predicate):
-        """unwinds the story history until predicate is true or beginning is reached. Predicate takes story items as argument."""
-        end = len(self.stories[self.index])
-        for i in range(end - 1, -1, -1):
-            if predicate(self.stories[self.index][i]):
-                self.stories[self.index] = self.stories[self.index][0:i+1]
-                return True
-        # predicate was never true
-        self.stories[self.index] = []
-        return False
-
-    def addText(self, w, user_generated=False):
-        item = makeStoryItem(w, user_generated)
-        self.getStory().append(item)
         
     def _shiftStory(self, i):
         l = len(self.stories)
