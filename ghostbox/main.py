@@ -463,9 +463,11 @@ returns - A string ready to be sent to the backend, including the full conversat
         # problem: the llm can only process text equal to or smaller than the context window
         # dumb solution (ds): make a ringbuffer, append at end, throw away the beginning until it fits into context window
         # problem with dumb solution: the system msg gets thrown out and the AI forgets the basics of who it is
-        # slightly less dumb solution (slds): keep the system_msg at all costs, throw first half of the rest away when context is exceeded this is llama.cpp solution, but only if you supply n_keep = tokens of system_msg koboldcpp does this too, but they seem to be a bit smarter about it and make it more convenient.
+        # slightly less dumb solution (slds): keep the system_msg at all costs, throw first half of the rest away when context is exceeded this is llama.cpp solution, but only if you supply n_keep = tokens of system_msg koboldcpp does this too, but they seem to be a bit smarter about it and make it more convenient. Advantage of this approach is that you will make better use of the cache, since at least half of the prompt after the system msg is guaranteed to be in cache.
         # problem with slds: This can cut off the story at awkward moments, especially if it's in the middle of sentence or prompt format relevant tokens, which can really throw some models off, especially in chat mode where we rely on proper formatting a lot
         # ghostbox (brilliant) solution (gbs): use metadata in the story history to semantically determine good cut-off points. usually, this is after an AI message, since those are more often closing-the-action than otherwise. Use template files to ensure syntactic correctness (e.g. no split prompt format tokens).
+        # The problem with this (gbs) is that it is not making as good use of the cache, since if an earlier part of the prompt changed everything after it gets invalidated. However prompt eval is the easy part. Clearly though, there is a trade off. Maybe give user a choice between slds and gbs as trade off between efficiency vs quality?
+        # Also: this is currently still quite dumb, actually, since we don't take any semantics into account
         # honorable mention of degenerate cases: If the system_msg is longer than the context itself, or users pull similar jokes, it is ok to shit the bed and let the backend truncate the prompt.
         self._smartShifted = False #debugging
         
@@ -486,7 +488,7 @@ returns - A string ready to be sent to the backend, including the full conversat
             # drop some items from the story, smartly, and without changing original
             self._smartShifted = True
             item = sf.popEntry(0)
-            #FIXME: this is missing the smart part!
+            #FIXME: this can be way better, needs moretesting!
 
         return self.session.getSystem() + self.session.showStory(w=sf.showStory(), trim_end=trim_end) + w
 

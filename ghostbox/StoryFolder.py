@@ -1,17 +1,17 @@
-import json, copy
-def makeStoryItem(text, user_generated=False):
-    return {"text" : text, "user_generated" : user_generated}
+import jsonpickle
+from ghostbox.Story import *
+
+
 
 class StoryFolder(object):
     def __init__(self, json_data=None):
-        self.stories = [[]]
+        self.stories = [Story()]
         self.index = 0 # points to where to append next
         if json_data:
-            self.stories = json.loads(json_data) # throw if illegal json
+            self.stories = jsonpickle.loads(json_data) # throw if illegal json
             # FIXME: this will crash and burn if json is bogus, but oh well
 
             
-
     def empty(self):
         return self.stories[self.index] == []
             
@@ -87,7 +87,7 @@ class StoryFolder(object):
         return self._shiftStory(-1)
     
     def toJSON(self):
-        return json.dumps(self.stories)
+        return jsonpickle.dumps(self.stories)
     
     def shiftTo(self, i):
         l = len(self.stories)
