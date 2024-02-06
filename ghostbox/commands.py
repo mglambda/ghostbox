@@ -37,7 +37,7 @@ def newSession(program, argv):
     w += "Ok. Loaded " + path
 
     # template_initial
-    if "{$template_initial}" in program.session.keys:
+    if "{$template_initial}" in program.session.fileVars:
         program.initial_print_flag = True
         
     # config may have set the mode, but we need to go through setMode
@@ -150,10 +150,10 @@ def showVars(prog, argv):
       2. The -x or --varfile command line option. This argument provides additional files that may serve as variables, similar to (1). The argument may be repeated multiple times. This is most commonly used by users."""
 
     if argv == []:
-        return "\n".join([f"{key}" for key in prog.session.keys.keys()])
+        return "\n".join([f"{key}" for key in prog.session.fileVars.keys()])
 
     k = " ".join(argv)
-    return prog.session.keys.get(k, f"Could not find var '{k}'")
+    return prog.session.fileVars.get(k, f"Could not find var '{k}'")
 
 def showChars(prog, argv):
     """

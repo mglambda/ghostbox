@@ -12,9 +12,14 @@ class PFTemplate(ABC):
         pass
 
     @abstractmethod
-    def body(self, story, hint="", **kwargs):
+    def body(self, story, append_hint=True, **kwargs):
         pass
 
+    @abstractmethod
+    def strip(self, w):
+        pass
+    
+    
 class FilePFTemplate(PFTemplate):
     """Simple, customizable prompt format templates based on loading dictionaries with certain files.
 
@@ -63,7 +68,7 @@ The quick, brown fox jumps over the lazy hedgehog!<|im_end|><|im_start|>assistan
     def header(self, system_msg, **kwargs):
         return replaceFromDict(self.system.replace("{{system_msg}}", system_msg), kwargs, key_func=FilePFTemplate.var_decorator)
 
-    def body(self, story, append_hint=False, **kwargs):
+    def body(self, story, append_hint=True, **kwargs):
         def build(w, item):
             # you could do this more modular but why? this way users see the files and the template scheme is obvious. I bet this covers 99% of actual use cases for LLM
             content = replaceFromDict(item["content"], kwargs, key_func=FilePFTemplate.var_decorator)
@@ -79,3 +84,8 @@ The quick, brown fox jumps over the lazy hedgehog!<|im_end|><|im_start|>assistan
             hint = ""
         return reduce(build, story.getData(), "") + hint
 
+    def strip(self, w):
+        #FXIME: only preliminary for testing like this
+        targets = [self.begin_user, self.begin_assistant, self.end_user, self.end_assistant]
+        return reduce(lambda v, target: v.replace(target, ""), targets, w)
+        

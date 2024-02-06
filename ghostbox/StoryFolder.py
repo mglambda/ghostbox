@@ -1,4 +1,4 @@
-import jsonpickle
+import jsonpickle, copy
 from ghostbox.Story import *
 
 class StoryFolder(object):
@@ -13,7 +13,7 @@ class StoryFolder(object):
     def empty(self):
         return self.stories[self.index] == []
             
-    def getStory(self):
+    def get(self):
         return self.stories[self.index]
     
     def newStory(self):

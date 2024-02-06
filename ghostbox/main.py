@@ -8,6 +8,7 @@ from ghostbox._argparse import *
 from ghostbox.streaming import streamPrompt
 from ghostbox.session import Session
 from ghostbox.transcribe import WhisperTranscriber
+from ghostbox.pftemplate import *
 
 
 def showHelp(prog, argv):
@@ -77,6 +78,7 @@ DEFAULT_PARAMS = {                "rep_pen": 1.1, "temperature": 0.7, "top_p": 0
 class Program(object):
     def __init__(self, options={}, initial_cli_prompt=""):
         self.session = Session(chat_user=options.get("chat_user", ""))
+        self.template = FilePFTemplate("templates/chat-ml")
         self.lastResult = {}
         self.tts_flag = False
         self.initial_print_flag = False
@@ -234,16 +236,18 @@ class Program(object):
             return
         
         self.loadImage(image_path, image_id)
-        (modified_w, prompt) = self.buildPrompt(w)
-        self.communicate(modified_w, prompt)
+        (modified_w, hint) = self.modifyInput(w)
+        self.session.stories.get().addUserText(modified_w)
+        self.communicate(self.buildPrompt(hint))
         print(self.showCLIPrompt(), end="")
 
         
     def _transcriptionCallback(self, w):
-        (modified_w, prompt) = self.buildPrompt(w)
+        (modified_w, hint) = self.modifyInput(w)
+        self.session.stories.get().addUserText(modified_w)
         if self.getOption("audio_show_transcript"):
             print(w)
-        self.communicate(modified_w, prompt)
+        self.communicate(self.buildPrompt(hint))
         print(self.showCLIPrompt(), end="")
         
         
@@ -282,7 +286,7 @@ class Program(object):
 
         
         
-    def getPrompt(self, conversation_history, text, system_msg = ""):
+    def getPrompt(self, text):
         self._lastPrompt = text
         
         if self.getOption("warn_trailing_space"):
@@ -290,13 +294,13 @@ class Program(object):
                 printerr("warning: Prompt ends with a trailing space. This messes with tokenization, and can cause the model to start its responses with emoticons. If this is what you want, you can turn off this warning by setting 'warn_trailing_space' to False.")
         backend = self.getOption("backend")
         if backend == "koboldcpp":
-            d = {"prompt": conversation_history + text + "",
+            d = {"prompt": text + "",
                  "grammar" : self.getOption("grammar"),
                  "n": 1,
                  "max_context_length": self.getOption("max_context_length"),
                  "max_length": self.options["max_length"]}
         elif backend == "llama.cpp":
-            d = {"prompt": system_msg + conversation_history + text + "",
+            d = {"prompt": text,
                  "grammar" : self.getOption("grammar"),
                  #"n_ctx": self.getOption("max_context_length"), # this is sort of undocumented in llama.cpp server
                  "cache_prompt" : True,
@@ -406,10 +410,9 @@ class Program(object):
     def formatGeneratedText(self, w):
         return self._formatters.get(self.getMode(), self._defaultFormatter)(self.replaceForbidden(w))
 
-    def _defaultFormatter(self, w):
-        display =trimIncompleteSentence(w)
-        raw = display + self.session.template_end
-        return (display, raw)
+    def _defaultFormatter(self, raw_response):
+        display =trimIncompleteSentence(self.getTemplate().strip(raw_response))
+        return (display, display)
 
     def _chatFormatter(self, w):
         # point of this is to 1. always start the prompt with e.g. Gary: if the AI is called gary. This helps the LLM stay in character, but it should be hidden from the user in chat mode
@@ -434,31 +437,47 @@ class Program(object):
         display = discardFirstLine(clean)
         return (display, txt)
     
-    def buildPrompt(prog, w):
-        """Takes user input (w), returns pair of (modified user input, prompt)"""
+    def modifyInput(prog, w):
+        """Takes user input (w), returns pair of (modified user input, and a hint to give to the ai."""
         if prog.getOption("continue") and prog.continue_with == "": # user entered /cont or equivalent
             setOption(prog, ["continue", "False"])
-            return ("", prog.getPrompt("", prog.adjustForContext("", trim_end=True)))
+            return ("", "")
 
         if prog.continue_with != "":# user input has been replaced with something else, e.g. a transcription
             w = prog.popContinueString()
         
-        (w, ai_msg_start) = prog.adjustForChat(w)
-        w = prog.session.injectTemplate(w) + ai_msg_start
-        return (w, prog.getPrompt("", prog.adjustForContext(w)))
-
-
+        (w, ai_hint) = prog.adjustForChat(w)
+        if prog.getMode().startswith("chat"):
+            #FIXME: this isn't very clean, but the colon thing is annoying
+            w = ensureColonSpace(w, txt)
+        
+        return (w, ai_hint)
 
     def getSystemTokenCount(self):
         """Returns the number of tokens in system msg. The value is cached per session. Note that this adds +1 for the BOS token."""
         if self._systemTokenCount is None:
             self._systemTokenCount = len(self.tokenize(self.session.getSystem())) + 1
         return self._systemTokenCount
+
+
+    def getTemplate(self):
+        return self.template
+    
+    
+    def showSystem(self):
+        return self.getTemplate().header(**self.session.getVars())
+
+    def showStory(self, story_folder=None):
+        if story_folder is None:
+            sf = self.session.stories
+        else:
+            sf = story_folder
+        return self.getTemplate().body(sf.get(), **self.session.getVars())
         
-    def adjustForContext(self, w, trim_end=False):
+    def buildPrompt(self,hint=""):
         """Takes an input string w and returns the full history (including system msg) + w, but adjusted to fit into the context given by max_context_length. This is done in a complicated but very smart way.
-w - A (usually user supplied) input string.
-trim_end - This is passed on to the session object that tracks the story, and will cause the automatically appended end tokens to be omitted. Note that this has no effect for prompt formats without such end tokens.
+
+
 returns - A string ready to be sent to the backend, including the full conversation history, and guaranteed to carry the system msg."""
         # problem: the llm can only process text equal to or smaller than the context window
         # dumb solution (ds): make a ringbuffer, append at end, throw away the beginning until it fits into context window
@@ -470,7 +489,7 @@ returns - A string ready to be sent to the backend, including the full conversat
         # Also: this is currently still quite dumb, actually, since we don't take any semantics into account
         # honorable mention of degenerate cases: If the system_msg is longer than the context itself, or users pull similar jokes, it is ok to shit the bed and let the backend truncate the prompt.
         self._smartShifted = False #debugging
-        
+        w = self.showStory() + hint 
         gamma = self.getOption("max_context_length")        
         k = self.getSystemTokenCount()
         wc = len(self.tokenize(w))
@@ -479,21 +498,19 @@ returns - A string ready to be sent to the backend, including the full conversat
         
         if budget < 0:
             #shit the bed
-            return self.session.getSystem() + self.session.showStory(trim_end=trim_end) + w
+            return self.showSystem() + w
 
         # now we need a smart story history that fits into budget
         sf = self.session.stories.copyFolder(only_active=True)
-        # FIXME: should showstory have trim_end?
-        while len(self.tokenize(sf.showStory())) > budget and not(sf.empty()):
-            # drop some items from the story, smartly, and without changing original
+        print("buildPrompt before loop")
+        while len(self.tokenize(self.showStory(story_folder=sf) + hint)) > budget and not(sf.empty()):
+        # drop some items from the story, smartly, and without changing original
             self._smartShifted = True
             item = sf.get().pop(0)
             #FIXME: this can be way better, needs moretesting!
 
-        return self.session.getSystem() + self.session.showStory(w=sf.showStory(), trim_end=trim_end) + w
-
-    def applyTemplate(self, template, story, system_prompt=""):
-        """Assembles an actual, properly formatted string from a prompt-format template, a Story object, and an optional system_prompt that is prepended to the front. Returns a string that can be send to a backend as prompt."""
+            print("buildprompt after loop")
+        return self.showSystem() + self.showStory(story_folder=sf) + hint
         
     def adjustForChat(self, w):
         """Takes user input w and returns a pair (w1, v) where w1 is the modified user input and v is the beginning of the AI message. Both of these carry adjustments for chat mode, such as adding 'Bob: ' and similar. This has no effect if there is no chat mode set, and v is empty string in this case."""
@@ -507,10 +524,11 @@ returns - A string ready to be sent to the backend, including the full conversat
             v = mkChatPrompt(self.session.getVar("thoughtstr"), space=False)
         return (w, v)
     
-    def communicate(prog, w, prompt):
-        """Sends prompt to the backend and prints results.
-        w - User supplied input. Used for what is printed back out. Not actually send to backend.
-        prompt - String to send to the backend."""
+    def communicate(prog, prompt_text):
+        """Sends prompt_text to the backend and prints results."""
+        #turn raw text into json for the backend
+        prompt = prog.getPrompt(prompt_text)
+        
         if prog.getOption("streaming"):
             r = streamPrompt(prog, prog.getOption("endpoint") + "/api/extra/generate/stream", json=prompt)
             #FIXME: find a better way to do this (print of ai prompt with colon etc.)
@@ -521,18 +539,14 @@ returns - A string ready to be sent to the backend, including the full conversat
             r.json = lambda ws=prog.stream_queue: {"results" : [{"text" : "".join(ws)}]}
             prog.stream_queue = []
         else:
+            print("posting")
             r = requests.post(prog.getOption("endpoint") + prog.getGenerateApi(), json=prompt)
 
         if r.status_code == 200:
+            print("200")
             results = prog.getResults(r)
             (displaytxt, txt) = prog.formatGeneratedText(results)
-
-            if prog.getMode().startswith("chat"):
-                #FIXME: this isn't very clean, but the colon thing is annoying
-                w = ensureColonSpace(w, txt)
-            
-            prog.session.addUserText(w)
-            prog.session.addAIText(txt)
+            prog.session.stories.get().addAssistantText(txt)
 
             if prog.getOption("streaming"):
                 # already printed it piecemeal, so skip this step
@@ -540,7 +554,7 @@ returns - A string ready to be sent to the backend, including the full conversat
             else:
                 prog.print(displaytxt, end="")
         else:
-            print(str(r.status_code))
+            printerr(str(r.status_code))
 
     def getGenerateApi(self):
         backend = self.getOption("backend")
@@ -595,11 +609,14 @@ returns - A string ready to be sent to the backend, including the full conversat
 
     def tokenize(self, w):
         # returns list of tokens
+        print("tokenizing")
+        print(w)
         if self.getOption("backend") != "llama.cpp":
             # this doesn't work
             return []
 
         r = requests.post(self.getOption("endpoint") + "/tokenize", json= {"content" : w})
+        print("done")
         if r.status_code == 200:
             return r.json()["tokens"]
         return []
@@ -673,11 +690,9 @@ def main():
             skip = False
             continue
 
-        (modified_w, prompt) = prog.buildPrompt(w)
-        prog.communicate(modified_w, prompt)
+        (modified_w, hint) = prog.modifyInput(w)
+        prog.session.stories.get().addUserText(modified_w)
+        prog.communicate(prog.buildPrompt(hint))
 
 if __name__ == "__main__":
     main()
-
-
-
