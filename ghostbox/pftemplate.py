@@ -16,7 +16,34 @@ class PFTemplate(ABC):
         pass
 
 class FilePFTemplate(PFTemplate):
-    """Simple, customizable prompt format templates based on loading dictionaries with certain files."""
+    """Simple, customizable prompt format templates based on loading dictionaries with certain files.
+
+Files expected:
+    system - Will be prepended to every prompt. It should contain '{{system_msg}}', which will be replaced by the actual content of the system prompt when the header method is called.
+    begin_user - Contains string that will be prepended to user messages. Be sure to include newlines, if you want them
+    end_user - Contains string that will be appended to user message.
+    begin_assistant - Contains string that will be prepended to generated AI message. This may be the same as begin_user, or it may differ.
+    end_assistant - Contains string that will be appended to the generated AI message.
+    hint - Contains a special string that is sometimes appended at the end of a user message. It should contain a string that guides the AI's compleetion, e.g. this may just be '<|im_start|>assistant\n' in the case of chat-ml, which will heavily discourage the LLM from speaking for the user. This is only appended when append_hint is True in the body method.
+
+All methods accept additional **kwargs, which contain replacements for double curly braced strings in the story content and system message. Things like '{{char_name}}' etc.
+Example:
+    ```
+from ghostbox.Story import *
+s = Story()
+s.addUserText("The {{adjective}}, brown fox jumps over the lazy hedgehog!")
+t = FilePFTemplate("templates/chat-ml")
+print(t.body(s, append_hint=True, adjective="quick"))
+```
+
+Output:
+    
+```
+The quick, brown fox jumps over the lazy hedgehog!<|im_end|><|im_start|>assistant
+
+```
+"""    
+
     var_decorator = lambda w: "{{" + w + "}}"
     
     def __init__(self, dir):
@@ -52,8 +79,3 @@ class FilePFTemplate(PFTemplate):
             hint = ""
         return reduce(build, story.getData(), "") + hint
 
-from ghostbox.Story import *
-
-s = Story()
-s.addUserText("Hello!")
-s.addAssistantText("Yes. How may I help you?")
