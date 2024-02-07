@@ -200,6 +200,14 @@ class Program(object):
             return True
         return self.getOption(name) == newValue
 
+    def addUserText(self, w):
+        if w:
+            self.session.stories.get().addUserText(w)
+
+    def addAIText(self, w):
+        if w:
+            self.session.stories.get().addAssistantText(w)
+
     def setOption(self, name, value):
         self.options[name] = value
         # for some options we do extra stuff
@@ -237,17 +245,17 @@ class Program(object):
         
         self.loadImage(image_path, image_id)
         (modified_w, hint) = self.modifyInput(w)
-        self.session.stories.get().addUserText(modified_w)
-        self.communicate(self.buildPrompt(hint))
+        self.addUserText(modified_w)
+        self.addAIText(self.communicate(self.buildPrompt(hint)))
         print(self.showCLIPrompt(), end="")
 
         
     def _transcriptionCallback(self, w):
         (modified_w, hint) = self.modifyInput(w)
-        self.session.stories.get().addUserText(modified_w)
+        self.addUserText(modified_w)
         if self.getOption("audio_show_transcript"):
             print(w)
-        self.communicate(self.buildPrompt(hint))
+        self.addAIText(self.communicate(self.buildPrompt(hint)))
         print(self.showCLIPrompt(), end="")
         
         
@@ -502,14 +510,11 @@ returns - A string ready to be sent to the backend, including the full conversat
 
         # now we need a smart story history that fits into budget
         sf = self.session.stories.copyFolder(only_active=True)
-        print("buildPrompt before loop")
         while len(self.tokenize(self.showStory(story_folder=sf) + hint)) > budget and not(sf.empty()):
         # drop some items from the story, smartly, and without changing original
             self._smartShifted = True
             item = sf.get().pop(0)
             #FIXME: this can be way better, needs moretesting!
-
-            print("buildprompt after loop")
         return self.showSystem() + self.showStory(story_folder=sf) + hint
         
     def adjustForChat(self, w):
@@ -544,15 +549,17 @@ returns - A string ready to be sent to the backend, including the full conversat
         if r.status_code == 200:
             results = prog.getResults(r)
             (displaytxt, txt) = prog.formatGeneratedText(results)
-            prog.session.stories.get().addAssistantText(txt)
+
 
             if prog.getOption("streaming"):
                 # already printed it piecemeal, so skip this step
-                return
+                return txt
             else:
                 prog.print(displaytxt, end="")
+                return txt
         else:
             printerr(str(r.status_code))
+            return ""
 
     def getGenerateApi(self):
         backend = self.getOption("backend")
@@ -607,8 +614,6 @@ returns - A string ready to be sent to the backend, including the full conversat
 
     def tokenize(self, w):
         # returns list of tokens
-        print("tokenizing")
-        print(w)
         if self.getOption("backend") != "llama.cpp":
             # this doesn't work
             return []
@@ -659,7 +664,7 @@ def main():
 
         if prog.initial_print_flag:
             prog.initial_print_flag = False
-            print("\n\n" + prog.session.showStory(apply_filter=True), end="")
+            print("\n\n" + prog.showStory(), end="")
 
         w = input(prog.showCLIPrompt())
         # check for multiline
@@ -687,9 +692,10 @@ def main():
             skip = False
             continue
 
+        # this is the main event
         (modified_w, hint) = prog.modifyInput(w)
-        prog.session.stories.get().addUserText(modified_w)
-        prog.communicate(prog.buildPrompt(hint))
+        prog.addUserText(modified_w)
+        prog.addAIText(prog.communicate(prog.buildPrompt(hint)))
 
 if __name__ == "__main__":
     main()
