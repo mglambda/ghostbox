@@ -10,8 +10,6 @@ class Session(object):
         if self.dir is not None:
             self._init(additional_keys)
 
-
-
     def hasVar(self, var):
         return var in self.fileVars
     
@@ -24,22 +22,13 @@ class Session(object):
     def getVars(self):
         return self.fileVars
     
-    
     def getSystem(self):
         return self.getVar("system_msg")
-            
-    def _showStory(self, w=None, trim_end=False, apply_filter=False):
-        if w is None:
-            w = self.stories.showStory()
-        if trim_end and self.template_end != "":
-            if w.endswith(self.template_end):
-                return w[:-len(self.template_end)]
 
-        if apply_filter:
-            fs = self.fileVars.get("{$template_filter}", "").split(';;;')
-            for filter_string in fs:
-                w = w.replace(filter_string, "")                
-        return w
+
+    def expandVars(self, w):
+        """Expands all variables of the form {{VAR}} in a given string w, if VAR is a key in fileVars."""
+        return replaceFromDict(w, self.getVars(), lambda k: "{{" + k + "}}")
     
     def _init(self, additional_keys=[]):
         if not(os.path.isdir(self.dir)):
@@ -49,7 +38,7 @@ class Session(object):
         for filepath in allfiles:
             filename = os.path.split(filepath)[1]
             if os.path.isfile(filepath):
-                self.fileVars[filename] = open(filepath, "r").read()
+                self.fileVars[filename] = self.expandVars(open(filepath, "r").read())
 
                 printerr("Found " + filename)
 

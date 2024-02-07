@@ -432,12 +432,10 @@ class Program(object):
 
         if prog.continue_with != "":# user input has been replaced with something else, e.g. a transcription
             w = prog.popContinueString()
-        
+
+
+        w = prog.session.expandVars(w)
         (w, ai_hint) = prog.adjustForChat(w)
-         #if prog.getMode().startswith("chat"):
-            #FIXME: this isn't very clean, but the colon thing is annoying
-            # FIXME: temporarily disabled
-            #w = ensureColonSpace(w, txt)
         
         return (w, ai_hint)
 
