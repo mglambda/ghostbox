@@ -536,6 +536,8 @@ returns - A string ready to be sent to the backend, including the full conversat
         if self.getMode() == "chat":
             w = mkChatPrompt(self.getOption("chat_user")) + w
             v = mkChatPrompt(self.getOption("chat_ai"), space=False)
+
+        return (w, v)
     
     def communicate(prog, prompt_text):
         """Sends prompt_text to the backend and prints results."""

@@ -214,7 +214,7 @@ def copyEntity(entitynoun, entitydir, entities):
                 if choice == "n":
                     continue
             print("Installing " + entitynoun + " " + char)
-            shutil.copytree("chars/" + char, chardir, dirs_exist_ok=True)
+            shutil.copytree(entitydir + "/" + char, chardir, dirs_exist_ok=True)
     except:
         print("Warning: Couldn't copy example " + entitynoun + "s.")
           
