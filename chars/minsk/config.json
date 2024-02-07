@@ -2,7 +2,6 @@
 	"mode" : "chat",
 	"chat_ai" : "Minsk",
 	"tts_voice" : "minsk",
-	"chat_show_ai_prompt" : false,
 	"tts_subtitles" : true,
     "max_length": 50,
     "rep_pen": 1.1,

@@ -176,6 +176,21 @@ def showChars(prog, argv):
 
     return "\n".join(sorted(allchars))
 
+def showTemplates(prog, argv):
+    """
+Lists all available templates for prompt formats.
+To see the places searched, check the value of the template_include option."""
+    allchars = []
+    for dir in prog.getOption("template_include"):
+        if not(os.path.isdir(dir)):
+            printerr("warning: template Include path '" + dir + "' is not a directory.")
+            continue
+        for charpath in glob.glob(dir + "/*"):
+            if os.path.isfile(charpath):
+                continue
+            allchars.append(os.path.split(charpath)[1])
+    return "\n".join(sorted(allchars))
+    
 
 def showVoices(prog, argv):
     """
@@ -329,6 +344,23 @@ def saveStoryFolder(prog, argv):
         return "Could not save story folder. Maybe provide a different filename?"
     return "Saved story folder as " + filename
 
+
+
+def changeTemplate(prog, argv):
+    """[PROMPT_TEMPLATE]
+Shows the current prompt template. If PROMPT_TEMPLATE is supplied, tries to load that template.
+LLMs usually work best when supplied with input that is formatted similar to their training data. Prompt templates apply some changes to your inputs in the background to get them into a shape that the LLM expects.
+    To find out the right template to use, consult the model card of the LLM you are using. When in doubt, 'chat-ml' is a very common prompt format.
+To disable this, set the template to 'raw' and you won't have anything done to your inputs. This can be useful for experimentation.
+Templates are searched for in the directories specified by the template_include option, which can be supplied at the command line.
+To get a full list of available templates, try /lstemplates ."""
+
+    if argv == []:
+        return prog.getOption("prompt_format")
+        
+    choice = " ".join(argv)
+    prog.loadTemplate(choice)
+    return ""
     
 def loadStoryFolder(prog, argv):
     """STORY_FOLDER_NAME

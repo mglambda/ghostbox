@@ -172,6 +172,11 @@ def userConfigFile(force=False):
 def userCharDir():
     return appdirs.user_data_dir() + "/ghostbox/chars"
 
+def ghostboxdir():
+    return appdirs.user_data_dir() + "/ghostbox"
+
+def userTemplateDir():
+    return ghostboxdir() + "/templates"
 
 def inputChoice(msg, choices):
     while True:
@@ -192,19 +197,26 @@ def userSetup():
         os.makedirs(userCharDir())
 
     # try copying some example chars
-    chars = "chat-ml dolphin dolphin-kitten joshu minsk".split(" ")
+    chars = "dolphin dolphin-kitten joshu minsk".split(" ")
+    copyEntity("char", "chars", chars)
+    templates = "chat-ml".split(" ")
+    copyEntity("template", "templates", templates)
+    
+
+def copyEntity(entitynoun, entitydir, entities):
+    chars = entities
     choice = ""
     try:
         for char in chars:
-            chardir = userCharDir() + "/" + char
+            chardir = ghostboxdir() + "/" + entitydir + "/" + char
             if os.path.isdir(chardir) and choice != "a":
                 choice = inputChoice(chardir + " exists. Overwrite? (y/n/a): ", "y n a".split(" "))
                 if choice == "n":
                     continue
-            print("Installing char " + char)
+            print("Installing " + entitynoun + " " + char)
             shutil.copytree("chars/" + char, chardir, dirs_exist_ok=True)
     except:
-        print("Warning: Couldn't copy example chars.")
+        print("Warning: Couldn't copy example " + entitynoun + "s.")
           
 def getJSONGrammar():
     return r"""root   ::= object

@@ -89,3 +89,16 @@ The quick, brown fox jumps over the lazy hedgehog!<|im_end|><|im_start|>assistan
         targets = [self.begin_user, self.begin_assistant, self.end_user, self.end_assistant]
         return reduce(lambda v, target: v.replace(target, ""), targets, w)
         
+
+
+class RawTemplate(PFTemplate):
+    """This is a dummy template that doesn't do anything. Perfect if you want to experiment."""
+    def header(self, system_msg, **kwargs):
+        return system_msg
+
+
+    def body(self, story, append_hint=True, **kwargs):
+        return [item["content"] for item in story.getData()]
+
+    def strip(self, w):
+        return w

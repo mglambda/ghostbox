@@ -56,12 +56,14 @@ cmds = [
     ("/tts", toggleTTS),
     ("/set", setOption),
     ("/unset", lambda prog, argv: setOption(prog, [argv[0]])),
+    ("/template", changeTemplate),
     ("/saveoptions", saveConfig),
     ("/saveconfig", saveConfig),    
     ("/loadconfig", loadConfig),
     ("/save", saveStoryFolder),
     ("/load", loadStoryFolder),
     ("/varfile", varfile),
+    ("/lstemplates", showTemplates),
     ("/lsoptions", showOptions),
     ("/lschars", showChars),
     ("/lsvoices", showVoices),
@@ -84,7 +86,6 @@ DEFAULT_PARAMS = {                "rep_pen": 1.1, "temperature": 0.7, "top_p": 0
 class Program(object):
     def __init__(self, options={}, initial_cli_prompt=""):
         self.session = Session(chat_user=options.get("chat_user", ""))
-        self.template = FilePFTemplate("templates/chat-ml")
         self.lastResult = {}
         self.tts_flag = False
         self.initial_print_flag = False
@@ -107,7 +108,9 @@ class Program(object):
             self.loadGrammar(self.getOption("grammar_file"))
         else:
             self.setOption("grammar", "")
-
+        # template
+        self.loadTemplate(self.getOption("prompt_format"))
+            
             # whisper stuff. We do this with a special init function because it's lazy
         self.whisper = self._newTranscriber()
         self.ct = None
@@ -145,11 +148,30 @@ class Program(object):
         else:
             self.setOption("grammar", "")
             printerr("warning: grammar file " + grammar_file + " could not be loaded: file not found.")
-            
 
+    def loadTemplate(self, name):
+        allpaths = [p + "/" + name for p in self.getOption("template_include")]
+        for path in allpaths:
+            path = os.path.normpath(path)
+            if not(os.path.isdir(path)):
+                failure = "Could not find template '" + name + "'. Did you supply a --template_include option?"
+                continue
+            failure = False
+            try:
+                template = FilePFTemplate(path)
+                break
+            except FileNotFoundError as e:
+                failure = e
 
-
-        
+        if failure:
+            printerr("warning: " + str(failure) + "\nDefaulting to 'raw' template.")
+            self.template = RawTemplate()
+            self.options["prompt_format"] = 'raw'
+            return
+        self.template = template
+        self.options["prompt_format"] = name
+        printerr("Using '" + name + "' as prompt format template.")
+                
     def loadConfig(self, json_data, override=True):
         d = json.loads(json_data)
         if type(d) != type({}):
@@ -243,6 +265,10 @@ class Program(object):
             self.initial_cli_prompt = value
         elif name == "max_context_length":
             self._dirtyContextLlama = False
+        elif name =="prompt_format":
+            self.loadTemplate(name)
+            
+            
 
         return ""
 
@@ -505,16 +531,11 @@ returns - A string ready to be sent to the backend, including the full conversat
         return self.showSystem() + self.showStory(story_folder=sf) + hint
         
     def adjustForChat(self, w):
-        """Takes user input w and returns a pair (w1, v) where w1 is the modified user input and v is the beginning of the AI message. Both of these carry adjustments for chat mode, such as adding 'Bob: ' and similar. This has no effect if there is no chat mode set, and v is empty string in this case."""
+        """Takes user input w and returns a pair (w1, v) where w1 is the modified user input and v is a hint for the AI to be put at the end of the prompt."""
         v = ""
         if self.getMode() == "chat":
             w = mkChatPrompt(self.getOption("chat_user")) + w
             v = mkChatPrompt(self.getOption("chat_ai"), space=False)
-        elif self.getMode() == "chat-thoughts":
-            w = mkChatPrompt(self.getOption("chat_user")) + w
-            # have to start with Internal Thought: etc, FIXME: refactor
-            v = mkChatPrompt(self.session.getVar("thoughtstr"), space=False)
-        return (w, v)
     
     def communicate(prog, prompt_text):
         """Sends prompt_text to the backend and prints results."""
