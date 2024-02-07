@@ -455,9 +455,10 @@ class Program(object):
             w = prog.popContinueString()
         
         (w, ai_hint) = prog.adjustForChat(w)
-        if prog.getMode().startswith("chat"):
+         #if prog.getMode().startswith("chat"):
             #FIXME: this isn't very clean, but the colon thing is annoying
-            w = ensureColonSpace(w, txt)
+            # FIXME: temporarily disabled
+            #w = ensureColonSpace(w, txt)
         
         return (w, ai_hint)
 
@@ -481,7 +482,16 @@ class Program(object):
         else:
             sf = story_folder
         return self.getTemplate().body(sf.get(), append_hint, **self.session.getVars())
-        
+
+    def formatStory(self, story_folder=None):
+        """Pretty print the current story (or a provided one) in a nicely formatted way."""
+        # FIXME: this ain't done yet
+        if story_folder is None:
+            sf = self.session.stories
+        else:
+            sf = story_folder
+        return "\n".join([item["content"] for item in sf.get().getData()])
+
     def buildPrompt(self,hint=""):
         """Takes an input string w and returns the full history (including system msg) + w, but adjusted to fit into the context given by max_context_length. This is done in a complicated but very smart way.
 
@@ -664,7 +674,7 @@ def main():
 
         if prog.initial_print_flag:
             prog.initial_print_flag = False
-            print("\n\n" + prog.showStory(), end="")
+            print("\n\n" + prog.formatStory(), end="")
 
         w = input(prog.showCLIPrompt())
         # check for multiline

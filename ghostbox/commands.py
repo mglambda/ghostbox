@@ -36,9 +36,11 @@ def newSession(program, argv):
     program.options["character_folder"] = path
     w += "Ok. Loaded " + path
 
-    # template_initial
-    if "{$template_initial}" in program.session.fileVars:
+
+    # by convention, the inital message is stored in inital_msg
+    if program.session.hasVar("initial_msg"):
         program.initial_print_flag = True
+
         
     # config may have set the mode, but we need to go through setMode
     program.setMode(program.getOption("mode"))
@@ -55,15 +57,13 @@ def newSession(program, argv):
         
     return w
 
-
 def printStory(prog, argv, stderr=False, apply_filter=True):
     """[FILENAME]
     Print the current story.
     If FILENAME is provided, save the story to that file."""
     # apply_filter basically means make it pretty
     if apply_filter:
-        # FIXME: this needs a proper refactor as well
-        w = "\n".join([item["content"] for item in prog.session.stories.get().getData()])
+        w = prog.formatStory()
     else:
         w = prog.showStory(append_hint=False)
 

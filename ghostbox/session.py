@@ -5,13 +5,17 @@ from ghostbox.StoryFolder import *
 class Session(object):
     def __init__(self, dir=None, chat_user="", additional_keys=[]):
         self.dir = dir
-        self.chat_user = chat_user
         self.fileVars = {"chat_user" : chat_user}
         self.stories = StoryFolder()
         if self.dir is not None:
             self._init(additional_keys)
 
-    def getVar(self, var):
+
+
+    def hasVar(self, var):
+        return var in self.fileVars
+    
+    def getVar(self, var):            
         if var not in self.fileVars:
             printerr("warning: session.getVar: Key not defined '" + var + "'. Did you forget to create " + self.dir + "/" + var + "?")
             return ""
