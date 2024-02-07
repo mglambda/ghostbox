@@ -3,6 +3,7 @@ from lazy_object_proxy import Proxy
 import argparse
 from ghostbox.commands import *
 from ghostbox.autoimage import *
+from ghostbox.output_formatter import *
 from ghostbox.util import *
 from ghostbox._argparse import *
 from ghostbox.streaming import streamPrompt
@@ -71,6 +72,11 @@ cmds = [
         ("/continue", doContinue)
 ]
 
+# the mode formatters dictionary is a mapping from mode names to pairs of OutputFormatters (DISPLAYFORMATTER, TXTFORMATTER), where DISPLAYFORMATTER is applied to output printed to the screen in that mode, and TXTFORMATTER is applied to the text that is saved in the story. The pair is wrapped in a lambda that supplies a keyword dictionary.
+mode_formatters = {
+    "default" : lambda d: (DoNothing, DoNothing, DoNothing, CleanResponse),
+    "chat" : lambda d: (DoNothing, NicknameRemover(d["chat_ai"]), NicknameFormatter(d["chat_user"]), ChatFormatter(d["chat_ai"]))
+}
     
 #defined here for convenience. Can all be changed through cli parameters or with / commands
 DEFAULT_PARAMS = {                "rep_pen": 1.1, "temperature": 0.7, "top_p": 0.92, "top_k": 0, "top_a": 0, "typical": 1, "tfs": 1, "rep_pen_range": 320, "rep_pen_slope": 0.7, "sampler_order": [6, 0, 1, 3, 4, 2, 5], "quiet": True, "use_default_badwordsids": True}
@@ -111,10 +117,6 @@ class Program(object):
         self.image_watch = None
         
         # formatters is to be idnexed with modes
-        self._formatters = {
-            "default" : self._defaultFormatter,
-            "chat" : self._chatFormatter,
-            "chat-thoughts" : self._chatThoughtsFormatter}
         self.setMode(self.getOption("mode"))
         self.running = True
 
@@ -180,7 +182,7 @@ class Program(object):
         return w
 
     def isValidMode(self, mode):
-        return mode in self._formatters
+        return mode in mode_formatters
 
     def setMode(self, mode):
         if not(self.isValidMode(mode)):
@@ -200,13 +202,33 @@ class Program(object):
             return True
         return self.getOption(name) == newValue
 
+    def getFormatters(self):
+        mode = self.getOption("mode")
+        if not(self.isValidMode(mode)):
+            mode = "default"
+            printerr("warning: Unsupported mode '" + mode + "'.. Using 'default'.")
+        return mode_formatters[mode](self.options)
+
+    def getDisplayFormatter(self):
+        return self.getFormatters()[0]
+
+
+    def getTTSFormatter(self):
+        return self.getFormatters()[1]
+
+    def getUserFormatter(self):
+        return self.getFormatters()[2]
+
+    def getAIFormatter(self):
+        return self.getFormatters()[3]
+    
     def addUserText(self, w):
         if w:
-            self.session.stories.get().addUserText(w)
+            self.session.stories.get().addUserText(self.getUserFormatter().format(w))
 
     def addAIText(self, w):
         if w:
-            self.session.stories.get().addAssistantText(w)
+            self.session.stories.get().addAssistantText(self.getAIFormatter().format(w))
 
     def setOption(self, name, value):
         self.options[name] = value
@@ -267,8 +289,7 @@ class Program(object):
         dir = self.getOption("image_watch_dir")
         printerr("Watching for new images in " + dir + ".")
         self.image_watch = AutoImageProvider(dir, self._imageWatchCallback)
-        
-    
+
     def startAudioTranscription(self):
         printerr("Beginning automatic transcription. CTRL + c to pause.")
         if self.ct:
@@ -368,17 +389,6 @@ class Program(object):
         if not(self.getOption("tts")):
             return ""
 
-        #fixmE: don't speak out "Bob: " etc. bit of a hack while we experiment with chat-thought mode
-        if self.getMode() == "chat-thoughts":
-            prompt = mkChatPrompt(self.getOption("chat_ai"), space=False)
-            ws = w.split("\n")
-            vs = []
-            for v in ws:
-                if v.startswith(prompt):
-                    v = v[len(prompt):]
-                vs.append(v)
-            w = "\n".join(vs)
-                    
         # this is crazy
         self.tts.stdin.flush()
         self.tts.stdout.flush()
@@ -392,11 +402,11 @@ class Program(object):
     def print(self, w, end="\n", flush=False):
         # either prints, speaks, or both, depending on settings
         if self.getOption("tts"):
-            self.communicateTTS(w + end)
+            self.communicateTTS(self.getTTSFormatter().format(w) + end)
             if not(self.getOption("tts_subtitles")):
                 return
 
-        print(w, end=end, flush=flush)
+        print(self.getDisplayFormatter().format(w), end=end, flush=flush)
 
     def replaceForbidden(self, w):
         for forbidden in self.getOption("forbid_strings"):
@@ -413,37 +423,6 @@ class Program(object):
         w = self.multiline_buffer
         self.multiline_buffer = ""
         return w
-        
-    
-    def formatGeneratedText(self, w):
-        return self._formatters.get(self.getMode(), self._defaultFormatter)(self.replaceForbidden(w))
-
-    def _defaultFormatter(self, raw_response):
-        display =trimIncompleteSentence(self.getTemplate().strip(raw_response))
-        return (display, display)
-
-    def _chatFormatter(self, w):
-        # point of this is to 1. always start the prompt with e.g. Gary: if the AI is called gary. This helps the LLM stay in character, but it should be hidden from the user in chat mode
-        # 2. filter out any accidental generations of Bob: if the user is called bob, i.e. don't let the LLM talk for the user.
-        ai_chat_prompt = mkChatPrompt(self.getOption("chat_ai"))
-        user_chat_prompt = mkChatPrompt(self.getOption("chat_user"))
-        display = filterLonelyPrompt(ai_chat_prompt, trimIncompleteSentence(trimChatUser(self.getOption("chat_user"), w))).strip()
-        txt = display + self.session.template_end
-        if self.getOption("chat_show_ai_prompt"):
-            display = ai_chat_prompt + display        
-        return (display, txt)
-    
-    def _chatThoughtsFormatter(self, w):
-        # this is different from chat because we want a stream of internal thoughts to be carried along with everything else, so it must start with thoughtstr, and hide it from the user
-        # 2. filter out any accidental generations of Bob: if the user is called bob, i.e. don't let the LLM talk for the user.
-        ai_chat_prompt = mkChatPrompt(self.getOption("chat_ai"))
-        user_chat_prompt = mkChatPrompt(self.getOption("chat_user"))
-        thought_prompt = mkChatPrompt(self.session.getVar("thoughtstr"))
-
-        clean = filterLonelyPrompt(ai_chat_prompt, trimIncompleteSentence(trimChatUser(self.getOption("chat_user"), w))).strip()
-        txt = clean + self.session.template_end
-        display = discardFirstLine(clean)
-        return (display, txt)
     
     def modifyInput(prog, w):
         """Takes user input (w), returns pair of (modified user input, and a hint to give to the ai."""
@@ -477,6 +456,7 @@ class Program(object):
         return self.getTemplate().header(**self.session.getVars())
 
     def showStory(self, story_folder=None, append_hint=True):
+        """Returns the current story as a unformatted string, injecting the current prompt template.""" 
         if story_folder is None:
             sf = self.session.stories
         else:
@@ -484,13 +464,12 @@ class Program(object):
         return self.getTemplate().body(sf.get(), append_hint, **self.session.getVars())
 
     def formatStory(self, story_folder=None):
-        """Pretty print the current story (or a provided one) in a nicely formatted way."""
-        # FIXME: this ain't done yet
+        """Pretty print the current story (or a provided one) in a nicely formatted way. Returns pretty story as a string."""
         if story_folder is None:
             sf = self.session.stories
         else:
             sf = story_folder
-        return "\n".join([item["content"] for item in sf.get().getData()])
+        return "\n".join([self.getDisplayFormatter().format(item["content"]) for item in sf.get().getData()])
 
     def buildPrompt(self,hint=""):
         """Takes an input string w and returns the full history (including system msg) + w, but adjusted to fit into the context given by max_context_length. This is done in a complicated but very smart way.
@@ -543,7 +522,6 @@ returns - A string ready to be sent to the backend, including the full conversat
         """Sends prompt_text to the backend and prints results."""
         #turn raw text into json for the backend
         prompt = prog.getPrompt(prompt_text)
-        
         if prog.getOption("streaming"):
             r = streamPrompt(prog, prog.getOption("endpoint") + "/api/extra/generate/stream", json=prompt)
             #FIXME: find a better way to do this (print of ai prompt with colon etc.)
@@ -558,15 +536,13 @@ returns - A string ready to be sent to the backend, including the full conversat
 
         if r.status_code == 200:
             results = prog.getResults(r)
-            (displaytxt, txt) = prog.formatGeneratedText(results)
-
-
             if prog.getOption("streaming"):
                 # already printed it piecemeal, so skip this step
-                return txt
+                return results
             else:
-                prog.print(displaytxt, end="")
-                return txt
+                # FIXME: we're currently formatting the AI string twice. Here and in addAIText. that's not a big deal, though
+                prog.print(prog.getAIFormatter().format(results), end="")
+                return results
         else:
             printerr(str(r.status_code))
             return ""

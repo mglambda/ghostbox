@@ -15,21 +15,6 @@ def printerr(w, prefix=getErrorPrefix()):
     w = ("\n" + prefix).join(ws)
     print(prefix + w, file=sys.stderr)
     
-def trimIncompleteSentence(w):
-    if w == "":
-        return w
-    
-    stopchars = '! . ? :'.split(" ")
-    for i in range(len(w)-1, -1, -1):
-        if w[i] in stopchars:
-            break
-
-    if i == 0:
-        return w
-    return w[:i+1]
-
-
-
 
 def getArgument(argname, argv):
     ws = argv.split(argname)
