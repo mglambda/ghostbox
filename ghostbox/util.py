@@ -1,4 +1,5 @@
 import os, getpass, shutil, base64, requests
+from colorama import Fore, Back, Style
 import appdirs
 import sys
 from functools import *
@@ -6,14 +7,14 @@ from functools import *
 def getErrorPrefix():
     return " # "
 
-def printerr(w, prefix=getErrorPrefix()):
+def printerr(w, prefix=getErrorPrefix(), color=Fore.GREEN):
     if w == "":
         return
 
     # prepend all lines with prefix
     ws = w.split("\n")
     w = ("\n" + prefix).join(ws)
-    print(prefix + w, file=sys.stderr)
+    print(color + prefix + w + Fore.RESET, file=sys.stderr)
     
 
 def getArgument(argname, argv):

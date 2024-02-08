@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 import os
 
 
-GHOSTBOX_VERSION='0.8.1'
+GHOSTBOX_VERSION='0.8.2'
 
 
 with open("README.md", "r", encoding="utf-8") as readme_file:
@@ -20,6 +20,6 @@ setup(
     license_files=["LICENSE"],
     scripts=["scripts/ghostbox", "scripts/ghostbox-tts-polly", "scripts/ghostbox-install"],
     packages=find_packages(include=['ghostbox']),
-    install_requires=["requests","requests_html","boto3", "appdirs", "lazy-object-proxy", "pygame", "openai-whisper", "pyaudio", "pydub"] 
+    install_requires=["requests","requests_html","boto3", "appdirs", "lazy-object-proxy", "pygame", "openai-whisper", "pyaudio", "pydub", "colorama"] 
 )
 

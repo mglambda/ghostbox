@@ -98,15 +98,6 @@ def doContinue(prog, argv):
     if prog.session.stories.empty():
         return ""
     
-    # now comes some fuckery to get rid of trailing <|im_end|> etc.
-    # FIXME: this doesn't work for other prompt templates than chat-ml
-    delim = prog.session.template_end
-    if delim == "":
-        return ""
-    
-    if prog.session.stories.getStory()[-1]["text"].endswith(delim):
-        prog.session.stories.getStory()[-1]["text"] = prog.session.stories.getStory()[-1]["text"][:-len(delim)]
-    
     return ""
 
 def setOption(prog, argv):

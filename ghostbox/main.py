@@ -1,4 +1,5 @@
 import requests, json, os, io, re, base64, random, sys, threading, subprocess, signal
+from colorama import just_fix_windows_console, Fore, Back, Style
 from lazy_object_proxy import Proxy
 import argparse
 from ghostbox.commands import *
@@ -250,7 +251,10 @@ class Program(object):
 
     def addAIText(self, w):
         if w:
-            self.session.stories.get().addAssistantText(self.getAIFormatter().format(w))
+            if self.getOption("continue"):
+                self.session.stories.get().extendAssistantText(w)
+            else:
+                self.session.stories.get().addAssistantText(self.getAIFormatter().format(w))
 
     def setOption(self, name, value):
         self.options[name] = value
@@ -425,14 +429,14 @@ class Program(object):
         self.tts.stderr.flush()
         return w
 
-    def print(self, w, end="\n", flush=False):
+    def print(self, w, end="\n", flush=False, color="", style=""):
         # either prints, speaks, or both, depending on settings
         if self.getOption("tts"):
             self.communicateTTS(self.getTTSFormatter().format(w) + end)
             if not(self.getOption("tts_subtitles")):
                 return
 
-        print(self.getDisplayFormatter().format(w), end=end, flush=flush)
+        print(style + color + self.getDisplayFormatter().format(w) + Fore.RESET + Style.RESET_ALL, end=end, flush=flush)
 
     def replaceForbidden(self, w):
         for forbidden in self.getOption("forbid_strings"):
@@ -453,7 +457,7 @@ class Program(object):
     def modifyInput(prog, w):
         """Takes user input (w), returns pair of (modified user input, and a hint to give to the ai."""
         if prog.getOption("continue") and prog.continue_with == "": # user entered /cont or equivalent
-            setOption(prog, ["continue", "False"])
+            #setOption(prog, ["continue", "False"])
             return ("", "")
 
         if prog.continue_with != "":# user input has been replaced with something else, e.g. a transcription
@@ -474,7 +478,9 @@ class Program(object):
 
     def getTemplate(self):
         return self.template
-    
+
+    def getRawTemplate(self):
+        return RawTemplate()
     
     def showSystem(self):
         return self.getTemplate().header(**self.session.getVars())
@@ -485,6 +491,9 @@ class Program(object):
             sf = self.session.stories
         else:
             sf = story_folder
+        if self.getOption("continue"):
+            # user hit enter and wants ai to keep talking. this is kind of like using the entire last reply as a hint -> no templating needed
+            return self.getRawTemplate().body(sf.get(), append_hint, **self.session.getVars())
         return self.getTemplate().body(sf.get(), append_hint, **self.session.getVars())
 
     def formatStory(self, story_folder=None):
@@ -528,6 +537,7 @@ returns - A string ready to be sent to the backend, including the full conversat
             self._smartShifted = True
             item = sf.get().pop(0)
             #FIXME: this can be way better, needs moretesting!
+            sf.pop(0)
         return self.showSystem() + self.showStory(story_folder=sf) + hint
         
     def adjustForChat(self, w):
@@ -631,6 +641,7 @@ returns - A string ready to be sent to the backend, including the full conversat
         return []
     
 def main():
+    just_fix_windows_console()
     parser = makeArgParser(DEFAULT_PARAMS)
     args = parser.parse_args()
     prog = Program(options=args.__dict__, initial_cli_prompt=args.cli_prompt)
@@ -703,6 +714,6 @@ def main():
         (modified_w, hint) = prog.modifyInput(w)
         prog.addUserText(modified_w)
         prog.addAIText(prog.communicate(prog.buildPrompt(hint)))
-
+        setOption(prog, ["continue", "False"])
 if __name__ == "__main__":
     main()

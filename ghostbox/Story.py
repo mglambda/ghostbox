@@ -10,6 +10,12 @@ class Story(object):
     def addAssistantText(self, w, **kwargs):
         self.data.append({ "role" : "assistant", "content" : w} | kwargs)
 
+    def extendAssistantText(self, w):
+        if self.data == []:
+            self.addAssistantText(w)
+        else:
+            self.data[-1]["content"] = self.data[-1]["content"] + w
+            
     def extendLast(self, w):
         self.data[-1]["content"] = self.data[-1]["content"] + w
             
