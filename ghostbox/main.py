@@ -11,6 +11,7 @@ from ghostbox.streaming import streamPrompt
 from ghostbox.session import Session
 from ghostbox.transcribe import WhisperTranscriber
 from ghostbox.pftemplate import *
+from ghostbox.backends import *
 
 
 def showHelp(prog, argv):
@@ -87,6 +88,9 @@ DEFAULT_PARAMS = {                "rep_pen": 1.1, "temperature": 0.7, "top_p": 0
 
 class Program(object):
     def __init__(self, options={}, initial_cli_prompt=""):
+        self.options = options        
+        self.backend = None
+        self.initializeBackend(self.getOption("backend"), self.getOption("endpoint"))
         self.session = Session(chat_user=options.get("chat_user", ""))
         self.lastResult = {}
         self.tts_flag = False
@@ -102,7 +106,6 @@ class Program(object):
         self.continue_with = ""
         self.tts = None
         self.multiline_buffer = ""
-        self.options = options
         if self.getOption("json"):
             self.setOption("grammar", getJSONGrammar())
             del self.options["json"]
@@ -124,6 +127,27 @@ class Program(object):
         # formatters is to be idnexed with modes
         self.setMode(self.getOption("mode"))
         self.running = True
+
+
+    def initializeBackend(self, backend, endpoint):
+        self.backend = LlamaCPPBackend(endpoint)
+
+    def getBackend(self):
+        return self.backend
+    
+    def makeGeneratePayload(self, text):
+        d = {"prompt": text,
+             "grammar" : self.getOption("grammar"),
+             #"n_ctx": self.getOption("max_context_length"), # this is sort of undocumented in llama.cpp server
+             "cache_prompt" : True,
+             "n_predict": self.options["max_length"]}
+
+        if self.hasImages():
+            d["image_data"] = [packageImageDataLlamacpp(d["data"], id) for (id, d) in self.images.items()]
+            
+        for paramname in DEFAULT_PARAMS.keys():
+            d[paramname] = self.options[paramname]
+        return d
 
     def _newTranscriber(self):
         # makes a lazy WhisperTranscriber, because model loading can be slow
@@ -354,11 +378,7 @@ class Program(object):
         
         
     def getPrompt(self, text):
-        self._lastPrompt = text
-        
-        if self.getOption("warn_trailing_space"):
-            if text.endswith(" "):
-                printerr("warning: Prompt ends with a trailing space. This messes with tokenization, and can cause the model to start its responses with emoticons. If this is what you want, you can turn off this warning by setting 'warn_trailing_space' to False.")
+
         backend = self.getOption("backend")
         if backend == "koboldcpp":
             d = {"prompt": text + "",
@@ -557,33 +577,25 @@ returns - A string ready to be sent to the backend, including the full conversat
 
         return (w, v)
     
-    def communicate(prog, prompt_text):
+    def communicate(self, prompt_text):
         """Sends prompt_text to the backend and prints results."""
-        #turn raw text into json for the backend
-        prompt = prog.getPrompt(prompt_text)
-        if prog.getOption("streaming"):
-            r = streamPrompt(prog, prog.getOption("endpoint") + "/api/extra/generate/stream", json=prompt)
-            #FIXME: find a better way to do this (print of ai prompt with colon etc.)
-            if prog.getOption("chat_show_ai_prompt"):
-                print(mkChatPrompt(prog.getOption("chat_ai")), end="")
-            prog.streaming_done.wait()
-            prog.streaming_done.clear()
-            r.json = lambda ws=prog.stream_queue: {"results" : [{"text" : "".join(ws)}]}
-            prog.stream_queue = []
-        else:
-            r = requests.post(prog.getOption("endpoint") + prog.getGenerateApi(), json=prompt)
+        backend = self.getBackend()
+        self._lastPrompt = prompt_text
+        if self.getOption("warn_trailing_space"):
+            if prompt_text.endswith(" "):
+                printerr("warning: Prompt ends with a trailing space. This messes with tokenization, and can cause the model to start its responses with emoticons. If this is what you want, you can turn off this warning by setting 'warn_trailing_space' to False.")
+            
+        result = backend.handleGenerateResult(backend.generate(self.makeGeneratePayload(prompt_text)))
+        self.setLastJSON(backend.getLastJSON())
 
-        if r.status_code == 200:
-            results = prog.getResults(r)
-            if prog.getOption("streaming"):
-                # already printed it piecemeal, so skip this step
-                return results
-            else:
-                # FIXME: we're currently formatting the AI string twice. Here and in addAIText. that's not a big deal, though
-                prog.print(prog.getAIFormatter().format(results), end="")
-                return results
+
+            
+        if result:
+            # FIXME: we're currently formatting the AI string twice. Here and in addAIText. that's not a big deal, though
+            self.print(self.getAIFormatter().format(result), end="")
+            return result
         else:
-            printerr(str(r.status_code))
+            printerr("error: " + backend.getLastError)
             return ""
 
     def getGenerateApi(self):
@@ -607,14 +619,6 @@ returns - A string ready to be sent to the backend, including the full conversat
             return r.json()["status"]
         return "error " + str(r.status_code)
         
-    def getResults(self, r):
-        backend = self.getOption("backend")
-        self.setLastResult(r.json())        
-        if backend == "llama.cpp":
-            return r.json()['content']
-        else:
-            return r.json()['results'][0]["text"]
-
     def hasImages(self):
         return bool(self.images)
         
@@ -627,15 +631,13 @@ returns - A string ready to be sent to the backend, including the full conversat
         self.images[id] = {"url" : url,
                            "data" : loadImageData(url)}
 
-    def setLastResult(self, result):
-        self.lastResult = result
+    def setLastJSON(self, json_result):
+        print(str(json_result))
+        self.lastResult = json_result
         if self.getOption("backend") == "llama.cpp":
             # llama does not allow to set the context size by clients, instead it dictates it server side. however i have not found a way to query it directly, it just gets set after the first request
-            self.setOption("max_context_length", result["generation_settings"]["n_ctx"])
+            self.setOption("max_context_length", json_result["generation_settings"]["n_ctx"])
             self._dirtyContextLlama = True # context has been set by llama
-            
-            
-        
 
     def tokenize(self, w):
         # returns list of tokens

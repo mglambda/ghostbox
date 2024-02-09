@@ -20,6 +20,6 @@ setup(
     license_files=["LICENSE"],
     scripts=["scripts/ghostbox", "scripts/ghostbox-tts-polly", "scripts/ghostbox-install"],
     packages=find_packages(include=['ghostbox']),
-    install_requires=["requests","requests_html","boto3", "appdirs", "lazy-object-proxy", "pygame", "openai-whisper", "pyaudio", "pydub", "colorama"] 
+    install_requires=["requests","requests_html","boto3", "appdirs", "lazy-object-proxy", "pygame", "openai-whisper", "pyaudio", "pydub", "colorama", "automodinit"] 
 )
 
