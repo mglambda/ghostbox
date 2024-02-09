@@ -598,26 +598,6 @@ returns - A string ready to be sent to the backend, including the full conversat
             printerr("error: " + backend.getLastError)
             return ""
 
-    def getGenerateApi(self):
-        backend = self.getOption("backend")
-        if backend == "llama.cpp":
-            return "/completion"
-        else:
-            return "/api/v1/generate"
-
-
-    def getHealthEndpoint(self):
-        backend = self.getOption("backend")
-        if backend == "llama.cpp":
-            return self.getOption("endpoint") + "/health"
-        else:
-            return self.getOption("endpoint") + "/api/v1/health"
-
-    def getHealthResult(self):
-        r = requests.get(self.getHealthEndpoint())
-        if r.status_code == 200:
-            return r.json()["status"]
-        return "error " + str(r.status_code)
         
     def hasImages(self):
         return bool(self.images)
@@ -632,7 +612,6 @@ returns - A string ready to be sent to the backend, including the full conversat
                            "data" : loadImageData(url)}
 
     def setLastJSON(self, json_result):
-        print(str(json_result))
         self.lastResult = json_result
         if self.getOption("backend") == "llama.cpp":
             # llama does not allow to set the context size by clients, instead it dictates it server side. however i have not found a way to query it directly, it just gets set after the first request

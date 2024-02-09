@@ -576,7 +576,7 @@ Give an overall report about the program and some subprocesses."""
     w = ""
     if "backend" in topics:
         w += "backend: " + prog.getOption("backend") + " at " + prog.getOption("endpoint") + "\n"
-        w += "backend status: " + str(prog.getHealthResult()) + "\n"
+        w += "backend status: " + str(prog.getBackend().health()) + "\n"
         w += "max_context_length: " + str(prog.getOption("max_context_length"))
         if prog._dirtyContextLlama:
             # context has been changed by llama server
