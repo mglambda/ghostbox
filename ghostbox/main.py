@@ -372,38 +372,7 @@ class Program(object):
             self.ct.stop()
         self.ct = None
         signal.signal(signal.SIGINT, self._defaultSIGINTHandler)
-            
-            
-
         
-        
-    def getPrompt(self, text):
-
-        backend = self.getOption("backend")
-        if backend == "koboldcpp":
-            d = {"prompt": text + "",
-                 "grammar" : self.getOption("grammar"),
-                 "n": 1,
-                 "max_context_length": self.getOption("max_context_length"),
-                 "max_length": self.options["max_length"]}
-        elif backend == "llama.cpp":
-            d = {"prompt": text,
-                 "grammar" : self.getOption("grammar"),
-                 #"n_ctx": self.getOption("max_context_length"), # this is sort of undocumented in llama.cpp server
-                 "cache_prompt" : True,
-                 "n_predict": self.options["max_length"]}
-
-            if self.hasImages():
-                d["image_data"] = [packageImageDataLlamacpp(d["data"], id) for (id, d) in self.images.items()]
-        else:
-            printerr("error: backend not recognized.")
-            d = {}
-
-            
-        for paramname in DEFAULT_PARAMS.keys():
-            d[paramname] = self.options[paramname]
-        return d
-            
     def initializeTTS(self):
         tts_program = self.getOption("tts_program")
         candidate = os.getcwd() + "/" + tts_program
@@ -500,7 +469,7 @@ class Program(object):
     def getSystemTokenCount(self):
         """Returns the number of tokens in system msg. The value is cached per session. Note that this adds +1 for the BOS token."""
         if self._systemTokenCount is None:
-            self._systemTokenCount = len(self.tokenize(self.session.getSystem())) + 1
+            self._systemTokenCount = len(self.getBackend().tokenize(self.session.getSystem())) + 1
         return self._systemTokenCount
 
 
@@ -547,10 +516,12 @@ returns - A string ready to be sent to the backend, including the full conversat
         # Also: this is currently still quite dumb, actually, since we don't take any semantics into account
         # honorable mention of degenerate cases: If the system_msg is longer than the context itself, or users pull similar jokes, it is ok to shit the bed and let the backend truncate the prompt.
         self._smartShifted = False #debugging
+        backend = self.getBackend()
+        
         w = self.showStory() + hint 
         gamma = self.getOption("max_context_length")        
         k = self.getSystemTokenCount()
-        wc = len(self.tokenize(w))
+        wc = len(backend.tokenize(w))
         n = self.getOption("max_length")
         budget = gamma - (k + wc + n)
         
@@ -560,12 +531,11 @@ returns - A string ready to be sent to the backend, including the full conversat
 
         # now we need a smart story history that fits into budget
         sf = self.session.stories.copyFolder(only_active=True)
-        while len(self.tokenize(self.showStory(story_folder=sf) + hint)) > budget and not(sf.empty()):
+        while len(backend.tokenize(self.showStory(story_folder=sf) + hint)) > budget and not(sf.empty()):
         # drop some items from the story, smartly, and without changing original
             self._smartShifted = True
             item = sf.get().pop(0)
             #FIXME: this can be way better, needs moretesting!
-            #sf.pop(0)
         return self.showSystem() + self.showStory(story_folder=sf) + hint
         
     def adjustForChat(self, w):
@@ -617,17 +587,6 @@ returns - A string ready to be sent to the backend, including the full conversat
             # llama does not allow to set the context size by clients, instead it dictates it server side. however i have not found a way to query it directly, it just gets set after the first request
             self.setOption("max_context_length", json_result["generation_settings"]["n_ctx"])
             self._dirtyContextLlama = True # context has been set by llama
-
-    def tokenize(self, w):
-        # returns list of tokens
-        if self.getOption("backend") != "llama.cpp":
-            # this doesn't work
-            return []
-
-        r = requests.post(self.getOption("endpoint") + "/tokenize", json= {"content" : w})
-        if r.status_code == 200:
-            return r.json()["tokens"]
-        return []
     
 def main():
     just_fix_windows_console()
