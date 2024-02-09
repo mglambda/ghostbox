@@ -3,9 +3,9 @@ from ghostbox.session import Session
 from ghostbox.util import *
 from ghostbox.StoryFolder import *
 
-def newSession(program, argv):
+def newSession(program, argv, keep=False):
     """CHARACTER_FOLDER
-    Start a new session with the character or template defined in CHARACTER_FOLDER. You can specify a full path, or just the folder name, in which case the program will look for it in all folders specified in the 'include' paths. See /lsoptions include."""
+Start a new session with the character or template defined in CHARACTER_FOLDER. You can specify a full path, or just the folder name, in which case the program will look for it in all folders specified in the 'include' paths. See /lsoptions include."""
     if argv == []:
         if program.getOption("character_folder"):
             # synonymous with /restart
@@ -19,7 +19,7 @@ def newSession(program, argv):
         path = os.path.normpath(path)
         failure = False
         try:
-            program.session = Session(dir=path, chat_user=program.getOption("chat_user"), additional_keys=program.getOption("var_file"))
+            s = Session(dir=path, chat_user=program.getOption("chat_user"), additional_keys=program.getOption("var_file"))
             break
         except FileNotFoundError as e:
             # session will throw if path is not valid, we keep going through the includes
@@ -28,17 +28,26 @@ def newSession(program, argv):
     if failure:
         return "error: " + str(failure)
 
+    # constructing new session worked
+    if not(keep):
+        program.session = s
+    else:
+        # something like /switch happened, we want to keep some stuff
+        program.session.merge(s)
+        
     w = ""
     # try to load config.json if present
     configpath = path + "/config.json"
     if os.path.isfile(configpath):
         w += loadConfig(program, [configpath], override=False) + "\n"
     program.options["character_folder"] = path
+    # this might be very useful for people to debug their chars, so we are a bit verbose here by default
+    w += "Found vars " + ", ".join([k for k in program.session.getVars().keys() if k != "chat_user" and k != "config.json"]) + "\n"
     w += "Ok. Loaded " + path
 
 
     # by convention, the initial message is stored in initial_msg
-    if program.session.hasVar("initial_msg"):
+    if program.session.hasVar("initial_msg") and not(keep):
         program.initial_print_flag = True
 
     # config may have set the mode, but we need to go through setMode
@@ -392,11 +401,11 @@ def gotoStory(prog, argv):
 
 def loadConfig(prog, argv, override=True):
     """CONFIG_FILE
-    Loads a json config file at location CONFIG_FILE. A config file contains a dictionary of program options. 
-    You can create an example config with /saveconfig example.conf.json.
-    You can also load a config file at startup with the --config_file command line argument.
-    If it exists, the ~/.ghostbox.conf.json will also be loaded at startup.
-    The order of config file loading is as follows .ghostconf.conf.json > --config_file > conf.json (from character folder). Config files that are loaded later will override settings from earlier files."""
+Loads a json config file at location CONFIG_FILE. A config file contains a dictionary of program options. 
+You can create an example config with /saveconfig example.conf.json.
+You can also load a config file at startup with the --config_file command line argument.
+If it exists, the ~/.ghostbox.conf.json will also be loaded at startup.
+The order of config file loading is as follows .ghostconf.conf.json > --config_file > conf.json (from character folder). Config files that are loaded later will override settings from earlier files."""
 
     # loads a config file, which may be a user config, or a config supplied by a character folder. if override is false, the config may not override command line arguments that have been manually supplied (in the long form)
     if argv == []:
@@ -674,6 +683,25 @@ def showRaw(prog, argv):
     printerr(prog._lastPrompt, prefix="")
     return ""
 
+
+def switch(prog, argv):
+    """ CHARACTER_FOLDER
+Switch to another character folder, retaining the current story.
+As opposed to /start or /restart, this will hot-switch the AI without wiping your story so far, or adding the initial message. This can e.g. allow the used of specialized AI's in certain situations.
+Specifically, '/switch bob' will do the following:
+ - Set your system prompt to bob/system_msg
+ - Set all session variables defined in bob/, possibly overriding existing ones
+ - Load bob/config.json, if present, not overriding command line arguments.
+See also: /start, /restart, /lschars"""
+    if argv == []:
+        return "No character folder given. No switch occured."
+    
+    prog._lastChar = prog.session.dir
+    w = newSession(prog, argv, keep=True)
+    # FIXME: when people use this command they probably don't want to be spammed, so we discard w, but maybe we want a verbose mode?
+    return w.split("\n")[-1]
+                   
+    
 def tokenize(prog, argv):
     """MSG
     Send a tokenize request to the server. Will print raw tokens to standard output, one per line. This is mostly used to debug prompts."""

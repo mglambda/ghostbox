@@ -10,6 +10,11 @@ class Session(object):
         if self.dir is not None:
             self._init(additional_keys)
 
+    def merge(self, other):
+        """Merges some things from a session object other into itself. This generally means keeping story etc, of self, but possibly adding fileVars from other, including overriding our own."""
+        self.fileVars = self.fileVars | other.fileVars
+        self.dir = other.dir
+            
     def hasVar(self, var):
         return var in self.fileVars
     
@@ -39,8 +44,8 @@ class Session(object):
             filename = os.path.split(filepath)[1]
             if os.path.isfile(filepath):
                 self.fileVars[filename] = self.expandVars(open(filepath, "r").read())
-
-                printerr("Found " + filename)
+                # this is useful but too verbose
+                #printerr("Found " + filename)
 
         init_msg = self.fileVars.get("initial_msg", "")
         if init_msg:

@@ -31,6 +31,7 @@ def showHelp(prog, argv):
 cmds = [
     ("/help", showHelp),
     ("/start", newSession),
+    ("/switch", switch),
     ("/quit", exitProgram),
     ("/restart", lambda prog, argv: newSession(prog, [])),
     ("/print", printStory) ,
@@ -264,10 +265,12 @@ class Program(object):
     def setOption(self, name, value):
         self.options[name] = value
         # for some options we do extra stuff
-        if name == "tts_voice" or name == "tts_volume":
+        if (name == "tts_voice" or name == "tts_volume") and self.getOption("tts"):
             # we don't want to restart tts on /restart
             if self.optionDiffers(name, value):
                 self.tts_flag = True #restart TTS
+        elif name == "no-tts":
+            self.setOption("tts", not(value))
         elif name == "whisper_model":
             self.whisper = self._newTranscriber()
         elif name == "cli_prompt":
