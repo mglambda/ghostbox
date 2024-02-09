@@ -1,6 +1,7 @@
 import argparse, os
 from ghostbox.util import *
 
+
 def makeArgParser(default_params):
     # default_params are only the hyperparameters (temp, etc.), not command line parameters
     parser = argparse.ArgumentParser(description="ghostbox - koboldcpp Command Line Interface", formatter_class=argparse.ArgumentDefaultsHelpFormatter)

@@ -12,6 +12,7 @@ from ghostbox.session import Session
 from ghostbox.transcribe import WhisperTranscriber
 from ghostbox.pftemplate import *
 from ghostbox.backends import *
+from ghostbox import backends
 
 
 def showHelp(prog, argv):
@@ -82,9 +83,6 @@ mode_formatters = {
     "default" : lambda d: (DoNothing, DoNothing, DoNothing, CleanResponse),
     "chat" : lambda d: (DoNothing, NicknameRemover(d["chat_ai"]), NicknameFormatter(d["chat_user"]), ChatFormatter(d["chat_ai"]))
 }
-    
-#defined here for convenience. Can all be changed through cli parameters or with / commands
-DEFAULT_PARAMS = {                "rep_pen": 1.1, "temperature": 0.7, "top_p": 0.92, "top_k": 0, "top_a": 0, "typical": 1, "tfs": 1, "rep_pen_range": 320, "rep_pen_slope": 0.7, "sampler_order": [6, 0, 1, 3, 4, 2, 5], "quiet": True, "use_default_badwordsids": True}
 
 class Program(object):
     def __init__(self, options={}, initial_cli_prompt=""):
@@ -136,18 +134,17 @@ class Program(object):
         return self.backend
     
     def makeGeneratePayload(self, text):
-        d = {"prompt": text,
-             "grammar" : self.getOption("grammar"),
-             #"n_ctx": self.getOption("max_context_length"), # this is sort of undocumented in llama.cpp server
-             "cache_prompt" : True,
-             "n_predict": self.options["max_length"]}
+        d = backends.default_params.copy()
+        d["prompt"] = text
+
+        # these 2 have unintuitive names so we explicitly mention them here
+        #d["n_ctx"] = self.getOption("max_context_length"), # this is sort of undocumented in llama.cpp server
+        d["n_predict"] = self.getOption("max_length")
 
         if self.hasImages():
             d["image_data"] = [packageImageDataLlamacpp(d["data"], id) for (id, d) in self.images.items()]
-            
-        for paramname in DEFAULT_PARAMS.keys():
-            d[paramname] = self.options[paramname]
         return d
+            
 
     def _newTranscriber(self):
         # makes a lazy WhisperTranscriber, because model loading can be slow
@@ -590,7 +587,7 @@ returns - A string ready to be sent to the backend, including the full conversat
     
 def main():
     just_fix_windows_console()
-    parser = makeArgParser(DEFAULT_PARAMS)
+    parser = makeArgParser(backends.default_params)
     args = parser.parse_args()
     prog = Program(options=args.__dict__, initial_cli_prompt=args.cli_prompt)
     if userConfigFile():    
