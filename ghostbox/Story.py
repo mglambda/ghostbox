@@ -21,11 +21,22 @@ class Story(object):
             
     def getData(self):
         return self.data
-        
+
+    def drop(self, n=-1):
+        """Safely remove the nth story item from the story. Defaults to the last item. If there are no elements, of if n is out of range, this has no effect. Returns True if an item was removed."""
+        if self.data == []:
+            return False
+
+        if not(n in range(0, len(self.data))):
+            return False
+        self.pop(n)
+        return True
+    
+    
     def pop(self, n=-1):
         """Remove and return the last story item. If n is supplied, item at position n is removed and returned."""
         return self.data.pop(n)
-
+            
     def dropUntil(self, predicate):
         """Drops story items from the back of the list until predicate is True. Predicate takes a story item as argument. Returns true if predicate was true for an item."""
         while self.data != []:

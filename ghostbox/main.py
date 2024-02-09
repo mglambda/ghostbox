@@ -38,7 +38,7 @@ cmds = [
     ("/prev", previousStory),
     ("/story", gotoStory),
     ("/retry", retry),
-    ("/resend", lambda prog, argv: retry(prog, argv, lambda item: item["text"] != "" and item["user_generated"] == True)),
+    ("/rephrase", rephrase),
     ("/drop", dropEntry),
     ("/new", newStory),
     ("/clone", cloneStory),
@@ -174,21 +174,26 @@ class Program(object):
         printerr("Using '" + name + "' as prompt format template.")
                 
     def loadConfig(self, json_data, override=True):
+        """Loriads a config file provided as json into options. Override=False means that command line options that have been provided will not be overriden by the config file."""
         d = json.loads(json_data)
         if type(d) != type({}):
             return "error loading config: Not a dictionary."
-
         if not(override):
             # drop keys in the config that can be found in the command line arguments
+            # have to do the one letter options manually
+            letterMap = {"u" : "chat_user", "c" : "character_folder", "V" : "tts_voice", "T" : "prompt_format"}
             for arg in sys.argv:
+                if not(arg.startswith("-")):
+                    continue
                 key = stripLeadingHyphens(arg)
-                if key in d:
+                # "no-" is for e.g. '--no-tts'
+                if key in d or "no-"+key in d:
                     del d[key]
+                for (letter, full_arg) in letterMap.items():
+                    if key.startswith(letter):
+                        if full_arg in d:
+                            del d[full_arg]
 
-
-        # used to be
-        #self.options = self.options | d
-        # which is nice, but unfortunately we have to go through setOption
         for (k, v) in d.items():
             self.setOption(k, v)
         return ""
@@ -537,7 +542,7 @@ returns - A string ready to be sent to the backend, including the full conversat
             self._smartShifted = True
             item = sf.get().pop(0)
             #FIXME: this can be way better, needs moretesting!
-            sf.pop(0)
+            #sf.pop(0)
         return self.showSystem() + self.showStory(story_folder=sf) + hint
         
     def adjustForChat(self, w):
@@ -647,11 +652,15 @@ def main():
     prog = Program(options=args.__dict__, initial_cli_prompt=args.cli_prompt)
     if userConfigFile():    
         prog.setOption("user_config", userConfigFile())
-        printerr(loadConfig(prog, [userConfigFile()]))
+        printerr(loadConfig(prog, [userConfigFile()], override=False))
     
     if prog.getOption("config_file"):
         printerr(loadConfig(prog, [prog.options["config_file"]]))
-    
+
+    # FIXME: this might also have to be done for other variables in the future, at which point we refactor and generalize
+    if "-u" in sys.argv or "--chat_user" in sys.argv:
+        prog.setOption("chat_user", args.chat_user)
+        
     if args.character_folder:
         printerr(        newSession(prog, []))
 
