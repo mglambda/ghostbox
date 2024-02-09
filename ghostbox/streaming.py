@@ -11,21 +11,20 @@ def connect_to_endpoint(url, prompt):
         print(f"Error connecting to {url}: {e}")
         return None
 
-def process_sse_streaming_events(prog, r):
-    for event in r.iter_lines():
+def process_sse_streaming_events(callback, flag, r):
+    print("thread started")
+    #    for event in r.iter_lines():
+    for event in r.iter_content(decode_unicode=True):
+        print(event)
         if event:
-            w = event.decode()
-            if w.startswith("data: "):
-                d = json.loads(w[6:])
-                v = d["token"]
-                prog.print(v, end="", flush=prog.getOption("streaming_flush"))
-                prog.stream_queue.append(v)
-    prog.streaming_done.set()
+            w = event
+        callback(w)
+    flag.set()
 
 
-def streamPrompt(prog, url, json=""):
+def streamPrompt(callback, flag, url, json=""):
     response = connect_to_endpoint(url, json)
     if response:
-        thread = Thread(target=process_sse_streaming_events, args=(prog, response))
+        thread = Thread(target=process_sse_streaming_events, args=(callback, flag, response))
         thread.start()
     return response

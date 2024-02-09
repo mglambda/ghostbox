@@ -94,7 +94,7 @@ class Program(object):
         self.tts_flag = False
         self.initial_print_flag = False
         self.initial_cli_prompt = initial_cli_prompt
-        self.streaming_done = threading.Event()
+        self.stream_done = threading.Event()
         self.stream_queue = []
         self. images = {}
         self._lastPrompt = ""
@@ -135,12 +135,16 @@ class Program(object):
     
     def makeGeneratePayload(self, text):
         d = backends.default_params.copy()
+        for key in d.keys():
+            if key in self.options:
+                d[key] = self.getOption(key)
+        
         d["prompt"] = text
 
         # these 2 have unintuitive names so we explicitly mention them here
         #d["n_ctx"] = self.getOption("max_context_length"), # this is sort of undocumented in llama.cpp server
         d["n_predict"] = self.getOption("max_length")
-
+            
         if self.hasImages():
             d["image_data"] = [packageImageDataLlamacpp(d["data"], id) for (id, d) in self.images.items()]
         return d
@@ -547,22 +551,34 @@ returns - A string ready to be sent to the backend, including the full conversat
     def communicate(self, prompt_text):
         """Sends prompt_text to the backend and prints results."""
         backend = self.getBackend()
+        payload = self.makeGeneratePayload(prompt_text)
         self._lastPrompt = prompt_text
         if self.getOption("warn_trailing_space"):
             if prompt_text.endswith(" "):
                 printerr("warning: Prompt ends with a trailing space. This messes with tokenization, and can cause the model to start its responses with emoticons. If this is what you want, you can turn off this warning by setting 'warn_trailing_space' to False.")
-            
-        result = backend.handleGenerateResult(backend.generate(self.makeGeneratePayload(prompt_text)))
-        self.setLastJSON(backend.getLastJSON())
 
 
-            
+        if self.getOption("stream"):
+            def f(w):
+                self.stream_queue.append(w)
+                self.print(w, end="")
+                
+            r = backend.generateStreaming(payload, f, self.stream_done)
+            self.stream_done.wait()
+            result = "".join(self.stream_queue)
+            self.stream_queue = []
+                
+        else:
+            result = backend.handleGenerateResult(backend.generate(payload))
+            self.setLastJSON(backend.getLastJSON())
+
+
         if result:
             # FIXME: we're currently formatting the AI string twice. Here and in addAIText. that's not a big deal, though
             self.print(self.getAIFormatter().format(result), end="")
             return result
         else:
-            printerr("error: " + backend.getLastError)
+            printerr("error: " + backend.getLastError())
             return ""
 
         
