@@ -111,7 +111,7 @@ class LlamaCPPBackend(AIBackend):
         return None
 
     def generateStreaming(self, payload, callback=lambda w: print(w), flag=None):
-        return streamPrompt(callback, flag, self.endpoint + "/completion", payload)
+        return streamPrompt(lambda d: callback(d["content"]), flag, self.endpoint + "/completion", payload)
     
     def tokenize(self, w):
         r = requests.post(self.endpoint + "/tokenize", json={"content" : w})

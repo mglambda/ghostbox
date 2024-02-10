@@ -2,23 +2,25 @@ import requests, json
 from requests_html import HTMLSession
 from time import sleep
 from threading import Thread
+from ghostbox.util import printerr
+
 def connect_to_endpoint(url, prompt):
     try:
         session = HTMLSession()
         r = session.post(url, json=prompt, stream=True)
         return r
     except Exception as e:
-        print(f"Error connecting to {url}: {e}")
+        printerr(f"Error connecting to {url}: {e}")
         return None
 
 def process_sse_streaming_events(callback, flag, r):
     print("thread started")
-    #    for event in r.iter_lines():
-    for event in r.iter_content(decode_unicode=True):
-        print(event)
+    for event in r.iter_lines():
         if event:
-            w = event
-        callback(w)
+            w = event.decode()            
+            if w.startswith("data: "):
+                d = json.loads(w[6:])            
+                callback(d)
     flag.set()
 
 

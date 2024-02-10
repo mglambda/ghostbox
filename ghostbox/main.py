@@ -140,6 +140,8 @@ class Program(object):
                 d[key] = self.getOption(key)
         
         d["prompt"] = text
+        # this one is temporarily disabled because of argparse so we have to do it here
+        d["stream"] = self.getOption("stream")
 
         # these 2 have unintuitive names so we explicitly mention them here
         #d["n_ctx"] = self.getOption("max_context_length"), # this is sort of undocumented in llama.cpp server
@@ -434,7 +436,10 @@ class Program(object):
             if not(self.getOption("tts_subtitles")):
                 return
 
-        print(style + color + self.getDisplayFormatter().format(w) + Fore.RESET + Style.RESET_ALL, end=end, flush=flush)
+        if not(color) and not(style):
+            print(self.getDisplayFormatter().format(w), end=end, flush=flush)
+        else:
+            print(style + color + self.getDisplayFormatter().format(w) + Fore.RESET + Style.RESET_ALL, end=end, flush=flush)
 
     def replaceForbidden(self, w):
         for forbidden in self.getOption("forbid_strings"):
@@ -561,11 +566,12 @@ returns - A string ready to be sent to the backend, including the full conversat
         if self.getOption("stream"):
             def f(w):
                 self.stream_queue.append(w)
-                self.print(w, end="")
+                self.print(w, end="", flush=self.getOption("stream_flush"))
                 
             r = backend.generateStreaming(payload, f, self.stream_done)
             self.stream_done.wait()
-            result = "".join(self.stream_queue)
+            result = "".join(self.stream_queue) #json.loads("".join(self.stream_queue))["content"]
+            print("\n")
             self.stream_queue = []
                 
         else:
@@ -574,9 +580,13 @@ returns - A string ready to be sent to the backend, including the full conversat
 
 
         if result:
-            # FIXME: we're currently formatting the AI string twice. Here and in addAIText. that's not a big deal, though
-            self.print(self.getAIFormatter().format(result), end="")
-            return result
+            if self.getOption("stream"):
+                # already printed, just return
+                return result
+            else:
+                # FIXME: we're currently formatting the AI string twice. Here and in addAIText. that's not a big deal, though                
+                self.print(self.getAIFormatter().format(result), end="")
+                return result
         else:
             printerr("error: " + backend.getLastError())
             return ""
