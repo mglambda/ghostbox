@@ -126,7 +126,6 @@ class Program(object):
         self.setMode(self.getOption("mode"))
         self.running = True
 
-
     def initializeBackend(self, backend, endpoint):
         self.backend = LlamaCPPBackend(endpoint)
 
@@ -151,7 +150,6 @@ class Program(object):
             d["image_data"] = [packageImageDataLlamacpp(d["data"], id) for (id, d) in self.images.items()]
         return d
             
-
     def _newTranscriber(self):
         # makes a lazy WhisperTranscriber, because model loading can be slow
         return Proxy(lambda: WhisperTranscriber(model_name = self.getOption("whisper_model"),
@@ -168,7 +166,6 @@ class Program(object):
         tmp = self.continue_with
         self.continue_with = ""
         return tmp
-    
     
     def loadGrammar(self, grammar_file):
         if os.path.isfile(grammar_file):
@@ -268,7 +265,6 @@ class Program(object):
     def getDisplayFormatter(self):
         return self.getFormatters()[0]
 
-
     def getTTSFormatter(self):
         return self.getFormatters()[1]
 
@@ -322,10 +318,6 @@ class Program(object):
         signal.signal(signal.SIGINT, self._ctPauseHandler)
 
     def _imageWatchCallback(self, image_path, image_id):
-        #FIXME: this is only temporary until we fix the context being exceeded with llamacpp. This happens very quickly with image data, and so we frequently restart the session to get the system message in.
-        newSession(self, [])
-        
-        
         w = self.getOption("image_watch_msg")
         if w == "":
             return
@@ -333,10 +325,10 @@ class Program(object):
         self.loadImage(image_path, image_id)
         (modified_w, hint) = self.modifyInput(w)
         self.addUserText(modified_w)
-        self.addAIText(self.communicate(self.buildPrompt(hint)))
+        image_watch_hint = self.getOption("image_watch_hint")
+        self.addAIText(self.communicate(self.buildPrompt(hint + image_watch_hint)))
         print(self.showCLIPrompt(), end="")
 
-        
     def _transcriptionCallback(self, w):
         (modified_w, hint) = self.modifyInput(w)
         self.addUserText(modified_w)
@@ -365,15 +357,10 @@ class Program(object):
         self.stream_queue = []
         self.stream_sentence_queue = []
         return w
-                
-
-            
-            
         
     def isAudioTranscribing(self):
         return self.ct is not None and self.ct.running
         
-
     def startImageWatch(self):
         dir = self.getOption("image_watch_dir")
         printerr("Watching for new images in " + dir + ".")
@@ -386,12 +373,9 @@ class Program(object):
         self.ct = self.whisper.transcribeContinuously(callback=self._transcriptionCallback)
         signal.signal(signal.SIGINT, self._ctPauseHandler)
 
-
     def stopImageWatch(self):
         if self.image_watch:
             self.image_watch.stop()
-            
-        
         
     def stopAudioTranscription(self):
         if self.ct:
@@ -473,6 +457,7 @@ class Program(object):
     def bufferMultilineInput(self, w):
         #expects strings with \ at the end
         self.multiline_buffer += w[:-1] + "\n"
+
     def isMultilineBuffering(self):
         return self.multiline_buffer != ""
             
@@ -501,7 +486,6 @@ class Program(object):
         if self._systemTokenCount is None:
             self._systemTokenCount = len(self.getBackend().tokenize(self.session.getSystem())) + 1
         return self._systemTokenCount
-
 
     def getTemplate(self):
         return self.template
@@ -609,8 +593,6 @@ returns - A string ready to be sent to the backend, including the full conversat
         self.print(self.getAIFormatter().format(result), end="")
         return result            
 
-
-        
     def hasImages(self):
         return bool(self.images)
         

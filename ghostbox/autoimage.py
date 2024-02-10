@@ -14,6 +14,8 @@ def mostRecentFile(path):
     for file in all_files:
         e = path + "/" + file
         file_mtimes[e] = time.time() - os.stat(e).st_mtime;
+    if not(file_mtimes):
+        return ("", 0)
     winner =  sorted(file_mtimes.items(), key=operator.itemgetter(1))[0][0]
     return (winner, os.stat(winner).st_mtime)
 
