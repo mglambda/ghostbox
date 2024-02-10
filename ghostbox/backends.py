@@ -53,9 +53,14 @@ class AIBackend(ABC):
         self.stream_done = threading.Event()
         self.last_error = ""
 
+    @abstractmethod
     def getLastError(self):
         return self.last_error
 
+    @abstractmethod
+    def getLastJSON(self):
+        pass
+    
     def waitForStream(self):
         self.stream_done.wait()
         
@@ -87,6 +92,7 @@ class AIBackend(ABC):
         """Takes a string w and returns a list of tokens."""
         pass
 
+    @abstractmethod
     def health(self):
         """Returns a string indicating the status of the backend."""
         pass
@@ -99,6 +105,9 @@ class LlamaCPPBackend(AIBackend):
         super().__init__(endpoint)
         self._lastResult = None
 
+    def getLastError(self):
+        return super().getLastError()
+        
     def getLastJSON(self):
         return self._lastResult
 
@@ -117,9 +126,17 @@ class LlamaCPPBackend(AIBackend):
         self._lastResult = result.json()
         return result.json()['content']
 
+    def _makeLlamaCallback(self, callback):
+        def f(d):
+            if d["stop"]:
+                self._lastResult = d
+                return 
+            callback(d["content"])
+        return f
+
     def generateStreaming(self, payload, callback=lambda w: print(w)):
         self.stream_done.clear()
-        r = streamPrompt(lambda d: callback(d["content"]), self.stream_done, self.endpoint + "/completion", payload)
+        r = streamPrompt(self._makeLlamaCallback(callback), self.stream_done, self.endpoint + "/completion", payload)
         if r.status_code != 200:
             self.last_error = "streaming HTTP request with status code " + str(r.status_code)
             self.stream_done.set()

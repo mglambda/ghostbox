@@ -588,7 +588,7 @@ returns - A string ready to be sent to the backend, including the full conversat
 
         if self.getOption("stream"):
             # FIXME: this is the last hacky bit about formatting
-            if self.getOption("chat_show_ai_prompt"):
+            if self.getOption("chat_show_ai_prompt") and self.getMode().startswith("chat"):
                 self.print(self.session.getVar("chat_ai") + ": ", end="", flush=True)
                     
 
@@ -596,6 +596,7 @@ returns - A string ready to be sent to the backend, including the full conversat
                 printerr(backend.getLastError())
                 return ""
             backend.waitForStream()
+            self.setLastJSON(backend.getLastJSON())
             return self.flushStreamQueue()
         else:
             result = backend.handleGenerateResult(backend.generate(payload))
