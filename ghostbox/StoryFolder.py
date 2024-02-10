@@ -17,7 +17,7 @@ class StoryFolder(object):
         return self.stories[self.index]
     
     def newStory(self):
-        self.stories.append([])
+        self.stories.append(Story())
         self.index = len(self.stories) - 1
 
     def cloneStory(self, index=-1):

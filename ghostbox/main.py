@@ -318,6 +318,7 @@ class Program(object):
         signal.signal(signal.SIGINT, self._ctPauseHandler)
 
     def _imageWatchCallback(self, image_path, image_id):
+        newStory(self, [])
         w = self.getOption("image_watch_msg")
         if w == "":
             return
