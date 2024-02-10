@@ -94,8 +94,8 @@ class Program(object):
         self.tts_flag = False
         self.initial_print_flag = False
         self.initial_cli_prompt = initial_cli_prompt
-        self.stream_done = threading.Event()
         self.stream_queue = []
+        self.stream_sentence_queue = []
         self. images = {}
         self._lastPrompt = ""
         self._dirtyContextLlama = False
@@ -344,7 +344,31 @@ class Program(object):
             print(w)
         self.addAIText(self.communicate(self.buildPrompt(hint)))
         print(self.showCLIPrompt(), end="")
-        
+
+    def _streamCallback(self, token):
+        self.stream_queue.append(token)
+        method = self.getOption("stream_flush")
+        if method == "token":
+            self.print(token, end="", flush=True)
+        elif method == "sentence":
+            self.stream_sentence_queue.append(token)            
+            w = IncompleteSentenceCleaner().format("".join(self.stream_sentence_queue))
+            if w.strip() == "":
+                # not a complete sentence yet, let's keep building it
+                return
+            # w is a complete sentence
+            self.stream_sentence_queue = []
+            self.print(w, end="", flush=True)
+
+    def flushStreamQueue(self):
+        w = "".join(self.stream_queue)
+        self.stream_queue = []
+        self.stream_sentence_queue = []
+        return w
+                
+
+            
+            
         
     def isAudioTranscribing(self):
         return self.ct is not None and self.ct.running
@@ -562,34 +586,28 @@ returns - A string ready to be sent to the backend, including the full conversat
             if prompt_text.endswith(" "):
                 printerr("warning: Prompt ends with a trailing space. This messes with tokenization, and can cause the model to start its responses with emoticons. If this is what you want, you can turn off this warning by setting 'warn_trailing_space' to False.")
 
-
         if self.getOption("stream"):
-            def f(w):
-                self.stream_queue.append(w)
-                self.print(w, end="", flush=self.getOption("stream_flush"))
-                
-            r = backend.generateStreaming(payload, f, self.stream_done)
-            self.stream_done.wait()
-            result = "".join(self.stream_queue) #json.loads("".join(self.stream_queue))["content"]
-            print("\n")
-            self.stream_queue = []
-                
+            # FIXME: this is the last hacky bit about formatting
+            if self.getOption("chat_show_ai_prompt"):
+                self.print(self.session.getVar("chat_ai") + ": ", end="", flush=True)
+                    
+
+            if backend.generateStreaming(payload, self._streamCallback):
+                printerr(backend.getLastError())
+                return ""
+            backend.waitForStream()
+            return self.flushStreamQueue()
         else:
             result = backend.handleGenerateResult(backend.generate(payload))
-            self.setLastJSON(backend.getLastJSON())
+            self.setLastJSON(backend.getLastJSON())            
 
-
-        if result:
-            if self.getOption("stream"):
-                # already printed, just return
-                return result
-            else:
-                # FIXME: we're currently formatting the AI string twice. Here and in addAIText. that's not a big deal, though                
-                self.print(self.getAIFormatter().format(result), end="")
-                return result
-        else:
+        if not(result):
             printerr("error: " + backend.getLastError())
             return ""
+        # FIXME: we're currently formatting the AI string twice. Here and in addAIText. that's not a big deal, though                
+        self.print(self.getAIFormatter().format(result), end="")
+        return result            
+
 
         
     def hasImages(self):
@@ -690,5 +708,7 @@ def main():
         prog.addUserText(modified_w)
         prog.addAIText(prog.communicate(prog.buildPrompt(hint)))
         setOption(prog, ["continue", "False"])
+
+
 if __name__ == "__main__":
     main()

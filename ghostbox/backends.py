@@ -1,4 +1,4 @@
-import time, requests
+import time, requests, threading
 from abc import ABC, abstractmethod
 from functools import *
 from ghostbox.util import *
@@ -50,10 +50,14 @@ class AIBackend(ABC):
     @abstractmethod
     def __init__(self, endpoint):
         self.endpoint = endpoint
+        self.stream_done = threading.Event()
         self.last_error = ""
 
     def getLastError(self):
         return self.last_error
+
+    def waitForStream(self):
+        self.stream_done.wait()
         
     @abstractmethod
     def getName(self):
@@ -72,7 +76,10 @@ class AIBackend(ABC):
 
     @abstractmethod
     def generateStreaming(self, payload, callback=lambda w: print(w)):
-        """Takes a payload dictionary similar to default_params, and returns nothing. This will begin generating in streaming mode. The callback provided will be called with individual tokens that are being generated. This function is non-blocking"""
+        """Takes a payload dictionary similar to default_params and begins streaming generated tokens to a callback function. Returns True if there was a HTTP error, which you can check with getLastError().
+        callback - A function taking one string argument, which will be the generated tokens.
+        payload - A dictionary similar to default_params. If this doesn't contain "stream" : True, this function may fail or have no effect.
+        returns - True on status code != 200"""
         pass
                                       
     @abstractmethod
@@ -104,14 +111,20 @@ class LlamaCPPBackend(AIBackend):
         return requests.post(self.endpoint + "/completion", json=payload)
 
     def handleGenerateResult(self, result):
-        if result.status_code == 200:
-            self._lastResult = result.json()
-            return result.json()['content']
-        self.last_error = "HTTP request with status code " + str(r.status_code)
-        return None
+        if result.status_code != 200:
+            self.last_error = "HTTP request with status code " + str(r.status_code)
+            return None
+        self._lastResult = result.json()
+        return result.json()['content']
 
-    def generateStreaming(self, payload, callback=lambda w: print(w), flag=None):
-        return streamPrompt(lambda d: callback(d["content"]), flag, self.endpoint + "/completion", payload)
+    def generateStreaming(self, payload, callback=lambda w: print(w)):
+        self.stream_done.clear()
+        r = streamPrompt(lambda d: callback(d["content"]), self.stream_done, self.endpoint + "/completion", payload)
+        if r.status_code != 200:
+            self.last_error = "streaming HTTP request with status code " + str(r.status_code)
+            self.stream_done.set()
+            return True
+        return False
     
     def tokenize(self, w):
         r = requests.post(self.endpoint + "/tokenize", json={"content" : w})
@@ -121,7 +134,6 @@ class LlamaCPPBackend(AIBackend):
     
     def health(self):
         r = requests.get(self.endpoint + "/health")
-        if r.status_code == 200:
-            return r.json()["status"]
-        return "error " + str(r.status_code)
-
+        if r.status_code != 200:
+            return "error " + str(r.status_code)
+        return r.json()["status"]

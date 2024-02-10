@@ -116,7 +116,7 @@ class IncompleteSentenceCleaner(OutputFormatter):
                 break
 
         if i == 0:
-            return w
+            return ""
         return w[:i+1]
 
 class WhitespaceFormatter(OutputFormatter):

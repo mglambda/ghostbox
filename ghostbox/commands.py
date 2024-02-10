@@ -223,21 +223,18 @@ def toggleTTS(prog, argv):
     The TTS service that will be used depends on the value of tts_program. The tts_program can be any executable or shell script that reads lines from standard input. It may also support additional functionality.
     An example tts program for amazon polly voices is provided with 'ghostbox-tts-polly'. Note that this requires you to have credentials with amazon web services.
     On linux distributions with speech-dispatcher, you can set the value of tts_program to 'spd-say', or 'espeak-ng' if it's installed. This works, but it isn't very nice.
-    The voice used depends on the value of tts_voice, which you can either /set or provide with the -V or --tts_voice command line option. It can also be set in character folder's config.json.
-    ghostbox will attempt to provide the tts_program with the voice using a -V command line argument.
-    To see the list of supported voices, try /lsvoices.
-    Currently, turning TTS on disables token streaming, though you may reenable it with /set streaming True, if you wish."""
+The voice used depends on the value of tts_voice, which you can either /set or provide with the -V or --tts_voice command line option. It can also be set in character folder's config.json.
+ghostbox will attempt to provide the tts_program with the voice using a -V command line argument.
+To see the list of supported voices, try /lsvoices.
+Enabling TTS will automatically set stream_flush to 'sentence', as this works best with most TTS engines. You can manually reset it to 'token' if you want, though."""
     prog.options["tts"] = not(prog.options["tts"])
     w = ""
     if prog.options["tts"]:
         err = prog.initializeTTS()
         if err:
             return err
-        if prog.getOption("streaming"):
-            prog.options["streaming"] = False
-            w += "Disabling streaming (this tends to work better with TTS. You can manually reenable streaming if you wish.)\n"
         w += "Try /hide for a more immersive experience.\n"
-            
+        prog.setOption("stream_flush", "sentence")
     return w + "TTS " + {True : "on.", False : "off."}[prog.options["tts"]]
 
 def ttsDebug(prog, argv):
@@ -448,7 +445,7 @@ def hide(prog, argv):
     prog.options["cli_prompt"] = "\n"
     prog.options["audio_show_transcript"] = False
     prog.options["tts_subtitles"] = False
-    prog.options["streaming"] = False
+    #prog.options["stream"] = False
     prog.options["chat_show_ai_prompt"] = False
     return ""
 
@@ -650,7 +647,7 @@ Give an overall report about the program and some subprocesses."""
         w += "\n"
 
         if "streaming" in topics:
-            w += "streaming: " + str(prog.getOption("streaming")) + "\n\n"
+            w += "streaming: " + str(prog.getOption("stream")) + "\n\n"
         
     return w.strip()
 

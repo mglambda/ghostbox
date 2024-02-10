@@ -14,7 +14,6 @@ def connect_to_endpoint(url, prompt):
         return None
 
 def process_sse_streaming_events(callback, flag, r):
-    print("thread started")
     for event in r.iter_lines():
         if event:
             w = event.decode()            
