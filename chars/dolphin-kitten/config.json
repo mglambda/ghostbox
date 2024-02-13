@@ -1,4 +1,5 @@
 {
+	"mode" : "default",
 	"cli_prompt" : "\n 🐬 ",
 	"cli_prompt_color" : "blue"
 }

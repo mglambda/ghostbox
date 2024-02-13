@@ -1,4 +1,5 @@
 import requests, json, os, io, re, base64, random, sys, threading, subprocess, signal
+from functools import *
 from colorama import just_fix_windows_console, Fore, Back, Style
 from lazy_object_proxy import Proxy
 import argparse
@@ -199,7 +200,7 @@ class Program(object):
         printerr("Using '" + name + "' as prompt format template.")
                 
     def loadConfig(self, json_data, override=True):
-        """Loriads a config file provided as json into options. Override=False means that command line options that have been provided will not be overriden by the config file."""
+        """Loads a config file provided as json into options. Override=False means that command line options that have been provided will not be overriden by the config file."""
         d = json.loads(json_data)
         if type(d) != type({}):
             return "error loading config: Not a dictionary."
@@ -219,7 +220,9 @@ class Program(object):
                         if full_arg in d:
                             del d[full_arg]
 
-        for (k, v) in d.items():
+        # now actually load the options, with a partial ordering
+        items = sorted(d.items(), key=cmp_to_key(lambda a, b: -1 if a[0] == "mode" else 1))
+        for (k, v) in items:
             self.setOption(k, v)
         return ""
 
@@ -232,9 +235,7 @@ class Program(object):
             f = ColorFormatter(self.getOption("cli_prompt_color")) + f
 
         return f.format(self.getOption("cli_prompt"))
-
             
-    
     def getMode(self):
         w = self.getOption("mode")
         if not(self.isValidMode(w)):
@@ -252,8 +253,8 @@ class Program(object):
         if mode.startswith("chat"):
             userPrompt = mkChatPrompt(self.getOption("chat_user"))
             self.setOption("cli_prompt", "\n" + userPrompt)
-            self.appendOption("stop", userPrompt)
-            self.appendOption("stop", userPrompt.strip())            
+            self.appendOption("stop", userPrompt, duplicates=False)
+            self.appendOption("stop", userPrompt.strip(), duplicates=False)            
 
         else: # default
             self.options["cli_prompt"] = self.initial_cli_prompt
@@ -302,7 +303,7 @@ class Program(object):
             else:
                 self.session.stories.get().addAssistantText(self.getAIFormatter().format(w))
 
-    def appendOption(self, name, value):
+    def appendOption(self, name, value, duplicates=True):
         if name not in self.options:
             printerr("warning: unrecognized option '" + name + "'")
             return
@@ -312,25 +313,34 @@ class Program(object):
             printerr("warning: attempt to append to '" + name + "' when it is not a list.")
             return
 
+        if not(duplicates):
+            if value in xs:
+                return
         self.options[name].append(value)
             
             
             
                 
     def setOption(self, name, value):
+        # mode gets to call dibs
+        if name == "mode":
+            self.setMode(value)
+            return
+        
         oldValue = self.getOption(name)
+        differs = self.optionDiffers(name, value)
         self.options[name] = value
         # for some options we do extra stuff
         if (name == "tts_voice" or name == "tts_volume") and self.getOption("tts"):
             # we don't want to restart tts on /restart
-            if self.optionDiffers(name, value):
+            if differs:
                 self.tts_flag = True #restart TTS
         elif name == "no-tts":
             self.setOption("tts", not(value))
         elif name == "whisper_model":
             self.whisper = self._newTranscriber()
-        elif name == "cli_prompt":
-            self.initial_cli_prompt = value
+        #elif name == "cli_prompt":
+            #self.initial_cli_prompt = value
         elif name == "max_context_length":
             self._dirtyContextLlama = False
         elif name =="prompt_format":
@@ -343,10 +353,6 @@ class Program(object):
 
             # and this will add the new username if it's chat mode
             self.setMode(self.getMode())
-            
-            
-            
-            
 
         return ""
 

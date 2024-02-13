@@ -50,9 +50,6 @@ Start a new session with the character or template defined in CHARACTER_FOLDER. 
     if program.session.hasVar("initial_msg") and not(keep):
         program.initial_print_flag = True
 
-    # config may have set the mode, but we need to go through setMode
-    program.setMode(program.getOption("mode"))
-
     # hide if option is set
     if program.getOption("hide"):
         hide(program, [])
@@ -206,9 +203,9 @@ def showVoices(prog, argv):
 
 def toggleMode(prog, argv):
     """[MODE_NAME}
-    Put the program into the specified mode, or show the current mode if MODE_NAME is omitted.
-    Possible values are 'default', or 'chat'.
-    Setting a certain mode has various effects on many aspects of program execution. Currently, most of this is undocumented :)"""    
+Put the program into the specified mode, or show the current mode if MODE_NAME is omitted.
+Possible values are 'default', or 'chat'.
+Setting a certain mode has various effects on many aspects of program execution. Currently, most of this is undocumented :)"""    
     if argv == []:
         return "Currently in " + prog.getOption("mode") + " mode."
 
