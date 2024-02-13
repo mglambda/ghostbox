@@ -196,6 +196,8 @@ class Program(object):
             self.options["prompt_format"] = 'raw'
             return
         self.template = template
+        for w in template.stops():
+            self.appendOption("stop", w)
         self.options["prompt_format"] = name
         printerr("Using '" + name + "' as prompt format template.")
                 
@@ -477,6 +479,9 @@ class Program(object):
         if not(self.getOption("tts")):
             return ""
 
+        # strip color codes - this would be nicer by just disabling color, but the fact of the matter is we sometimes want color printing on console and tts at the same time. At least regex is fast.
+        w = stripANSI(w)
+        
         # this is crazy
         self.tts.stdin.flush()
         self.tts.stdout.flush()
@@ -489,6 +494,9 @@ class Program(object):
 
     def print(self, w, end="\n", flush=False, color="", style=""):
         # either prints, speaks, or both, depending on settings
+        if w == "":
+            return
+        
         if self.getOption("tts"):
             self.communicateTTS(self.getTTSFormatter().format(w) + end)
             if not(self.getOption("tts_subtitles")):
@@ -520,11 +528,14 @@ class Program(object):
         """Takes user input (w), returns pair of (modified user input, and a hint to give to the ai."""
         if prog.getOption("continue") and prog.continue_with == "": # user entered /cont or equivalent
             #setOption(prog, ["continue", "False"])
+            if prog.getMode().startswith("chat"):
+                # prevent AI from talking for us
+                if prog.showStory().endswith("\n"):
+                    return ("", prog.adjustForChat("")[1])
             return ("", "")
 
         if prog.continue_with != "":# user input has been replaced with something else, e.g. a transcription
             w = prog.popContinueString()
-
 
         w = prog.session.expandVars(w)
         (w, ai_hint) = prog.adjustForChat(w)
@@ -579,8 +590,6 @@ class Program(object):
 
     def buildPrompt(self,hint=""):
         """Takes an input string w and returns the full history (including system msg) + w, but adjusted to fit into the context given by max_context_length. This is done in a complicated but very smart way.
-
-
 returns - A string ready to be sent to the backend, including the full conversation history, and guaranteed to carry the system msg."""
         # problem: the llm can only process text equal to or smaller than the context window
         # dumb solution (ds): make a ringbuffer, append at end, throw away the beginning until it fits into context window
@@ -611,6 +620,7 @@ returns - A string ready to be sent to the backend, including the full conversat
         # drop some items from the story, smartly, and without changing original
             self._smartShifted = True
             item = sf.get().pop(0)
+            #printerr("smart shifted, dropped:\n" + item["content"] + "\n")
             #FIXME: this can be way better, needs moretesting!
         return self.showSystem() + self.showStory(story_folder=sf) + hint
         

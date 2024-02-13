@@ -88,12 +88,19 @@ If FILENAME is provided, save the story to that file."""
     
 def doContinue(prog, argv):
     """
-    Continue generating without new input. Use this whenever you want the AI to 'just keep talking'.
-    Specifically, this will send the story up to this point verbatim to the LLM backend. You can check where you are with /log.
-    If there are templated tokens that are normally inserted as part of the prompt format when a user message is received, they are not inserted.
-    This command is also executed when you hit enter without any text."""
+Continue generating without new input. Use this whenever you want the AI to 'just keep talking'.
+Specifically, this will send the story up to this point verbatim to the LLM backend. You can check where you are with /log.
+If there are templated tokens that are normally inserted as part of the prompt format when a user message is received, they are not inserted. Existing end tokens, like <|im_end|> will be removed before sending the prompt back.
+This command is also executed when you hit enter without any text."""
 
     prog.setOption("continue", "1")
+    #experimental: bias logits in chat mode
+    # often while chatting it happens that people want to extend the ai msg, but the ai starts talking for the user. you can prevent this with stopwords, but that can cut off generation, and the ai is now stuck until the user says something.
+    # If we bias the logits against the first token of the user's name/chat handle, the backend can still generate and will also not speak for user.
+    # Of course, this will also prevent the llm from generating anything with the users first token as a normal part of whatever the ai wants to say, with weird and unforeseen results, but since this only happens in the specific situation of continuing the AI's speech, it might be ok.
+    # FIXME: not implemented yet
+
+    
     if prog.session.stories.empty():
         return ""
     

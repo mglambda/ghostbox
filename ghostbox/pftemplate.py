@@ -6,7 +6,6 @@ from ghostbox.util import *
 class PFTemplate(ABC):
     """Abstract base class for prompt format templates, used to turn Story objects into properly formatted strings."""
 
-
     @abstractmethod
     def header(self, system_msg, **kwargs):
         pass
@@ -18,7 +17,11 @@ class PFTemplate(ABC):
     @abstractmethod
     def strip(self, w):
         pass
-    
+
+    @abstractmethod
+    def stops(self):
+        """Returns a list of strings that may stop generation. This is intended for EOS delimiters, like <|im_end|> etc."""
+        pass
     
 class FilePFTemplate(PFTemplate):
     """Simple, customizable prompt format templates based on loading dictionaries with certain files.
@@ -83,7 +86,10 @@ The quick, brown fox jumps over the lazy hedgehog!<|im_end|><|im_start|>assistan
         else:
             hint = ""
         return reduce(build, story.getData(), "") + hint
-
+    def stops(self):
+        return [self.end_assistant]
+        
+    
     def strip(self, w):
         #FXIME: only preliminary for testing like this
         targets = [self.begin_user, self.begin_assistant, self.end_user, self.end_assistant]

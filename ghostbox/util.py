@@ -1,4 +1,4 @@
-import os, getpass, shutil, base64, requests
+import os, getpass, shutil, base64, requests, re
 from colorama import Fore, Back, Style
 import appdirs
 import sys
@@ -309,3 +309,8 @@ def dirtyGetJSON(url):
 
 def replaceFromDict(w, d, key_func=lambda k: k):
     return reduce(lambda v, pair: v.replace(key_func(pair[0]), pair[1]), d.items(), w)
+
+ansi_escape = re.compile(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')
+def stripANSI(w):
+    return ansi_escape.sub('', w)
+    
