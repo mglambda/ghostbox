@@ -61,11 +61,11 @@ Start a new session with the character or template defined in CHARACTER_FOLDER. 
 
 def printStory(prog, argv, stderr=False, apply_filter=True):
     """[FILENAME]
-    Print the current story.
-    If FILENAME is provided, save the story to that file."""
+Print the current story.
+If FILENAME is provided, save the story to that file."""
     # apply_filter basically means make it pretty
     if apply_filter:
-        w = prog.formatStory()
+        w = prog.formatStory(with_color=prog.getOption("color"))
     else:
         w = prog.showStory(append_hint=False)
 

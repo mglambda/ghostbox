@@ -226,7 +226,14 @@ class Program(object):
     def showCLIPrompt(self):
         if self.isMultilineBuffering():
             return ""
-        return self.getOption("cli_prompt")
+
+        f = IdentityFormatter()
+        if self.getOption("color"):
+            f = ColorFormatter(self.getOption("cli_prompt_color")) + f
+
+        return f.format(self.getOption("cli_prompt"))
+
+            
     
     def getMode(self):
         w = self.getOption("mode")
@@ -271,8 +278,14 @@ class Program(object):
     def getUserFormatter(self):
         return self.getFormatters()[2]
 
-    def getAIFormatter(self):
-        return self.getFormatters()[3]
+
+    def getAIColorFormatter(self):
+        if self.getOption("color"):
+            return ColorFormatter(self.getOption("text_ai_color"), self.getOption("text_ai_style"))
+        return IdentityFormatter()
+    
+    def getAIFormatter(self, with_color=False):
+        return self.getAIColorFormatter() + self.getFormatters()[3]        
     
     def addUserText(self, w):
         if w:
@@ -342,7 +355,7 @@ class Program(object):
         self.stream_queue.append(token)
         method = self.getOption("stream_flush")
         if method == "token":
-            self.print(token, end="", flush=True)
+            self.print(self.getAIColorFormatter().format(token), end="", flush=True)
         elif method == "sentence":
             self.stream_sentence_queue.append(token)            
             w = IncompleteSentenceCleaner().format("".join(self.stream_sentence_queue))
@@ -351,7 +364,7 @@ class Program(object):
                 return
             # w is a complete sentence
             self.stream_sentence_queue = []
-            self.print(w, end="", flush=True)
+            self.print(self.getAIColorFormatter().format(w), end="", flush=True)
 
     def flushStreamQueue(self):
         w = "".join(self.stream_queue)
@@ -508,13 +521,25 @@ class Program(object):
             return self.getRawTemplate().body(sf.get(), append_hint, **self.session.getVars())
         return self.getTemplate().body(sf.get(), append_hint, **self.session.getVars())
 
-    def formatStory(self, story_folder=None):
+    def formatStory(self, story_folder=None, with_color=False):
         """Pretty print the current story (or a provided one) in a nicely formatted way. Returns pretty story as a string."""
         if story_folder is None:
             sf = self.session.stories
         else:
             sf = story_folder
-        return "\n".join([self.getDisplayFormatter().format(item["content"]) for item in sf.get().getData()])
+
+        ws = []
+        for item in sf.get().getData():
+            w = item["content"]
+            if item["role"] == "assistant":
+                ws.append((self.getAIColorFormatter() + self.getDisplayFormatter()).format(w))
+                continue
+            ws.append(self.getDisplayFormatter().format(w))
+        return "\n".join(ws)
+
+            
+            
+
 
     def buildPrompt(self,hint=""):
         """Takes an input string w and returns the full history (including system msg) + w, but adjusted to fit into the context given by max_context_length. This is done in a complicated but very smart way.
@@ -576,9 +601,8 @@ returns - A string ready to be sent to the backend, including the full conversat
             if self.getOption("chat_show_ai_prompt") and self.getMode().startswith("chat"):
                 self.print(self.session.getVar("chat_ai") + ": ", end="", flush=True)
                     
-
             if backend.generateStreaming(payload, self._streamCallback):
-                printerr(backend.getLastError())
+                printerr("error: " + backend.getLastError())
                 return ""
             backend.waitForStream()
             self.setLastJSON(backend.getLastJSON())
@@ -591,7 +615,7 @@ returns - A string ready to be sent to the backend, including the full conversat
             printerr("error: " + backend.getLastError())
             return ""
         # FIXME: we're currently formatting the AI string twice. Here and in addAIText. that's not a big deal, though                
-        self.print(self.getAIFormatter().format(result), end="")
+        self.print(self.getAIFormatter(with_color=self.getOption("color")).format(result), end="")
         return result            
 
     def hasImages(self):

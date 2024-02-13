@@ -1,6 +1,7 @@
 from abc import ABC, abstractmethod
 from functools import *
 from ghostbox.util import *
+from colorama import Fore, Style
 
 class OutputFormatter(ABC):
     """An interface for formatting the chat history. The OutputFormatter interface is used both for formatted text that is presented to the user, as well as formatting text to send to the backend, e.g. to prepend 'Bob:' style chat prompts.
@@ -21,6 +22,9 @@ for all strings w. In other words, f is idempotent under repeated application. W
         """Takes a list of objects supporting the OutputFormatter interface and returns a ComposedFormatter that is the result of their composition."""
         return reduce(ComposedFormatter, xs, IdentityFormatter())
 
+    def __add__(self, other):
+        return ComposedFormatter(self, other)
+    
     def sequence(xs, w):
         """Takes a list of OutputFormatters xs and applies them to w in sequence. Tip: Read the list from left to right and imagine applying each formatter to the string in succession."""
         return reduce(lambda v, f: f.format(v), xs, w)
@@ -155,7 +159,18 @@ class ChatFormatter(OutputFormatter):
                                          LonelyPromptCleaner(self.nickname, decorator_func=self.decorator_func),
                                          NicknameFormatter(self.nickname, decorator_func=self.decorator_func)],
                                         w)
-                                                
+
+
+class ColorFormatter(OutputFormatter):
+    """Adds a given color and style to the output. Color and style can be provided as strings, e.g. 'red' and 'bright'm which will be converted to ANSI terminal codes."""
+    def __init__(self, color, style="default"):
+        super().__init__()
+        self.color = stringToColor(color)
+        self.style = stringToStyle(style)
+
+    def format(self, w):
+        return wrapColorStyle(w, self.color, self.style)
+        
 DoNothing = IdentityFormatter() # more descriptive name                
 DefaultResponseCleaner = OutputFormatter.compose([IncompleteSentenceCleaner()])
 CleanResponse = DefaultResponseCleaner

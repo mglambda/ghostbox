@@ -7,10 +7,35 @@ from functools import *
 def getErrorPrefix():
     return " # "
 
+
+def stringToColor(w):
+    """Maps normal strings like 'red' to ANSI control codes using colorama package."""
+    w = w.upper()
+    for color in Fore.__dict__.keys():
+        if w == color:
+            return Fore.__dict__[color]
+    return Fore.RESET
+
+def stringToStyle(w):
+    """Maps normal strings to ANSI control codes for style, like 'bright' etc. using colorama."""
+    w = w.upper()
+    for s in Style.__dict__.keys():
+        if w == s:
+            return Style.__dict__[s]
+    return Style.RESET_ALL
+def wrapColorStyle(w, color, style):
+    return style + color + w + Fore.RESET + Style.RESET_ALL
+
 def printerr(w, prefix=getErrorPrefix(), color=Fore.GREEN):
     if w == "":
         return
 
+    if w.startswith("error:"):
+        color = fore.RED
+
+    if w.startswith("warning:"):
+        color = fore.YELLOW
+    
     # prepend all lines with prefix
     ws = w.split("\n")
     w = ("\n" + prefix).join(ws)
