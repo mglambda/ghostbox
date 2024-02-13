@@ -232,6 +232,9 @@ class Program(object):
         if self.isMultilineBuffering():
             return ""
 
+        if self.getOption("cli_prompt") == "":
+            return ""
+        
         f = IdentityFormatter()
         if self.getOption("color"):
             f = ColorFormatter(self.getOption("cli_prompt_color")) + f
@@ -603,13 +606,13 @@ returns - A string ready to be sent to the backend, including the full conversat
         self._smartShifted = False #debugging
         backend = self.getBackend()
         
-        w = self.showStory() + hint 
+        w = self.showStory() + hint
         gamma = self.getOption("max_context_length")        
         k = self.getSystemTokenCount()
-        wc = len(backend.tokenize(w))
         n = self.getOption("max_length")
-        budget = gamma - (k + wc + n)
-        
+        # budget is the number of tokens we may spend on story history        
+        budget = gamma - (k + n)
+
         if budget < 0:
             #shit the bed
             return self.showSystem() + w
@@ -617,10 +620,10 @@ returns - A string ready to be sent to the backend, including the full conversat
         # now we need a smart story history that fits into budget
         sf = self.session.stories.copyFolder(only_active=True)
         while len(backend.tokenize(self.showStory(story_folder=sf) + hint)) > budget and not(sf.empty()):
+
         # drop some items from the story, smartly, and without changing original
             self._smartShifted = True
             item = sf.get().pop(0)
-            #printerr("smart shifted, dropped:\n" + item["content"] + "\n")
             #FIXME: this can be way better, needs moretesting!
         return self.showSystem() + self.showStory(story_folder=sf) + hint
         
@@ -742,6 +745,9 @@ def main():
         # for convenience when chatting
         if w == "":
             w = "/cont"
+
+        # expand session vars, so we can do e.g. /tokenize {{system_msg}}
+        w = prog.session.expandVars(w)
             
         for (cmd, f) in cmds:
             #FIXME: the startswith is dicey because it now makes the order of cmds defined above relevant, i.e. longer commands must be specified before shorter ones. 

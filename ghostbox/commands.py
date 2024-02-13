@@ -452,6 +452,8 @@ def hide(prog, argv):
     prog.options["tts_subtitles"] = False
     #prog.options["stream"] = False
     prog.options["chat_show_ai_prompt"] = False
+    prog.options["color"] = False
+    
     return ""
 
 def varfile(prog, argv):
@@ -705,9 +707,18 @@ See also: /start, /restart, /lschars"""
                    
     
 def tokenize(prog, argv):
-    """MSG
-    Send a tokenize request to the server. Will print raw tokens to standard output, one per line. This is mostly used to debug prompts."""
+    """[-c] MSG
+Send a tokenize request to the server. Will print raw tokens to standard output, one per line. This is mostly used to debug prompts. With -c, it will print the number of tokens instead."""
+    if argv != [] and argv[0] == "-c":
+        count = True
+        argv = argv[1:]        
+    else:
+        count = False
+        
     ts = prog.getBackend().tokenize("".join(argv))
+    if count:
+        return str(len(ts))
+
     for t in ts:
         print(t)
     return ""
