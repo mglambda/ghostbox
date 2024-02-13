@@ -250,7 +250,11 @@ class Program(object):
         
         self.options["mode"] = mode
         if mode.startswith("chat"):
-            self.options["cli_prompt"] = "\n" + mkChatPrompt(self.getOption("chat_user"))            
+            userPrompt = mkChatPrompt(self.getOption("chat_user"))
+            self.setOption("cli_prompt", "\n" + userPrompt)
+            self.appendOption("stop", userPrompt)
+            self.appendOption("stop", userPrompt.strip())            
+
         else: # default
             self.options["cli_prompt"] = self.initial_cli_prompt
                
@@ -267,7 +271,7 @@ class Program(object):
         if not(self.isValidMode(mode)):
             mode = "default"
             printerr("warning: Unsupported mode '" + mode + "'.. Using 'default'.")
-        return mode_formatters[mode](self.options)
+        return mode_formatters[mode](self.options | self.session.getVars())
 
     def getDisplayFormatter(self):
         return self.getFormatters()[0]
@@ -298,7 +302,23 @@ class Program(object):
             else:
                 self.session.stories.get().addAssistantText(self.getAIFormatter().format(w))
 
+    def appendOption(self, name, value):
+        if name not in self.options:
+            printerr("warning: unrecognized option '" + name + "'")
+            return
+
+        xs = self.getOption(name)
+        if type(xs) != type([]):
+            printerr("warning: attempt to append to '" + name + "' when it is not a list.")
+            return
+
+        self.options[name].append(value)
+            
+            
+            
+                
     def setOption(self, name, value):
+        oldValue = self.getOption(name)
         self.options[name] = value
         # for some options we do extra stuff
         if (name == "tts_voice" or name == "tts_volume") and self.getOption("tts"):
@@ -315,6 +335,16 @@ class Program(object):
             self._dirtyContextLlama = False
         elif name =="prompt_format":
             self.loadTemplate(name)
+        elif name == "chat_user":
+            # userpormpt might be in stopwords, which we have to refresh
+            prompt = mkChatPrompt(oldValue)
+            badwords = [prompt, prompt.strip()]
+            self.options["stop"] = list(filter(lambda w: w not in badwords, self.getOption("stop")))
+
+            # and this will add the new username if it's chat mode
+            self.setMode(self.getMode())
+            
+            
             
             
 
@@ -583,7 +613,7 @@ returns - A string ready to be sent to the backend, including the full conversat
         v = ""
         if self.getMode() == "chat":
             w = mkChatPrompt(self.getOption("chat_user")) + w
-            v = mkChatPrompt(self.getOption("chat_ai"), space=False)
+            v = mkChatPrompt(self.session.getVar("chat_ai"), space=False)
 
         return (w, v)
     

@@ -1,4 +1,4 @@
-import os, datetime, glob, sys, requests
+import os, datetime, glob, sys, requests, traceback
 from ghostbox.session import Session
 from ghostbox.util import *
 from ghostbox.StoryFolder import *
@@ -118,6 +118,7 @@ def setOption(prog, argv):
     try:
         prog.setOption(name, eval(w))
     except:
+        printerr(traceback.format_exc())
         return "Couldn't set " + name + " to " + w + ". Couldn't evaluate."
     return ""
     

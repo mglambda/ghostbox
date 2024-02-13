@@ -23,6 +23,7 @@ def stringToStyle(w):
         if w == s:
             return Style.__dict__[s]
     return Style.RESET_ALL
+
 def wrapColorStyle(w, color, style):
     return style + color + w + Fore.RESET + Style.RESET_ALL
 
