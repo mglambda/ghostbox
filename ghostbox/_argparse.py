@@ -13,7 +13,7 @@ def makeArgParser(default_params):
     parser.add_argument("--endpoint", type=str, default="http://localhost:8080", help="Address of koboldcpp http endpoint.")
     parser.add_argument("--backend", type=str, default="llama.cpp", help="Backend to use. Either 'llama.cpp', or 'koboldcpp'")
     parser.add_argument("--max_length", type=int, default=300, help="Number of tokens to request from koboldcpp for generation.")
-    parser.add_argument("--max_context_length", type=int, default=2048, help="Maximum number of tokens to keep in context.")
+    parser.add_argument("--max_context_length", type=int, default=4092, help="Maximum number of tokens to keep in context.")
     parser.add_argument("-u", "--chat_user", type=str, default="user", help="Username you wish to be called when chatting in 'chat' mode. It will also replace occurrences of {chat_user} anywhere in the character files.")
     parser.add_argument("-m", "--mode", type=str, default="default", help="Mode of operation. Changes various things behind-the-scenes. Values are currently 'default', or 'chat'.")
     parser.add_argument("-g", "--grammar_file", type=str, default="", help="Grammar file used to restrict generation output. Grammar format is GBNF.") 

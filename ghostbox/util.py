@@ -32,7 +32,7 @@ def printerr(w, prefix=getErrorPrefix(), color=Fore.GREEN):
         return
 
     if w.startswith("error:"):
-        color = fore.RED
+        color = Fore.RED
 
     if w.startswith("warning:"):
         color = fore.YELLOW
