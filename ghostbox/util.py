@@ -35,7 +35,7 @@ def printerr(w, prefix=getErrorPrefix(), color=Fore.GREEN):
         color = Fore.RED
 
     if w.startswith("warning:"):
-        color = fore.YELLOW
+        color = Fore.YELLOW
     
     # prepend all lines with prefix
     ws = w.split("\n")
@@ -226,7 +226,7 @@ def userSetup():
     # try copying some example chars
     chars = "dolphin dolphin-kitten joshu minsk".split(" ")
     copyEntity("char", "chars", chars)
-    templates = "chat-ml".split(" ")
+    templates = "chat-ml alpaca raw mistral user-assistant-newline".split(" ")
     copyEntity("template", "templates", templates)
     
 
