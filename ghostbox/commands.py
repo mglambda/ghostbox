@@ -723,7 +723,35 @@ Send a tokenize request to the server. Will print raw tokens to standard output,
         print(t)
     return ""
     
+def detokenize(prog, argv):
+    """[-n]
+Turn a list of tokens into strings.
+Tokens can be supplied like this /detokenize 23 20001 1
+    If -n is supplied, reads one token per line until an empty line is found."""
+    ts = []
+    if argv != [] and argv[0] == "-n":
+        # one per line
+        argv = []
+        while True:
+            w = input()
+            if w == "":
+                break
+            argv.append(w)
+        
+    for arg in argv:
+        try:
+            t = int(arg)
+        except:
+            return "Please specify tokens as integers, seperated by spaces, or newlines in case you supplied -n."
+        ts .append(t)
 
+    w = prog.backend.detokenize(ts)
+    print(w)
+    return ""
+            
+            
+            
+    
 
 cmds_additional_docs = {
     "/log" : """

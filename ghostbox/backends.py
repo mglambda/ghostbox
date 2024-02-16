@@ -89,9 +89,14 @@ class AIBackend(ABC):
                                       
     @abstractmethod
     def tokenize(self, w):
-        """Takes a string w and returns a list of tokens."""
+        """Takes a string w and returns a list of tokens as ints."""
         pass
 
+    @abstractmethod
+    def detokenize(self, ts):
+        """Takes a list of tokens as ints, and returns a string consisting of the tokens."""
+        pass
+    
     @abstractmethod
     def health(self):
         """Returns a string indicating the status of the backend."""
@@ -147,6 +152,12 @@ class LlamaCPPBackend(AIBackend):
         r = requests.post(self.endpoint + "/tokenize", json={"content" : w})
         if r.status_code == 200:
             return r.json()["tokens"]
+        return []
+
+    def detokenize(self, ts):
+        r = requests.post(self.endpoint + "/detokenize", json={"tokens" : ts})
+        if r.status_code == 200:
+            return r.json()["content"]
         return []
     
     def health(self):

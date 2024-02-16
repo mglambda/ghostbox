@@ -54,6 +54,7 @@ cmds = [
     ("/image", image),
     ("/time", showTime),
     ("/status", showStatus),
+    ("/detokenize", detokenize),
     ("/tokenize", tokenize),
     ("/raw", showRaw),
     ("/debuglast", debuglast),
