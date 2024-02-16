@@ -27,6 +27,9 @@ class Story(object):
         if self.data == []:
             return False
 
+        if n == -1:
+            n = len(self.data) - 1
+        
         if not(n in range(0, len(self.data))):
             return False
         self.pop(n)

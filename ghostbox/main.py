@@ -490,6 +490,9 @@ class Program(object):
 
         # strip color codes - this would be nicer by just disabling color, but the fact of the matter is we sometimes want color printing on console and tts at the same time. At least regex is fast.
         w = stripANSI(w)
+
+        # strip whitespace, we especially don't want to send pure whitespace like ' \n' or '  ' to a tts, this is known to crash some of them. It also shouldn't change the resulting output.
+        w = w.strip()
         
         # this is crazy
         self.tts.stdin.flush()
