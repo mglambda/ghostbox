@@ -548,8 +548,12 @@ class Program(object):
 
         w = prog.session.expandVars(w)
         (w, ai_hint) = prog.adjustForChat(w)
-        
-        return (w, ai_hint)
+        # user may also provide a hint. unclear how to best append it, we put it at the end
+        user_hint = prog.session.expandVars(prog.getOption("hint"))
+        if user_hint and prog.getOption("warn_hint"):
+            printerr("warning: Hint is set. Try /raw to see what you're sending. Use /set hint '' to disable the hint, or /set warn_hint False to suppress this message.")
+            
+        return (w, ai_hint + user_hint)
 
     def getSystemTokenCount(self):
         """Returns the number of tokens in system msg. The value is cached per session. Note that this adds +1 for the BOS token."""
