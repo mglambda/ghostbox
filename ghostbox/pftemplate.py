@@ -32,6 +32,7 @@ Files expected:
     end_user - Contains string that will be appended to user message.
     begin_assistant - Contains string that will be prepended to generated AI message. This may be the same as begin_user, or it may differ.
     end_assistant - Contains string that will be appended to the generated AI message.
+    stop_lines - Contains strings that will cause generation to stop, seperated by newlines
     hint - Contains a special string that is sometimes appended at the end of a user message. It should contain a string that guides the AI's compleetion, e.g. this may just be '<|im_start|>assistant\n' in the case of chat-ml, which will heavily discourage the LLM from speaking for the user. This is only appended when append_hint is True in the body method.
 
 All methods accept additional **kwargs, which contain replacements for double curly braced strings in the story content and system message. Things like '{{char_name}}' etc.
@@ -87,7 +88,7 @@ The quick, brown fox jumps over the lazy hedgehog!<|im_end|><|im_start|>assistan
             hint = ""
         return reduce(build, story.getData(), "") + hint
     def stops(self):
-        return [self.end_assistant]
+        return self.stop_lines.split("\n")
         
     
     def strip(self, w):

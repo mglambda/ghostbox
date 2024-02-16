@@ -1,4 +1,4 @@
-import requests, json, os, io, re, base64, random, sys, threading, subprocess, signal
+import requests, json, os, io, re, base64, random, sys, threading, subprocess, signal, tempfile
 from functools import *
 from colorama import just_fix_windows_console, Fore, Back, Style
 from lazy_object_proxy import Proxy
@@ -195,8 +195,14 @@ class Program(object):
             self.template = RawTemplate()
             self.options["prompt_format"] = 'raw'
             return
+        # actually load template
+        # first unload old stops
+        self.options["stop"] = list(filter(lambda w: w not in self.template.stops(), self.options["stop"]))
+            
         self.template = template
         for w in template.stops():
+            if not(w):
+                continue
             self.appendOption("stop", w)
         self.options["prompt_format"] = name
         printerr("Using '" + name + "' as prompt format template.")
@@ -349,7 +355,7 @@ class Program(object):
         elif name == "max_context_length":
             self._dirtyContextLlama = False
         elif name =="prompt_format":
-            self.loadTemplate(name)
+            self.loadTemplate(value)
         elif name == "chat_user":
             # userpormpt might be in stopwords, which we have to refresh
             prompt = mkChatPrompt(oldValue)
@@ -685,7 +691,20 @@ returns - A string ready to be sent to the backend, including the full conversat
             # llama does not allow to set the context size by clients, instead it dictates it server side. however i have not found a way to query it directly, it just gets set after the first request
             self.setOption("max_context_length", json_result["generation_settings"]["n_ctx"])
             self._dirtyContextLlama = True # context has been set by llama
-    
+
+    def backup(self):
+        """Returns a data structure that can be restored to return to a previous state of the program."""
+# copy strings etc., avoid copying high resource stuff or tricky things, like models and subprocesses
+        return (copy.deepcopy(self.session), copy.deepcopy(self.options))
+
+    def restore(self, backup):
+        (session, options) = backup
+        self.session = session
+        for (k, v) in options.items():
+            self.setOption(k, v)
+            
+
+                
 def main():
     just_fix_windows_console()
     parser = makeArgParser(backends.default_params)
@@ -724,51 +743,70 @@ def main():
     
     skip = False        
     while prog.running:
-        # have to do TTS here for complex reasons; flag means to reinitialize tts, which can happen e.g. due to voice change
-        if prog.tts_flag:
-            prog.tts_flag = False            
-            prog.options["tts"] = False
-            printerr(toggleTTS(prog, []))
+        last_state = prog.backup()
+        try:
+            # have to do TTS here for complex reasons; flag means to reinitialize tts, which can happen e.g. due to voice change
+            if prog.tts_flag:
+                prog.tts_flag = False            
+                prog.options["tts"] = False
+                printerr(toggleTTS(prog, []))
 
-        if prog.initial_print_flag:
-            prog.initial_print_flag = False
-            print("\n\n" + prog.formatStory(), end="")
+            if prog.initial_print_flag:
+                prog.initial_print_flag = False
+                print("\n\n" + prog.formatStory(), end="")
 
-        w = input(prog.showCLIPrompt())
-        # check for multiline
-        if w.endswith("\\") and not(w.endswith("\\\\")):
-            prog.bufferMultilineInput(w)
-            continue
-        elif prog.isMultilineBuffering():
-            w = prog.flushMultilineBuffer() + w
-       
-        # for convenience when chatting
-        if w == "":
-            w = "/cont"
+            w = input(prog.showCLIPrompt())
+            # check for multiline
+            if w.endswith("\\") and not(w.endswith("\\\\")):
+                prog.bufferMultilineInput(w)
+                continue
+            elif prog.isMultilineBuffering():
+                w = prog.flushMultilineBuffer() + w
 
-        # expand session vars, so we can do e.g. /tokenize {{system_msg}}
-        w = prog.session.expandVars(w)
-            
-        for (cmd, f) in cmds:
-            #FIXME: the startswith is dicey because it now makes the order of cmds defined above relevant, i.e. longer commands must be specified before shorter ones. 
-            if w.startswith(cmd):
-                v = f(prog, w.split(" ")[1:])
-                printerr(v)
-                if not(prog.getOption("continue")):
-                    # skip means we don't send a prompt this iteration, which we don't want to do when user issues a command, except for the /continue command
-                    skip = True
-                break #need this to not accidentally execute multiple commands like /tts and /ttsdebug
-        
-        if skip:
-            skip = False
-            continue
+            # for convenience when chatting
+            if w == "":
+                w = "/cont"
 
-        # this is the main event
-        (modified_w, hint) = prog.modifyInput(w)
-        prog.addUserText(modified_w)
-        prog.addAIText(prog.communicate(prog.buildPrompt(hint)))
-        setOption(prog, ["continue", "False"])
+            # expand session vars, so we can do e.g. /tokenize {{system_msg}}
+            w = prog.session.expandVars(w)
 
+            for (cmd, f) in cmds:
+                #FIXME: the startswith is dicey because it now makes the order of cmds defined above relevant, i.e. longer commands must be specified before shorter ones. 
+                if w.startswith(cmd):
+                    v = f(prog, w.split(" ")[1:])
+                    printerr(v)
+                    if not(prog.getOption("continue")):
+                        # skip means we don't send a prompt this iteration, which we don't want to do when user issues a command, except for the /continue command
+                        skip = True
+                    break #need this to not accidentally execute multiple commands like /tts and /ttsdebug
+
+            if skip:
+                skip = False
+                continue
+
+            # this is the main event
+            (modified_w, hint) = prog.modifyInput(w)
+            prog.addUserText(modified_w)
+            prog.addAIText(prog.communicate(prog.buildPrompt(hint)))
+            setOption(prog, ["continue", "False"])
+        except:
+            printerr("error: Caught unhandled exception in main()")
+            printerr(traceback.format_exc())
+            try:
+                prog.restore(last_state)
+            except:
+                printerr("error: While trying to recover from an exception, another exception was encountered. This is very bad.")
+                printerr(traceback.format_exc())
+                printerr(saveStoryFolder(prog, []))
+                sys.exit()
+            printerr("Restored previous state.")
+                      
+                
+
+                
+                
+
+                
 
 if __name__ == "__main__":
     main()
