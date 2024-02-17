@@ -314,3 +314,7 @@ ansi_escape = re.compile(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')
 def stripANSI(w):
     return ansi_escape.sub('', w)
     
+
+
+def getLayersFile():
+    return appdirs.user_config_dir() + "/llm_layers"
