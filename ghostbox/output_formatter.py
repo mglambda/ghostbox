@@ -107,15 +107,28 @@ class NicknameRemover(OutputFormatter):
 class IncompleteSentenceCleaner(OutputFormatter):
     """Removes incomplete sentences at the end of text."""
 
-    def __init__(self,     stopchars = '! . ? :'.split(" ")):
+    def __init__(self,     stopchars = '! . ? ;'.split(" ")):
         self.stopchars = stopchars
         
     def format(self, w):
         if w == "":
             return w
 
+
+        exclusions = []
+        # exclude stuff like '1.', '2.' etc
+        exclusions += list(re.finditer(r"\d\.", w))
+
+        skip = False
         stopchars = self.stopchars
         for i in range(len(w)-1, -1, -1):
+            for match in exclusions:
+                if i > match.start() and i < match.end():
+                    skip = True
+
+            if skip:
+                skip = False
+                continue
             if w[i] in stopchars:
                 break
 

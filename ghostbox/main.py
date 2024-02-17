@@ -405,12 +405,15 @@ class Program(object):
         if method == "token":
             self.print(self.getAIColorFormatter().format(token), end="", flush=True)
         elif method == "sentence":
-            self.stream_sentence_queue.append(token)            
-            w = IncompleteSentenceCleaner().format("".join(self.stream_sentence_queue))
-            if w.strip() == "":
-                # not a complete sentence yet, let's keep building it
-                return
-            # w is a complete sentence
+            self.stream_sentence_queue.append(token)
+            if "\n" in token:
+                w = "".join(self.stream_sentence_queue)
+            else:
+                w = IncompleteSentenceCleaner().format("".join(self.stream_sentence_queue))
+                if w.strip() == "":
+                    # not a complete sentence yet, let's keep building it
+                    return
+            # w is a complete sentence, or a full line
             self.stream_sentence_queue = []
             self.print(self.getAIColorFormatter().format(w), end="", flush=True)
 
