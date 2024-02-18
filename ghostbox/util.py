@@ -323,3 +323,8 @@ def loadLayersFile():
     """Returns a list of dictionaries, one for each row in the layers file."""
     f = open(getLayersFile(), "r")
     return list(csv.DictReader(filter(lambda row: row[0] != "#", f), delimiter="\t"))
+
+
+def envFromDict(d):
+    """Returns a kstandard shell environment with variables added from the provided dictionary d."""
+    return os.environ | {k : str(v) for (k, v) in d.items()}

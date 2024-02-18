@@ -1,4 +1,5 @@
-import requests, json, os, io, re, base64, random, sys, threading, subprocess, signal, tempfile
+import requests, json, os, io, re, base64, random, sys, threading, signal, tempfile
+import feedwater
 from functools import *
 from colorama import just_fix_windows_console, Fore, Back, Style
 from lazy_object_proxy import Proxy
@@ -488,38 +489,15 @@ class Program(object):
         candidate = os.getcwd() + "/" + tts_program
         if os.path.isfile(candidate):
             tts_program = candidate
-            
-        voice_dir = self.getOption("tts_voice_dir")
-        voicefile = self.getOption("tts_voice")
         
         if not(tts_program):
             return "Cannot initialize TTS: No TTS program set."
 
-        voice_args = [""]
-        if voicefile:
-            file = voice_dir + "/" + voicefile
-            if os.path.isfile(file):
-                voice_args = ["-V", file]
-            else:
-                #FIXME: this crashes if the file doesn't exist. maybe that's ok
-                voice_args = ["-V", voicefile]
-
-
         if self.tts is not None:
-            # since shell=true spawns child processes that may still be running , we have to terminate by sending kill signal to entire process group
-            # FIXME: this doesn't work on windows
-            os.killpg(os.getpgid(self.tts.pid), signal.SIGTERM)
+            # restarting
+            self.tts.close()
 
-                    
-        cmd = [tts_program] + voice_args + ["--volume=" + str(self.getOption("tts_volume"))]
-        cmdstring = " ".join(cmd)
-        self.tts = subprocess.Popen(cmdstring,
-                                    text=True,
-                                    stdin=subprocess.PIPE,
-                                    shell=True,
-                                    preexec_fn=os.setsid,
-                                    stdout=subprocess.PIPE,
-                                    stderr=subprocess.PIPE)
+        self.tts = feedwater.run(tts_program, env=envFromDict(self.options))
         return ""
 
     def communicateTTS(self, w):
@@ -531,15 +509,11 @@ class Program(object):
 
         # strip whitespace, we especially don't want to send pure whitespace like ' \n' or '  ' to a tts, this is known to crash some of them. It also shouldn't change the resulting output.
         w = w.strip()
-        
-        # this is crazy
-        self.tts.stdin.flush()
-        self.tts.stdout.flush()
-        self.tts.stderr.flush()        
-        self.tts.stdin.write(w + "\n")
-        self.tts.stdin.flush()
-        self.tts.stdout.flush()
-        self.tts.stderr.flush()
+        if not(self.tts.is_running()):
+            self.setOption("tts", False)
+            printerr("error: TTS is dead. You may attempt to restart with /tts. Check errors with /debugtts .")
+            return ""
+        self.tts.write_line(w)
         return w
 
     def print(self, w, end="\n", flush=False, color="", style=""):
