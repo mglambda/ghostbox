@@ -1,0 +1,3 @@
+#!/bin/bash
+
+spd-say -y $tts_voice -r $tts_rate -i $tts_volume -e -N 'ghostbox' -n "ghostbox" $tts_additional_arguments
