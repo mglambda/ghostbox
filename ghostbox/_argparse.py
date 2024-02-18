@@ -7,7 +7,7 @@ def makeArgParser(default_params):
     parser = argparse.ArgumentParser(description="ghostbox - koboldcpp Command Line Interface", formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument("-I", '--include', action="append", default=[userCharDir(), "chars/"], help="Include paths that will be searched for character folders named with the /start command or the --character_folder command line argument.")
     parser.add_argument('--template_include', action="append", default=[userTemplateDir(), "templates/"], help="Include paths that will be searched for prompt templates. You can specify a template to use with the -T option.")
-    parser.add_argument("-T", '--prompt_format', type=str, default="chat-ml", help="Prompt format template to use. The default is chat-ml.")
+    parser.add_argument("-T", '--prompt_format', type=str, default="guess", help="Prompt format template to use. The default is 'guess', which means ghostbox will try to determine the format through various heuristics. Often, this will result in 'chat-ml'.")
     #parser.add_argument('--stop', action="append", default=[], help="Forbidden strings that will stop the LLM backend generation.")
     parser.add_argument("-c", '--character_folder', type=str, default="", help="character folder to load at startup. The folder may contain templates, as well as arbitrary text files that may be injected in the templates. See the examples for more. Path is attempted to be resolved relative to the include paths, if any are provided.")    
     parser.add_argument("--endpoint", type=str, default="http://localhost:8080", help="Address of koboldcpp http endpoint.")

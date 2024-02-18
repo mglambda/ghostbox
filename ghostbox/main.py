@@ -177,7 +177,41 @@ class Program(object):
             self.setOption("grammar", "")
             printerr("warning: grammar file " + grammar_file + " could not be loaded: file not found.")
 
+    def guessPromptFormat(self):
+        """Uses any trick it can do guess the prompt format template. Returns a string like 'chat-ml', 'alpaca', etc."""
+        # see if we can find llm_layers
+        try:
+            data = loadLayersFile()
+        except:
+            printerr("warning: Couldn't load layers file " + getLayersFile())
+
+        try:
+            models =         dirtyGetJSON(self.getOption("endpoint") + "/v1/models").get("data", [])
+            # hope it's just one
+            model = os.path.basename(models[0]["id"])
+        except:
+            printerr(traceback.format_exc())
+            printerr("Failed to guess prompt format. Defaulting.")
+            return "raw"
+        
+        # check if model is in layers file
+        for d in data:
+            if "name" not in d.keys():
+                continue
+            if d["name"].lower() == model.lower():
+                if d["prompt_format"]:
+                    # success
+                    return d["prompt_format"]
+
+        #FIXME: at this point it's not in the layers file, but we still have a model name. consider googling it on hugginface and grepping the html
+        printerr("Failed to guess prompt format after exhausting all options 😦. Defaulting.")
+        return "raw"
+        
     def loadTemplate(self, name):
+        # special case
+        if name == "guess":
+            name = self.guessPromptFormat()
+            
         allpaths = [p + "/" + name for p in self.getOption("template_include")]
         for path in allpaths:
             path = os.path.normpath(path)
@@ -821,3 +855,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
