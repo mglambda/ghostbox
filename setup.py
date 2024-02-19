@@ -18,8 +18,8 @@ setup(
     long_description=README,
     long_description_content_type="text/markdown",
     license_files=["LICENSE"],
-    scripts=["scripts/ghostbox", "scripts/ghostbox-tts-polly", "scripts/ghostbox-aws-client", "scripts/ghostbox-install", "scripts/ghostbox-tts-spd-say"],
+    scripts=["scripts/ghostbox", "scripts/ghostbox-tts-polly", "scripts/ghostbox-aws-client", "scripts/ghostbox-install", "scripts/ghostbox-tts-spd-say", "scripts/ghostbox-tortoise-loop", "scripts/ghostbox-tts-tortoise"],
     packages=find_packages(include=['ghostbox']),
-    install_requires=["requests","requests_html","boto3", "appdirs", "lazy-object-proxy", "pygame", "openai-whisper", "pyaudio", "pydub", "colorama", "automodinit", "feedwater"] 
+    install_requires=["requests","requests_html","boto3", "appdirs", "lazy-object-proxy", "pygame", "openai-whisper", "pyaudio", "pydub", "colorama", "automodinit", "feedwater", "tortoise-tts", "deepspeed"] 
 )
 

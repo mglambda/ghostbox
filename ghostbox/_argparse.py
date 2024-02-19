@@ -32,6 +32,7 @@ def makeArgParser(default_params):
     parser.add_argument("--tts", action=argparse.BooleanOptionalAction, default=False, help="Enable text to speech on generated text.")
     parser.add_argument("--tts_program", type=str, default="ghostbox-tts-polly", help="Path to a TTS (Text-to-speech) program to verbalize generated text. The TTS program should read lines from standard input.")
     parser.add_argument("--tts_voice_dir", type=str, default=os.getcwd() + "/voices/", help="Directory to check first for voice file.")
+    parser.add_argument("--tts_tortoise_quality", type=str, default="fast", help="Quality preset. tortoise-tts only. Can be 'ultra_fast', 'fast' (default), 'standard', or 'high_quality'")
     parser.add_argument("--tts_volume", type=float, default=1.0, help="Volume for TTS voice program. Is passed to tts_program as environment variable.")
     parser.add_argument("--tts_rate", type=int, default=50, help="Speaking rate for TTS voice program. Is passed to tts_program as environment variable. Note that speaking rate is not supported by all TTS engines.")
     parser.add_argument("--tts_additional_arguments", type=str, default="", help="Additional command line arguments that will be passed to the tts_program.")

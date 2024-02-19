@@ -1,0 +1,30 @@
+#!/bin/bash
+
+# Tortoise is weirdly quiet by default. So we boost the user's volume choice by a little, just to get it in a similar range with other tts, as we don't want to set different volume for each individual tts.
+# FIXME: Reminding myself of two things:
+# 1. Tortoise has no native volume control. Like, at all (I grepped the source). Remember that we are boosting volume by multiplying the numpy array of wav data directly inside of the streaming loop. This could come with issues.
+# 2. Because of (1) we need to precalculate the additional boost right here, where it is only applied once at startup, and whenever the user restarts TTS, which happens on crashes, voice changes, or when tts_volume is changed.
+
+if [ "$tts_volume" ]
+then
+    tortoise_volume=$( echo "print(str(1.5 * ${tts_volume}))" | python )
+else
+ 	tortoise_volume=1.5
+fi
+
+if [ -n "$tts_voice" ]
+then
+	tortoise_voice="$tts_voice"
+else
+	tortoise_voice="random"
+fi
+
+if [ -n "$tts_tortoise_quality" ]
+then
+	tortoise_quality="$tts_tortoise_quality"
+else
+	tortoise_quality="fast"
+fi
+
+echo "ghostbox-tortoise-loop --voice $tortoise_voice --volume $tortoise_volume --use_deepspeed=1 --preset $tortoise_quality --half=1 $tts_additional_arguments"
+ghostbox-tortoise-loop --voice $tortoise_voice --volume $tortoise_volume --use_deepspeed=1 --preset $tortoise_quality --half=1 $tts_additional_arguments

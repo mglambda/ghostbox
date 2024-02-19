@@ -312,7 +312,7 @@ class Program(object):
     def optionDiffers(self, name, newValue):
         if name not in self.options:
             return True
-        return self.getOption(name) == newValue
+        return self.getOption(name) != newValue
 
     def getFormatters(self):
         mode = self.getOption("mode")
@@ -381,6 +381,7 @@ class Program(object):
         if (name == "tts_voice" or name == "tts_volume") and self.getOption("tts"):
             # we don't want to restart tts on /restart
             if differs:
+                printerr("Restarting TTS.")
                 self.tts_flag = True #restart TTS
         elif name == "no-tts":
             self.setOption("tts", not(value))
@@ -511,7 +512,7 @@ class Program(object):
         w = w.strip()
         if not(self.tts.is_running()):
             self.setOption("tts", False)
-            printerr("error: TTS is dead. You may attempt to restart with /tts. Check errors with /debugtts .")
+            printerr("error: TTS is dead. You may attempt to restart with /tts. Check errors with /ttsdebug .")
             return ""
         self.tts.write_line(w)
         return w
