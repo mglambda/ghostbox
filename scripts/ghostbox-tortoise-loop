@@ -1,4 +1,8 @@
 #!/usr/bin/env python
+# This file was heavily adapted from tortoise/tts_stream.py in the tortoise-tts repo.
+# You can find it, and its apache v2 license here:
+# https://github.com/neonbjb/tortoise-tts
+# Thanks to James Betker for an excellent tts engine!
 import argparse
 import os, sys
 from time import time
@@ -38,6 +42,7 @@ if __name__ == '__main__':
     parser.add_argument('--kv_cache', type=bool, help='If you disable this please wait for a long a time to get the output', default=True)
     parser.add_argument('--half', type=bool, help="float16(half) precision inference if True it's faster and take less vram and ram", default=True)
     parser.add_argument('--volume', type=float, default=1.0, help="Volume multiplier. A value of 1.2 would increase volume by 20%. Values over 2.0 may yield clipping or garbled audio.")
+    parser.add_argument('--extra_voice_dir', type=str, default="", help="Directory with voices that will be loaded, in addition to the builtin voices.")
 
     args = parser.parse_args()
     if torch.backends.mps.is_available():
@@ -86,7 +91,7 @@ if __name__ == '__main__':
             else:
                 voice_sel = [selected_voice]
 
-            voice_samples, conditioning_latents = load_voices(voice_sel)
+            voice_samples, conditioning_latents = load_voices(voice_sel, extra_voice_dirs=list(filter(bool, [args.extra_voice_dir])))
             all_parts = []
             for j, text in enumerate(texts):
                 if regenerate is not None and j not in regenerate:

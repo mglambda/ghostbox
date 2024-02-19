@@ -26,5 +26,12 @@ else
 	tortoise_quality="fast"
 fi
 
-echo "ghostbox-tortoise-loop --voice $tortoise_voice --volume $tortoise_volume --use_deepspeed=1 --preset $tortoise_quality --half=1 $tts_additional_arguments"
-ghostbox-tortoise-loop --voice $tortoise_voice --volume $tortoise_volume --use_deepspeed=1 --preset $tortoise_quality --half=1 $tts_additional_arguments
+if [ -n "$tts_voice_dir" ]
+then
+	tortoise_extra_voice_args="--extra_voice_dir $tts_voice_dir"	
+else
+	tortoise_extra_voice_args=""
+fi
+
+echo "ghostbox-tortoise-loop --voice $tortoise_voice --volume $tortoise_volume --use_deepspeed=1 --preset $tortoise_quality --half=1 $tortoise_extra_voice_args $tts_additional_arguments"
+ghostbox-tortoise-loop --voice $tortoise_voice --volume $tortoise_volume --use_deepspeed=1 --preset $tortoise_quality --half=1 $tortoise_extra_voice_args $tts_additional_arguments
