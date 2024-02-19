@@ -378,7 +378,7 @@ class Program(object):
         differs = self.optionDiffers(name, value)
         self.options[name] = value
         # for some options we do extra stuff
-        if (name == "tts_voice" or name == "tts_volume") and self.getOption("tts"):
+        if (name == "tts_voice" or name == "tts_volume" or name == "tts_tortoise_quality") and self.getOption("tts"):
             # we don't want to restart tts on /restart
             if differs:
                 printerr("Restarting TTS.")
@@ -494,6 +494,12 @@ class Program(object):
         if not(tts_program):
             return "Cannot initialize TTS: No TTS program set."
 
+        # pick a voice in case of random
+        if self.getOption("tts_voice") == "random":
+            # no setOption to avoid recursion
+            self.options["tts_voice"] = random.choice(getVoices(self))
+            printerr("Voice '" + self.getOption("tts_voice") + "' was chosen randomly.")
+            
         if self.tts is not None:
             # restarting
             self.tts.close()

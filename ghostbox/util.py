@@ -339,7 +339,7 @@ def getVoices(prog):
         for voice in pollyvoices:
             vs.append(voice)
     elif prog.getOption("tts_program") == "ghostbox-tts-tortoise":
-        vs = tortoise.utils.audio.get_voices(extra_voice_dirs=list(filter(bool, [prog.getOption("tts_voice_dir")])))
+        vs = list(tortoise.utils.audio.get_voices(extra_voice_dirs=list(filter(bool, [prog.getOption("tts_voice_dir")]))))
     else:
         for file in glob.glob(prog.getOption("tts_voice_dir") + "/*"):
             if os.path.isfile(file):
