@@ -192,20 +192,11 @@ To see the places searched, check the value of the template_include option."""
 
 def showVoices(prog, argv):
     """
-    List all available voices for the TTS program. These can be used with /set tts_voice.
-    To see the places searched for voices, see the value of tts_voice_dir.
-    Depending on the value of tts_program, that location may be meaningless, as the voice won't be file based, like with amazon polly voices. In this case /lsvoices tries to give a helpful answer if it can."""
-    pollyvoices = "Lotte, Maxim, Ayanda, Salli, Ola, Arthur, Ida, Tomoko, Remi, Geraint, Miguel, Elin, Lisa, Giorgio, Marlene, Ines, Kajal, Zhiyu, Zeina, Suvi, Karl, Gwyneth, Joanna, Lucia, Cristiano, Astrid, Andres, Vicki, Mia, Vitoria, Bianca, Chantal, Raveena, Daniel, Amy, Liam, Ruth, Kevin, Brian, Russell, Aria, Matthew, Aditi, Zayd, Dora, Enrique, Hans, Danielle, Hiujin, Carmen, Sofie, Gregory, Ivy, Ewa, Maja, Gabrielle, Nicole, Filiz, Camila, Jacek, Thiago, Justin, Celine, Kazuha, Kendra, Arlet, Ricardo, Mads, Hannah, Mathieu, Lea, Sergio, Hala, Tatyana, Penelope, Naja, Olivia, Ruben, Laura, Takumi, Mizuki, Carla, Conchita, Jan, Kimberly, Liv, Adriano, Lupe, Joey, Pedro, Seoyeon, Emma, Niamh, Stephen".split(", ")
-    w = ""
-    if prog.getOption("tts_program") == "ghostbox-tts-polly":
-        for voice in pollyvoices:
-            w += voice + "\n"
-    else:
-        for file in glob.glob(prog.getOption("tts_voice_dir") + "/*"):
-            if os.path.isfile(file):
-                w += os.path.split(file)[1] + "\n"
-                
-    return w
+List all available voices for the TTS program. These can be used with /set tts_voice.
+To see the places searched for voices, see the value of tts_voice_dir.
+Depending on the value of tts_program, that location may be meaningless, as the voice won't be file based, like with amazon polly voices. In this case /lsvoices tries to give a helpful answer if it can."""
+    return "\n".join(getVoices(prog))
+
         
 
 def toggleMode(prog, argv):

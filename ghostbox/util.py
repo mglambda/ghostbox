@@ -1,4 +1,5 @@
 import os, getpass, shutil, base64, requests, re, csv
+import tortoise.utils.audio
 from colorama import Fore, Back, Style
 import appdirs
 import sys
@@ -328,3 +329,19 @@ def loadLayersFile():
 def envFromDict(d):
     """Returns a kstandard shell environment with variables added from the provided dictionary d."""
     return os.environ | {k : str(v) for (k, v) in d.items()}
+
+
+def getVoices(prog):
+    """Returns a list of strings with voice names for a given Program object."""
+    pollyvoices = "Lotte, Maxim, Ayanda, Salli, Ola, Arthur, Ida, Tomoko, Remi, Geraint, Miguel, Elin, Lisa, Giorgio, Marlene, Ines, Kajal, Zhiyu, Zeina, Suvi, Karl, Gwyneth, Joanna, Lucia, Cristiano, Astrid, Andres, Vicki, Mia, Vitoria, Bianca, Chantal, Raveena, Daniel, Amy, Liam, Ruth, Kevin, Brian, Russell, Aria, Matthew, Aditi, Zayd, Dora, Enrique, Hans, Danielle, Hiujin, Carmen, Sofie, Gregory, Ivy, Ewa, Maja, Gabrielle, Nicole, Filiz, Camila, Jacek, Thiago, Justin, Celine, Kazuha, Kendra, Arlet, Ricardo, Mads, Hannah, Mathieu, Lea, Sergio, Hala, Tatyana, Penelope, Naja, Olivia, Ruben, Laura, Takumi, Mizuki, Carla, Conchita, Jan, Kimberly, Liv, Adriano, Lupe, Joey, Pedro, Seoyeon, Emma, Niamh, Stephen".split(", ")
+    vs = []
+    if prog.getOption("tts_program") == "ghostbox-tts-polly":
+        for voice in pollyvoices:
+            vs.append(voice)
+    elif prog.getOption("tts_program") == "ghostbox-tts-tortoise":
+        vs = tortoise.utils.audio.get_voices(extra_voice_dirs=list(filter(bool, [prog.getOption("tts_voice_dir")])))
+    else:
+        for file in glob.glob(prog.getOption("tts_voice_dir") + "/*"):
+            if os.path.isfile(file):
+                vs.append(os.path.split(file)[1])
+    return vs
