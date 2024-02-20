@@ -1,0 +1,22 @@
+#!/usr/bin/env python
+# This program will print out the available, usable vram on a machine in megabytes.
+# Note that 'usable' currently means from nvidia GPUs. Sorry.
+import torch
+
+def main():
+    has_cuda = torch.cuda.is_available()
+    if not(has_cuda):
+        print("0")
+        return
+    n = torch.cuda.device_count()
+    vram = 0
+    for i in range(0, n):
+        vram += torch.cuda.get_device_properties(i).total_memory / 1e6
+
+    print(str(round(vram)))
+    
+
+
+if __name__ == "__main__":
+    main()
+    
