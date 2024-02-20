@@ -14,6 +14,8 @@ def main():
     parser.add_argument("-x","--llama_executable", type=str, default="", help="Path to a llama.cpp executable. Server or main usually work. You can adjust this later with the LLM_SERVER environment variable.")
     parser.add_argument("--additional_arguments", type=str, default="--parallel 1 --mlock --no-mmap >/dev/null 2>/dev/null &", help="Any additional arguments that will be passed onto the server executable.")
     args = parser.parse_args()
+    args.layers_file = os.path.expanduser(args.layers_file)
+    
     if args.llama_executable == "":
         printerr("warning: No executable provided. You will either have to set LLM_SERVER in the environment or regenerate the scripts with --llama_executable set. Otherwise the scripts won't work.")
         
@@ -89,7 +91,7 @@ def doLayersFile(layersfile, models, args, cmd=""):
                 # don't override anything
                 continue
             # assign defaults
-            model["layers"] = args.layers
+            model["gpu_layers"] = args.layers
             model["context"] = args.context
             newData.append(model)
 
@@ -121,15 +123,15 @@ def getGGUFFiles(mdir, extensions=["gguf"]):
     for file in files:
         if os.path.basename(file).lower() == "readme.md":
             prompt_format = guessPromptFormat(open(file, "r").read())
+            # FIXME: new, we also want to figure out model type. No idea how yet.
+        model_type = "default"
             
 
-            
-        
     # now go through the remaining ones
     for file in files:
         if os.path.isfile(file):
             if file.lower().endswith(".gguf") and not(file in seen):
-                d = { "file" : file, "mmproj" : mmproj, "prompt_format" : prompt_format}
+                d = { "file" : file, "mmproj" : mmproj, "prompt_format" : prompt_format, "type" : model_type}
                 seen.add(file)
                 models.append(d)
         else:
@@ -143,7 +145,7 @@ def getGGUFFiles(mdir, extensions=["gguf"]):
 def writeLayersConfig(layerfile, data, cmd=""):
     header = "# Generated on " + datetime.datetime.now().strftime("%Y-%m-%d-%H:%M:%S") + " with\n# " + cmd + "\n# Listed values are what will be used for a particular model by the backend, not the maximum model capability. Regenrating this file will keep existing settings, though your comments will be lost"
     header += "\n"
-    fields = "name layers context prompt_format".split(" ")
+    fields = "name gpu_layers context prompt_format type".split(" ")
     # csv is such a joy, it will throw if the dict has more keys than defined fields
     goodData = []
     for d in data:

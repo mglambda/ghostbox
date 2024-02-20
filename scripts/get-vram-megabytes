@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 # This program will print out the available, usable vram on a machine in megabytes.
 # Note that 'usable' currently means from nvidia GPUs. Sorry.
+# FIXME: investigate pyADL package to get AMD card vram. This is unfortunately difficult because the package won't even import without a card and its drivers
 import torch
 
 def main():
