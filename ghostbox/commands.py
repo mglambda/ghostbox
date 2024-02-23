@@ -1,4 +1,4 @@
-import os, datetime, glob, sys, requests, traceback
+import os, datetime, glob, sys, requests, traceback, random
 from ghostbox.session import Session
 from ghostbox.util import *
 from ghostbox.StoryFolder import *
@@ -728,7 +728,27 @@ Tokens can be supplied like this /detokenize 23 20001 1
             
             
             
-    
+def testQuestion(prog, argv):
+    """
+Send a random test question to the backend.
+The question is pulled from a random set of example questions. These are sometimes funny, but also turn out to be quite useful to get a general sense of a model."""
+
+    questions ="""I have 8 eggs, 4 water bottles, and 1 laptop. Suggest to me a configuration of these objects with which to balance them on top of another.
+How much does 1 kilogram of feathers weigh?
+I have 3 apples. I give 2 to timmy. How many apples do I have?
+Me and my friends have a rule: "If you borrow a sweater, then you have to return it." Last month I got Jane's sweater. I did not return it. What do I have to do now?
+You’re in a desert walking along in the sand when all of the sudden you look down, and you see a tortoise, it’s crawling toward you. You reach down, you flip the tortoise over on its back. The tortoise lays on its back, its belly baking in the hot sun, beating its legs trying to turn itself over, but it can’t, not without your help. But you’re not helping. Why is that?
+Describe in single words, only the good things that come into your mind about your mother.
+In a magazine you come across a full-page color picture of a nude girl. Your husband likes the picture. The girl is lying facedown on a large and beautiful bearskin rug. Your husband hangs the picture up on the wall of his study. How do you feel?
+A young boy shows you his butterfly collection, including the killing jar. How do you feel?
+You’re reading a novel written in the old days before the war. The characters are visiting Fisherman’s Wharf in San Francisco. They become hungry and enter a seafood restaurant. One of them orders lobster, and the chef drops the lobster into the tub of boiling water while the characters watch. What do you think about this?
+You are watching an old movie on TV, a movie from before the war. It shows a banquet in progress; the guests are enjoying raw oysters. The entrée consists of boiled dog, stuffed with rice. Are raw oysters more acceptable to you than a dish of boiled dog?""".split("\n")
+
+    w = random.choice(questions)
+    # no prefix
+    print(w)
+    prog.continueWith(w)
+    return ""
 
 cmds_additional_docs = {
     "/log" : """

@@ -126,7 +126,7 @@ class LlamaCPPBackend(AIBackend):
 
     def handleGenerateResult(self, result):
         if result.status_code != 200:
-            self.last_error = "HTTP request with status code " + str(r.status_code)
+            self.last_error = "HTTP request with status code " + str(result.status_code)
             return None
         self._lastResult = result.json()
         return result.json()['content']

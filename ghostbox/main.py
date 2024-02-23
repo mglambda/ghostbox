@@ -37,6 +37,7 @@ cmds = [
     ("/start", newSession),
     ("/switch", switch),
     ("/quit", exitProgram),
+    ("/test", testQuestion), 
     ("/restart", lambda prog, argv: newSession(prog, [])),
     ("/print", printStory) ,
     ("/next", nextStory),
@@ -401,7 +402,14 @@ class Program(object):
 
             # and this will add the new username if it's chat mode
             self.setMode(self.getMode())
-
+        elif name == "stop":
+            # user may change this in a char config.json. This may be buggy, but let's make sure at least the template is in.
+            if self.template:
+                self.options[name] = self.template.stops()
+            else:
+                self.options[name] = []
+            self.options[name] += value
+            
         return ""
 
     def _ctPauseHandler(self, sig, frame):
@@ -502,7 +510,11 @@ class Program(object):
             
         if self.tts is not None:
             # restarting
-            self.tts.close()
+            try:
+                if not(self.tts.is_running()):
+                    self.tts.close()
+            except ProcessLookupError:
+                printerr("warning: TTS process got lost somehow. Probably not a big deal.")
 
         self.tts = feedwater.run(tts_program, env=envFromDict(self.options))
         return ""
@@ -649,6 +661,10 @@ returns - A string ready to be sent to the backend, including the full conversat
             #shit the bed
             return self.showSystem() + w
 
+        if not(self.getOption("smart_context")):
+            # currently we just dump FIXME: make this version keep the system prompt at least
+            return self.showSystem() + w
+                    
         # now we need a smart story history that fits into budget
         sf = self.session.stories.copyFolder(only_active=True)
         while len(backend.tokenize(self.showStory(story_folder=sf) + hint)) > budget and not(sf.empty()):
