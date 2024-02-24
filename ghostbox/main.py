@@ -802,6 +802,7 @@ def main():
                 print("\n\n" + prog.formatStory(), end="")
 
             w = input(prog.showCLIPrompt())
+
             # check for multiline
             # this works different wether we have multiline mode enabled, or are doing ad-hoc multilines
             if prog.getOption("multiline"):
@@ -810,7 +811,8 @@ def main():
                     prog.bufferMultilineInput(w)
                     continue
                 else:
-                    w = prog.flushMultilineBuffer()
+                    # :-1 for trailing newline
+                    w = prog.flushMultilineBuffer()[:-1]
             else:
                 # ad hoc multilines
                 if w.endswith("\\") and not(w.endswith("\\\\")):

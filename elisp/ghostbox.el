@@ -1,13 +1,12 @@
 ;; -*- lexical-binding: t -*-
-
 (defvar ghostbox-file-path "/home/marius/prog/ai/ghostbox/scripts/ghostbox"
   "Path to the program used by `run-ghostbox'")
 
 (defvar ghostbox--multiline-delimiter "<*>GHOSTBOX_END<*>")
 (defvar ghostbox--multiline-delimiter-newlines (concat "\n" ghostbox--multiline-delimiter "\n"))
 
-(defvar ghostbox-arguments `(
-							 ,(concat "--multiline_delimiter='" ghostbox--multiline-delimiter "'"))
+(defvar ghostbox-arguments `(,"--multiline"
+							 ,(concat "--multiline_delimiter=" ghostbox--multiline-delimiter ""))
   "Commandline arguments to pass to `ghostbox'.")
 
 (defvar ghostbox-mode-map
@@ -64,11 +63,8 @@
 (add-hook 'ghostbox-mode-hook 'ghostbox--initialize)
 
 (defconst ghostbox-keywords
-  '("assume" "connect" "consistencylevel" "count" "create column family"
-    "create keyspace" "del" "decr" "describe cluster" "describe"
-    "drop column family" "drop keyspace" "drop index" "get" "incr" "list"
-    "set" "show api version" "show cluster name" "show keyspaces"
-    "show schema" "truncate" "update column family" "update keyspace" "use")
+  '("/help", "/start", "/switch", "/quit", "/test", "/restart", "/print", "/next", "/prev", "/story", "/retry", "/rephrase", "/drop", "/new", "/clone", "/log", "!", "/transcribe", "/audio", "/image_watch", "/image", "/time", "/status", "/detokenize", "/tokenize", "/raw", "/debuglast", "/ttsdebug", "/tts", "/set", "/unset", "/template", "/saveoptions", "/saveconfig", "/loadconfig", "/save", "/load", "/varfile", "/lstemplates", "/lsoptions", "/lschars", "/lsvoices", "/lsvars", "/mode", "/hide", "/cont", "/continue"
+"include", "template_include", "prompt_format", "character_folder", "endpoint", "backend", "max_length", "max_context_length", "chat_user", "mode", "grammar_file", "chat_ai", "stream", "multiline", "multiline_delimiter", "color", "text_ai_color", "text_ai_style", "warn_trailing_space", "warn_hint", "json", "stream_flush", "cli_prompt", "cli_prompt_color", "hint", "tts", "tts_program", "tts_voice_dir", "tts_tortoise_quality", "tts_volume", "tts_rate", "tts_additional_arguments", "image_watch", "image_watch_dir", "image_watch_msg", "image_watch_hint", "whisper_model", "tts_voice", "tts_subtitles", "config_file", "chat_show_ai_prompt", "smart_context", "hide", "audio_silence_threshold", "audio_show_transcript", "expand_user_input", "var_file", "repeat_penalty", "repeat_last_n", "penalize_nl", "presence_penalty", "frequency_penalty", "mirostat", "mirostat_tau", "temperature", "top_p", "top_k", "min_p", "typical_p", "tfs_z", "n_keep", "stop", "tfz", "seed", "ignore_eos", "logit_bias", "n_probs", "slot_id", "prompt", "grammar", "image_data", "n_predict", "cache_prompt", "user_config")
   "List of keywords to highlight in `ghostbox-font-lock-keywords'.")
 
 (defvar ghostbox-font-lock-keywords
@@ -76,7 +72,6 @@
    ;; highlight all the reserved commands.
    `(,(concat "\\_<" (regexp-opt ghostbox-keywords) "\\_>") . font-lock-keyword-face))
   "Additional expressions to highlight in `ghostbox-mode'.")
-
 
 ;; Just listing some comint hooks to help myself
 ;; taken from https://www.masteringemacs.org/article/comint-writing-command-interpreter
@@ -97,39 +92,57 @@
 ;; Another useful variable is comint-input-sender, which lets you alter the input string mid-stream. Annoyingly its name is inconsistent with the filter functions above.
 
 
-(provide 'ghostbox)
 
 
 
+
+
+;; what does this function do?
 (defun ghostbox-send-region (begin end)
   "Send contents of region to ghostbox for completion."
   (interactive "r")
-  (process-send-region ghostbox-buffer-name begin end))
+  (comint-send-string ghostbox-buffer-name
+					  (concat (buffer-substring begin end)
+							  ghostbox--multiline-delimiter-newlines)))
+
+
 
 (defun ghostbox-send-raw (w)
 "Send a string to the ghostbox process, without formatting or delimiter.\nSince this function does not append the multiline_delimiter, but ghostbox is run in multiline mode from emacs by default, sending the string may not trigger ghostbox to send a request to the backend. You can still use this to slowly build a longer input to ghostbox, or send complex command etc. When you are done, simply send ghostbox--multiline-delimiter-newlines ."
   (interactive "MMessage")
-  (process-send-string ghostbox-buffer-name w))
+  (comint-send-string ghostbox-buffer-name w))
 
 (defun ghostbox-send-string (w)
   "Send a string to the ghostbox process. Automatically appends newline."
   (interactive "MMessage")
-  (process-send-string ghostbox-buffer-name (concat w ghostbox--multiline-delimiter-newlines)))
+  (comint-send-string ghostbox-buffer-name (concat w ghostbox--multiline-delimiter-newlines)))
   
 (defun ghostbox-send-buffer (buffer)
   "Send contents of a buffer to ghostbox."
   (interactive "bBuffer:")
   (with-current-buffer buffer
-	(process-send-string ghostbox-buffer-name
+	(comint-send-string ghostbox-buffer-name
 						 (concat (buffer-string) ghostbox--multiline-delimiter-newlines))))
 
 (defun ghostbox-send-current-buffer ()
   "Sends contents of the current buffer to ghostbox."
   (interactive)
-  (process-send-string ghostbox-buffer-name
+  (comint-send-string ghostbox-buffer-name
 					   (concat (buffer-string) ghostbox--multiline-delimiter-newlines)))
 
 (defun ghostbox--input-sender (proc w)
   "Adds the delimiter after the string. Intended to be used as a hookeor replacement -function for comint-input-sender, since we need to add delimiter after the user hits enter."
-  (process-send-string proc
+  (comint-send-string proc
 					   (concat w ghostbox--multiline-delimiter-newlines)))
+
+
+
+(defun ghostbox-send-buffer-or-region (begin end)
+  "Send either the entire buffer, or the active region to ghostbox."
+  (interactive "r")
+  (cond ((region-active-p)
+		 (ghostbox-send-region begin end))
+		(t (ghostbox-send-current-buffer))))
+
+
+(provide 'ghostbox)

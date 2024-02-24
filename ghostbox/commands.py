@@ -25,6 +25,7 @@ Start a new session with the character or template defined in CHARACTER_FOLDER. 
             # session will throw if path is not valid, we keep going through the includes
             failure = e
 
+
     if failure:
         return "error: " + str(failure)
 
@@ -128,14 +129,23 @@ def setOption(prog, argv):
     
 def showOptions(prog, argv):
     """[OPTION_NAME]
-    Displays the list of program options, along with their values. Provide OPTION_NAME to see just its value.
-    The options displayed can all be set using /set OPTION_NAME.
-    Almost all of them may also be provided as command line arguments with preceding dashes, e.g. include as --include=/some/path.
-    Finally, they may be set in various config files, such as in character folders, or in a config file loaded with /load."""
+Displays the list of program options, along with their values. Provide OPTION_NAME to see just its value.
+The options displayed can all be set using /set OPTION_NAME.
+Almost all of them may also be provided as command line arguments with preceding dashes, e.g. include as --include=/some/path.
+Finally, they may be set in various config files, such as in character folders, or in a config file loaded with /load."""
     if argv == []:
         target = ""
+    elif argv[0] == "--emacs":
+        # undocumented, outputs all options in a neat form to put as keywords in ghostbox.el
+        w = "`("
+        for name in prog.options.keys():
+            w += '"' + name + '", '
+        w = w[:-2] + ")"
+        printerr(w)
+        return ""
     else:
         target = " ".join(argv)
+    
         
     w = ""
     for (k, v) in prog.options.items():
