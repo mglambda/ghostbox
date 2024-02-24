@@ -5,7 +5,7 @@ from ghostbox.StoryFolder import *
 class Session(object):
     def __init__(self, dir=None, chat_user="", additional_keys=[]):
         self.dir = dir
-        self.fileVars = {"chat_user" : chat_user}
+        self.fileVars = {"chat_user" : chat_user, "system_msg" : "" }
         self.stories = StoryFolder()
         if self.dir is not None:
             self._init(additional_keys)

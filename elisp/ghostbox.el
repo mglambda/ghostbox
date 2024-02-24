@@ -3,7 +3,11 @@
 (defvar ghostbox-file-path "/home/marius/prog/ai/ghostbox/scripts/ghostbox"
   "Path to the program used by `run-ghostbox'")
 
-(defvar ghostbox-arguments '()
+(defvar ghostbox--multiline-delimiter "<*>GHOSTBOX_END<*>")
+(defvar ghostbox--multiline-delimiter-newlines (concat "\n" ghostbox--multiline-delimiter "\n"))
+
+(defvar ghostbox-arguments `(
+							 ,(concat "--multiline_delimiter='" ghostbox--multiline-delimiter "'"))
   "Commandline arguments to pass to `ghostbox'.")
 
 (defvar ghostbox-mode-map
@@ -39,8 +43,9 @@
 
 (defun ghostbox--initialize ()
   "Helper function to initialize Ghostbox."
-  (setq comint-process-echoes t)
-  (setq comint-use-prompt-regexp t))
+  (set (make-local-variable 'comint-process-echoes) t)
+  (set (make-local-variable 'comint-use-prompt-regexp) nil)
+  (set (make-local-variable 'comint-input-sender) 'ghostbox--input-sender))
 
 (define-derived-mode ghostbox-mode comint-mode "Ghostbox"
   "Major mode for `run-ghostbox'.
@@ -95,8 +100,36 @@
 (provide 'ghostbox)
 
 
-;; Can you tell me what this does?
+
 (defun ghostbox-send-region (begin end)
   "Send contents of region to ghostbox for completion."
   (interactive "r")
   (process-send-region ghostbox-buffer-name begin end))
+
+(defun ghostbox-send-raw (w)
+"Send a string to the ghostbox process, without formatting or delimiter.\nSince this function does not append the multiline_delimiter, but ghostbox is run in multiline mode from emacs by default, sending the string may not trigger ghostbox to send a request to the backend. You can still use this to slowly build a longer input to ghostbox, or send complex command etc. When you are done, simply send ghostbox--multiline-delimiter-newlines ."
+  (interactive "MMessage")
+  (process-send-string ghostbox-buffer-name w))
+
+(defun ghostbox-send-string (w)
+  "Send a string to the ghostbox process. Automatically appends newline."
+  (interactive "MMessage")
+  (process-send-string ghostbox-buffer-name (concat w ghostbox--multiline-delimiter-newlines)))
+  
+(defun ghostbox-send-buffer (buffer)
+  "Send contents of a buffer to ghostbox."
+  (interactive "bBuffer:")
+  (with-current-buffer buffer
+	(process-send-string ghostbox-buffer-name
+						 (concat (buffer-string) ghostbox--multiline-delimiter-newlines))))
+
+(defun ghostbox-send-current-buffer ()
+  "Sends contents of the current buffer to ghostbox."
+  (interactive)
+  (process-send-string ghostbox-buffer-name
+					   (concat (buffer-string) ghostbox--multiline-delimiter-newlines)))
+
+(defun ghostbox--input-sender (proc w)
+  "Adds the delimiter after the string. Intended to be used as a hookeor replacement -function for comint-input-sender, since we need to add delimiter after the user hits enter."
+  (process-send-string proc
+					   (concat w ghostbox--multiline-delimiter-newlines)))
