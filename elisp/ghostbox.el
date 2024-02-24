@@ -1,5 +1,5 @@
 ;; -*- lexical-binding: t -*-
-(defvar ghostbox-file-path "/home/marius/prog/ai/ghostbox/scripts/ghostbox"
+(defvar ghostbox-file-path "ghostbox"
   "Path to the program used by `run-ghostbox'")
 
 (defvar ghostbox--multiline-delimiter "<*>GHOSTBOX_END<*>")
