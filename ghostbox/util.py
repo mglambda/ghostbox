@@ -1,4 +1,4 @@
-import os, getpass, shutil, base64, requests, re, csv
+import os, getpass, shutil, base64, requests, re, csv, glob
 import tortoise.utils.audio
 from colorama import Fore, Back, Style
 import appdirs

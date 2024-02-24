@@ -19,6 +19,8 @@ def makeArgParser(default_params):
     parser.add_argument("-g", "--grammar_file", type=str, default="", help="Grammar file used to restrict generation output. Grammar format is GBNF.") 
     parser.add_argument("--chat_ai", type=str, default="", help="Name  the AI will have when chatting. Has various effects on the prompt when chat mode is enabled. This is usually set automatically in the config.json file of a chracter folder.")
     parser.add_argument("--stream", action=argparse.BooleanOptionalAction, default=True, help="Enable streaming mode.")
+    parser.add_argument("--multiline", action=argparse.BooleanOptionalAction, default=False, help="Makes multiline mode the dfault, meaning that newlines no longer trigger a message being sent to the backend. instead, you must enter the value of --multiline_delimiter to trigger a send.")
+    parser.add_argument("--multiline_delimiter", type=str, default="\\", help="String that signifies the end of user input. This is only relevant for when --multiline is enabled. By default this is a backslash, inverting the normal behaviour of backslashes allowing to enter a newline ad-hoc while in multiline mode. This option is intended to be used by scripts to change the delimiter to something less common.")
     parser.add_argument("--color", action=argparse.BooleanOptionalAction, default=True, help="Enable colored output.")
     parser.add_argument("--text_ai_color", type=str, default="none", help="Color for the generated text, as long as --color is enabled. Most ANSI terminal colors are supported.")
     parser.add_argument("--text_ai_style", type=str, default="bright", help="Style for the generated text, as long as --color is enabled. Most ANSI terminal styles are supported.")    

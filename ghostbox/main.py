@@ -556,8 +556,12 @@ class Program(object):
         return w
 
     def bufferMultilineInput(self, w):
-        #expects strings with \ at the end
-        self.multiline_buffer += w[:-1] + "\n"
+        if self.getOption("multiline"):
+            # does not expect backslash at end
+            self.multiline_buffer += w + "\n"
+        else:
+            #expects strings with \ at the end
+            self.multiline_buffer += w[:-1] + "\n"
 
     def isMultilineBuffering(self):
         return self.multiline_buffer != ""
@@ -799,11 +803,21 @@ def main():
 
             w = input(prog.showCLIPrompt())
             # check for multiline
-            if w.endswith("\\") and not(w.endswith("\\\\")):
-                prog.bufferMultilineInput(w)
-                continue
-            elif prog.isMultilineBuffering():
-                w = prog.flushMultilineBuffer() + w
+            # this works different wether we have multiline mode enabled, or are doing ad-hoc multilines
+            if prog.getOption("multiline"):
+                # multiline mode                
+                if w != prog.getOption("multiline_delimiter"):
+                    prog.bufferMultilineInput(w)
+                    continue
+                else:
+                    w = prog.flushMultilineBuffer()
+            else:
+                # ad hoc multilines
+                if w.endswith("\\") and not(w.endswith("\\\\")):
+                    prog.bufferMultilineInput(w)
+                    continue
+                elif prog.isMultilineBuffering():
+                    w = prog.flushMultilineBuffer() + w
 
             # for convenience when chatting
             if w == "":
@@ -831,6 +845,9 @@ def main():
             prog.addUserText(modified_w)
             prog.addAIText(prog.communicate(prog.buildPrompt(hint)))
             setOption(prog, ["continue", "False"])
+        except KeyboardInterrupt:
+            prog.running = False
+            sys.exit
         except:
             printerr("error: Caught unhandled exception in main()")
             printerr(traceback.format_exc())
