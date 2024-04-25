@@ -31,6 +31,7 @@ def makeArgParser(default_params):
     parser.add_argument("--cli_prompt", type=str, default="\n 🧠 ", help="String to show at the bottom as command prompt. Can be empty.")
     parser.add_argument("--cli_prompt_color", type=str, default="none", help="Color of the prompt. Uses names of standard ANSI terminal colors. Requires --color to be enabled.")
     parser.add_argument("--hint", type=str, default="", help="Hint for the AI. This string will be appended to the prompt behind the scenes. It's the first thing the AI sees. Try setting it to 'Of course,' to get a more compliant AI.")
+    parser.add_argument("--hint_sticky", action=argparse.BooleanOptionalAction, default=True, help="If disabled, hint will be shown to the AI as part of prompt, but will be omitted from the story.")
     parser.add_argument("--tts", action=argparse.BooleanOptionalAction, default=False, help="Enable text to speech on generated text.")
     parser.add_argument("--tts_program", type=str, default="ghostbox-tts-tortoise", help="Path to a TTS (Text-to-speech) program to verbalize generated text. The TTS program should read lines from standard input. Many examples are provided in scripts/ghostbox-tts-* .")
     parser.add_argument("--tts_voice_dir", type=str, default=os.getcwd() + "/voices/", help="Directory to check first for voice file.")

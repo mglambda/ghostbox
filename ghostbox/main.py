@@ -349,7 +349,13 @@ class Program(object):
             if self.getOption("continue"):
                 self.session.stories.get().extendAssistantText(w)
             else:
-                self.session.stories.get().addAssistantText(self.getAIFormatter().format(w))
+                # hint may have been sent to the backend but we have to add it to the story ourselves.
+                if self.getOption("hint_sticky"):
+                    hint = self.getOption("hint")
+                else:
+                    hint = ""
+                    
+                self.session.stories.get().addAssistantText(self.getAIFormatter().format(hint + w))
 
     def appendOption(self, name, value, duplicates=True):
         if name not in self.options:
