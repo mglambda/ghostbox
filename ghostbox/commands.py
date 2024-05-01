@@ -43,7 +43,7 @@ Start a new session with the character or template defined in CHARACTER_FOLDER. 
         w += loadConfig(program, [configpath], override=False) + "\n"
     program.options["character_folder"] = path
     # this might be very useful for people to debug their chars, so we are a bit verbose here by default
-    w += "Found vars " + ", ".join([k for k in program.session.getVars().keys() if k != "chat_user" and k != "config.json"]) + "\n"
+    w += "Found vars " + ", ".join([k for k in program.session.getVars().keys() if k not in Session.special_files]) + "\n"
     w += "Ok. Loaded " + path
 
 
