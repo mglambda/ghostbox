@@ -54,12 +54,7 @@ class Session(object):
             elif filename == "tools.py":
                 self.tool_file = filepath                
                 self.tools = makeToolDicts(filepath, display_name=os.path.basename(self.dir) + "_tools")
-                import json
-                printerr(json.dumps(self.tools, indent=4))
 
-
-                
-                
         init_msg = self.fileVars.get("initial_msg", "")
         if init_msg:
             self.stories.get().addAssistantText(init_msg)

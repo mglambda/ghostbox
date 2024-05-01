@@ -1,4 +1,4 @@
-import os, datetime, glob, sys, requests, traceback, random
+import os, datetime, glob, sys, requests, traceback, random, json
 from ghostbox.session import Session
 from ghostbox.util import *
 from ghostbox.StoryFolder import *
@@ -44,7 +44,6 @@ Start a new session with the character or template defined in CHARACTER_FOLDER. 
     program.options["character_folder"] = path
     # this might be very useful for people to debug their chars, so we are a bit verbose here by default
     w += "Found vars " + ", ".join([k for k in program.session.getVars().keys() if k not in Session.special_files]) + "\n"
-    w += "Ok. Loaded " + path
 
 
     # by convention, the initial message is stored in initial_msg
@@ -54,12 +53,19 @@ Start a new session with the character or template defined in CHARACTER_FOLDER. 
     # enable tools if any are found
     if program.session.tools:
         program.setOption("use_tools", True)
-        w += "Function dictionary generated from tools.py, setting use_tools to True. Beware, the AI will now call functions."
+        w += "Tool dictionary generated from tools.py, setting use_tools to True. Beware, the AI will now call functions.\n"
+        if program.getOption("verbose"):
+            w += "Dumping tool dictionary. Run with --no-verbose to disable this."
+            w += json.dumps(program.session.tools, indent=4) + "\n"
+        else:
+            w += "AI tools: " + ", ".join([t["name"] for t in program.session.tools]) + "\n"
+
         
     # hide if option is set
     if program.getOption("hide"):
         hide(program, [])
 
+    w += "Ok. Loaded " + path 
     return w
 
 def printStory(prog, argv, stderr=False, apply_filter=True):
