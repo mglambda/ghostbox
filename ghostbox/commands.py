@@ -51,6 +51,11 @@ Start a new session with the character or template defined in CHARACTER_FOLDER. 
     if program.session.hasVar("initial_msg") and not(keep):
         program.initial_print_flag = True
 
+    # enable tools if any are found
+    if program.session.tools:
+        program.setOption("use_tools", True)
+        w += "Function dictionary generated from tools.py, setting use_tools to True. Beware, the AI will now call functions."
+        
     # hide if option is set
     if program.getOption("hide"):
         hide(program, [])

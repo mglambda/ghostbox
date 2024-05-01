@@ -1,12 +1,14 @@
 import os, glob
 from ghostbox.util import *
 from ghostbox.StoryFolder import *
-        
+from ghostbox.agency import *
+
 class Session(object):
     def __init__(self, dir=None, chat_user="", additional_keys=[]):
         self.dir = dir
         self.fileVars = {"chat_user" : chat_user, "system_msg" : "" }
         self.stories = StoryFolder()
+        self.tools = {}
         if self.dir is not None:
             self._init(additional_keys)
 
@@ -50,3 +52,9 @@ class Session(object):
         init_msg = self.fileVars.get("initial_msg", "")
         if init_msg:
             self.stories.get().addAssistantText(init_msg)
+
+        if self.hasVar("tools.py"):
+            self.tools = makeToolDict(self.getVar("tools.py"))
+                
+                
+            
