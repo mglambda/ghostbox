@@ -610,9 +610,26 @@ class Program(object):
 
     def getRawTemplate(self):
         return RawTemplate()
+
+    def showTools(self):
+        if not(self.getOption("use_tools")):
+            return ""
+
+        if not(self.session.tools):
+            return ""
+
+        # FIXME: probably adjust for different templates. Also may want to do this in Session maybe?
+        w = "\n## Tools Available\n\n" + json.dumps(self.session.tools, indent= 2)
+        return w
+
     
     def showSystem(self):
-        return self.getTemplate().header(**self.session.getVars())
+        # vars contains system_msg and others that may or may not be replaced in the template
+        vars = self.session.getVars().copy()
+        # new: tools are added at the end of the system prompt
+        if "system_msg" in vars:
+            vars["system_msg"] += self.showTools()
+        return self.getTemplate().header(**vars)
 
     def showStory(self, story_folder=None, append_hint=True):
         """Returns the current story as a unformatted string, injecting the current prompt template.""" 
