@@ -602,7 +602,8 @@ class Program(object):
     def getSystemTokenCount(self):
         """Returns the number of tokens in system msg. The value is cached per session. Note that this adds +1 for the BOS token."""
         if self._systemTokenCount is None:
-            self._systemTokenCount = len(self.getBackend().tokenize(self.session.getSystem())) + 1
+            #self._systemTokenCount = len(self.getBackend().tokenize(self.session.getSystem())) + 1
+self._systemTokenCount = len(self.getBackend().tokenize(self.showSystem())) + 1            
         return self._systemTokenCount
 
     def getTemplate(self):
