@@ -357,6 +357,13 @@ class Program(object):
                     
                 self.session.stories.get().addAssistantText(self.getAIFormatter().format(hint + w))
 
+    def applyTools(self, w):
+        if not(self.getOption("use_tools")):
+            return w
+
+        
+        
+                
     def appendOption(self, name, value, duplicates=True):
         if name not in self.options:
             printerr("warning: unrecognized option '" + name + "'")
@@ -603,7 +610,7 @@ class Program(object):
         """Returns the number of tokens in system msg. The value is cached per session. Note that this adds +1 for the BOS token."""
         if self._systemTokenCount is None:
             #self._systemTokenCount = len(self.getBackend().tokenize(self.session.getSystem())) + 1
-self._systemTokenCount = len(self.getBackend().tokenize(self.showSystem())) + 1            
+            self._systemTokenCount = len(self.getBackend().tokenize(self.showSystem())) + 1            
         return self._systemTokenCount
 
     def getTemplate(self):
@@ -869,7 +876,7 @@ def main():
             # this is the main event
             (modified_w, hint) = prog.modifyInput(w)
             prog.addUserText(modified_w)
-            prog.addAIText(prog.communicate(prog.buildPrompt(hint)))
+            prog.addAIText(prog.applyTools(prog.communicate(prog.buildPrompt(hint))))
             setOption(prog, ["continue", "False"])
         except KeyboardInterrupt:
             prog.running = False

@@ -1,7 +1,7 @@
 
 # allows for use of tools with tools.py in char directory.
 
-import os, importlib, inspect, docstring_parser
+import os, importlib, inspect, docstring_parser, json, re, traceback
 from ghostbox.util import *
 
 
@@ -96,3 +96,25 @@ def makeToolDicts(filepath, display_name="tmp_python_module"):
                   "parameter_definitions" : parameters})
 
     return tools
+
+
+def tryParseToolUse(w, predicate=lambda tool_name: True):
+    """Process AI output to see if tool use is requested. Returns a dictionary which is {} if parse failed."""
+    m = re.match(".*json(.*)```.*", w, flags=re.DOTALL)
+    if not(m):
+        return {}
+
+    try:
+        tools_requested = json.loads(m.groups(1)[-1])
+    except:
+        printerr("warning: Exception while trying to parse AI tool use.\n```" + w + "```")
+        printerr(traceback.format_exc())
+        return {}
+
+    return {func : params for (func, params) in tools_requested.items() if predicate(func)}
+
+def tryParseAllowedToolUse(w : str,
+                           tools_allowed : dict):
+    return tryParseToolUse(w, predicate=lambda tool_name: tool_name in allowed_tools.keys())
+
+    
