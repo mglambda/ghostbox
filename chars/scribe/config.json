@@ -1,6 +1,7 @@
 {
 	"mode" : "default",
 	"chat_ia" : "Scribe",
+	"tools_example" : false,
 	"cli_prompt" : "\n 🪶",
 	"cli_prompt_color" : "blue"
 }

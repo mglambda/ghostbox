@@ -648,8 +648,8 @@ class Program(object):
             return ""
 
         # FIXME: probably adjust for different templates. Also may want to do this in Session maybe?
-        w = "\n## Tools Available\n\n" + json.dumps(self.session.tools, indent= 2)
-        return w
+        return agency.makeToolSystemMsg(self.session.tools, example=self.getOption("tools_example"), instructions=self.getOption("tools_instructions"))
+
 
     
     def showSystem(self):

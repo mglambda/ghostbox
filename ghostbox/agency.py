@@ -92,9 +92,9 @@ def makeToolDicts(filepath, display_name="tmp_python_module"):
             parameters[param_name] = {"type" : param_type,
                                       "description" : param_description,
                                       "required" : param_required}
-    tools.append({"name" : name,
-                  "description" : description,
-                  "parameter_definitions" : parameters})
+        tools.append({"name" : name,
+                      "description" : description,
+                      "parameter_definitions" : parameters})
 
     return (tools, module)
 
@@ -113,6 +113,11 @@ def tryParseToolUse(w, predicate=lambda tool_name: True, start_string = "```json
         printerr(traceback.format_exc())
         return {}, w
 
+
+    if type(tools_requested) != dict:
+        printerr("warning: Wrong type of tool request. Parse succeeded but no tool application possible.")
+        printerr("Dump: \n" + json.dumps(tools_requested, indent=4))
+        
     # parse succeeded, clean the input
     w_clean = w.replace(start_string + capture + end_string, "")
     
@@ -137,3 +142,26 @@ def makeToolResult(tool_name, params, result):
             "parameters" : params},
         "output" : result}
             
+
+
+def makeToolSystemMsg(tools, example=True, instructions=True):
+    example_str = """When it is appropriate to use one of your tools, output your tool use with their respective parameters in the json format, like this
+```json
+{ 
+  "<TOOL NAME1>" :
+  {
+    "<PARAMETER 1>" : <VALUE 1,
+	"<PARAMETER 2>" : <VALUE 2>},
+  "<TOOL NAME2>" : {}}"""
+
+    w = ""
+    w +="# Tools\n"    
+    if example:
+        w += example_str
+    w += "\n## Tools Available\nHere are the tools available to you, as a json dictionary.\n\n"
+    w += json.dumps(tools, indent= 2)
+    if instructions:
+        w += '\nInvoke them by outputting json as described. The json for a tool call should come at the end of your output. The tools will be applied user side, and you will receive a structured json list, with each tool you called and its respective output. Refer to the contents of the "output" field for a tools results.'
+        w += "\nDo not talk to the user about the tool names, parameters, or any technical details. You may refer to your tool capabilities in general terms, and you may reference the descriptions.\n"
+        w += "If a tool allows you to retrieve, read, refer, fetch, pull, inspect, or otherwise gather data and the user requests it, give a simple and terse confirmation, and then output the json. The data will be available after you do this."
+    return w
