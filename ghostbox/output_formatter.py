@@ -107,7 +107,7 @@ class NicknameRemover(OutputFormatter):
 class IncompleteSentenceCleaner(OutputFormatter):
     """Removes incomplete sentences at the end of text."""
 
-    def __init__(self,     stopchars = '! . ? ;'.split(" ")):
+    def __init__(self,     stopchars = '! . ? ; `'.split(" ")):
         self.stopchars = stopchars
         
     def format(self, w):

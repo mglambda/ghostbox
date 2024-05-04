@@ -8,6 +8,7 @@ from ghostbox.commands import *
 from ghostbox.autoimage import *
 from ghostbox.output_formatter import *
 from ghostbox.util import *
+from ghostbox import agency
 from ghostbox._argparse import *
 from ghostbox.streaming import streamPrompt
 from ghostbox.session import Session
@@ -361,6 +362,22 @@ class Program(object):
         if not(self.getOption("use_tools")):
             return w
 
+        # FIXME: implement some form of checking e.g. tools requested match the tools defined for ai
+        tools_requested = agency.tryParseToolUse(w)
+        if tools_requested == {}:
+            # no parse, either because none were requested or they were malformatted.
+            return w
+
+        # AI wants tools. this is obviously unstable and may have bogus formatting / wrong types. For now we just let it run and dump the dict if something explodes
+        try:
+            for (tool, params) in tools_requested.items():
+                self.session.callTool(tool, params)
+        except:
+            printerr("warning: Caught the following exception while applying tools.")
+            printerr(traceback.format_exc())
+
+        # FIXME: consider removing the tool json before returning w
+        return w
         
         
                 
@@ -772,7 +789,7 @@ returns - A string ready to be sent to the backend, including the full conversat
     def backup(self):
         """Returns a data structure that can be restored to return to a previous state of the program."""
 # copy strings etc., avoid copying high resource stuff or tricky things, like models and subprocesses
-        return (copy.deepcopy(self.session), copy.deepcopy(self.options))
+        return (self.session.copy(), copy.deepcopy(self.options))
 
     def restore(self, backup):
         (session, options) = backup

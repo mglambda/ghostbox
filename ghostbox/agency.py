@@ -35,9 +35,10 @@ from ghostbox.util import *
 # ]
 
 def makeToolDicts(filepath, display_name="tmp_python_module"):
+    """Returns a pair of (tool_dict, module)."""
     if not(os.path.isfile(filepath)):
         printerr("warning: Failed to generate tool dictionary for '" + filepath + "' file not found.")
-        return {}
+        return ({}, None)
 
 
     tools = []
@@ -50,7 +51,7 @@ def makeToolDicts(filepath, display_name="tmp_python_module"):
         doc = inspect.getdoc(value)
         if doc is None:
             printerr("error: Missing docstring in function '" + name + "' in file '" + filepath + "'. Aborting tool generation.")
-            return {}
+            return ({}, None)
         fulldoc = docstring_parser.parse(doc)
         if fulldoc.description is None:
             printerr("warning: Missing description in function '" + name + "' in file '" + filepath + "'. Please make sure you adhere to standard python documentation syntax.")
@@ -95,7 +96,7 @@ def makeToolDicts(filepath, display_name="tmp_python_module"):
                   "description" : description,
                   "parameter_definitions" : parameters})
 
-    return tools
+    return (tools, module)
 
 
 def tryParseToolUse(w, predicate=lambda tool_name: True):
@@ -117,4 +118,15 @@ def tryParseAllowedToolUse(w : str,
                            tools_allowed : dict):
     return tryParseToolUse(w, predicate=lambda tool_name: tool_name in allowed_tools.keys())
 
-    
+
+def getPositionalArguments(func):
+    return [param.name for (k, param) in inspect.signature(func).parameters.items() if param.default == inspect._empty]
+
+def getOptionalArguments(func):
+    return [param.name for (k, param) in inspect.signature(func).parameters.items() if param.default != inspect._empty]
+
+
+
+            
+        
+        

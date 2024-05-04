@@ -1,4 +1,5 @@
 import os, glob
+from copy import deepcopy
 from ghostbox.util import *
 from ghostbox.StoryFolder import *
 from ghostbox.agency import *
@@ -12,9 +13,22 @@ class Session(object):
         self.stories = StoryFolder()
         self.tools = {}
         self.tools_file = ""
+        self.tools_module = None
         if self.dir is not None:
             self._init(additional_keys)
 
+    def copy(self):
+        # can't deepcopy a module
+        tmp = self.tools_module
+        self.tools_module = None
+        new = deepcopy(self)
+        # module becomes a singleton
+        self.tools_module = tmp
+        new.tools_module = tmp
+        return new
+    
+        
+            
     def merge(self, other):
         """Merges some things from a session object other into itself. This generally means keeping story etc, of self, but possibly adding fileVars from other, including overriding our own."""
         self.fileVars = self.fileVars | other.fileVars
@@ -53,11 +67,47 @@ class Session(object):
                 #printerr("Found " + filename)
             elif filename == "tools.py":
                 self.tool_file = filepath                
-                self.tools = makeToolDicts(filepath, display_name=os.path.basename(self.dir) + "_tools")
+                (self.tools, self.tools_module) = makeToolDicts(filepath, display_name=os.path.basename(self.dir) + "_tools")
+
+
 
         init_msg = self.fileVars.get("initial_msg", "")
         if init_msg:
             self.stories.get().addAssistantText(init_msg)
 
-                
+    def callTool(self, name, params):
+        if name not in list(map(lambda d: d["name"], self.tools)):
+            return
+
+
+        try:
+            f = getattr(self.tools_module, name)
+        except:
+            printerr("warning: Failed to call tool '" + name + "': Not found in module '" + self.tools_file + "'.")
+            printerr(traceback.format_exc())
+            return
+
+        # we have to build a function call somewhat laboriously because the order of arguments is not guaranteed        
+        try:
+            pargs = [params[arg] for arg in getPositionalArguments(f)]
+        except KeyError:
+            printerr("warning: Couldn't call tool '" + name + "': Required positional parameter missing.")
+            printerr(traceback.format_exc())
+            return
+        
+        kwargs = {k : v for (k, v) in params.items() if k in getOptionalArguments(f)}
+
+        # here goes nothing
+        try:
+            result = f(*pargs, **kwargs)
+        except:
+            printerr("warning: Caught exception when calling tool '" + name + "'. Here's a dump of the arguments:")
+            printerr(json.dumps(params, indent=4))
+            printerr("\nAnd here is the full exception:")
+            printerr(traceback.format_exc())
+            return
+        return result
+    
+
             
+
