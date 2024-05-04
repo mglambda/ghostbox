@@ -11,4 +11,4 @@ def take_note(text : str):
         f = open(file, "w")
     f.write(text + "\n")
     f.close()
-    return ""
+

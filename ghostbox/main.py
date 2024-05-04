@@ -363,24 +363,28 @@ class Program(object):
             return w
 
         # FIXME: implement some form of checking e.g. tools requested match the tools defined for ai
-        tools_requested = agency.tryParseToolUse(w)
+        (tools_requested, w_clean) = agency.tryParseToolUse(w)
         if tools_requested == {}:
             # no parse, either because none were requested or they were malformatted.
             return w
 
         # AI wants tools. this is obviously unstable and may have bogus formatting / wrong types. For now we just let it run and dump the dict if something explodes
+        results = []
         try:
             for (tool, params) in tools_requested.items():
-                self.session.callTool(tool, params)
+                maybeResult = self.session.callTool(tool, params)
+                if maybeResult is not None:
+                    results.append(agency.makeToolResult(tool, params, maybeResult))
         except:
             printerr("warning: Caught the following exception while applying tools.")
             printerr(traceback.format_exc())
 
         # FIXME: consider removing the tool json before returning w
-        return w
+        if results != []:
+            w_clean += "```json\n" + json.dumps(results, indent=4) + "\n```"
+        return w_clean
         
         
-                
     def appendOption(self, name, value, duplicates=True):
         if name not in self.options:
             printerr("warning: unrecognized option '" + name + "'")
@@ -755,7 +759,7 @@ returns - A string ready to be sent to the backend, including the full conversat
                 return ""
             backend.waitForStream()
             self.setLastJSON(backend.getLastJSON())
-            return self.flushStreamQueue()
+            return self.applyTools(self.flushStreamQueue())
         else:
             result = backend.handleGenerateResult(backend.generate(payload))
             self.setLastJSON(backend.getLastJSON())            
@@ -763,7 +767,8 @@ returns - A string ready to be sent to the backend, including the full conversat
         if not(result):
             printerr("error: " + backend.getLastError())
             return ""
-        # FIXME: we're currently formatting the AI string twice. Here and in addAIText. that's not a big deal, though                
+        # FIXME: we're currently formatting the AI string twice. Here and in addAIText. that's not a big deal, though
+        result = self.applyTools(result)
         self.print(self.getAIFormatter(with_color=self.getOption("color")).format(result), end="")
         return result            
 
@@ -893,7 +898,7 @@ def main():
             # this is the main event
             (modified_w, hint) = prog.modifyInput(w)
             prog.addUserText(modified_w)
-            prog.addAIText(prog.applyTools(prog.communicate(prog.buildPrompt(hint))))
+            prog.addAIText(prog.communicate(prog.buildPrompt(hint)))
             setOption(prog, ["continue", "False"])
         except KeyboardInterrupt:
             prog.running = False

@@ -99,20 +99,24 @@ def makeToolDicts(filepath, display_name="tmp_python_module"):
     return (tools, module)
 
 
-def tryParseToolUse(w, predicate=lambda tool_name: True):
-    """Process AI output to see if tool use is requested. Returns a dictionary which is {} if parse failed."""
-    m = re.match(".*json(.*)```.*", w, flags=re.DOTALL)
+def tryParseToolUse(w, predicate=lambda tool_name: True, start_string = "```json", end_string = "```"):
+    """Process AI output to see if tool use is requested. Returns a dictionary which is {} if parse failed, and the input string with json removed on a successful parse."""
+    m = re.match(".*" + start_string + "(.*)" + end_string + ".*", w, flags=re.DOTALL)
     if not(m):
-        return {}
+        return {}, w
 
     try:
-        tools_requested = json.loads(m.groups(1)[-1])
+        capture = m.groups(1)[-1]
+        tools_requested = json.loads(capture)
     except:
         printerr("warning: Exception while trying to parse AI tool use.\n```" + w + "```")
         printerr(traceback.format_exc())
-        return {}
+        return {}, w
 
-    return {func : params for (func, params) in tools_requested.items() if predicate(func)}
+    # parse succeeded, clean the input
+    w_clean = w.replace(start_string + capture + end_string, "")
+    
+    return {func : params for (func, params) in tools_requested.items() if predicate(func)}, w_clean
 
 def tryParseAllowedToolUse(w : str,
                            tools_allowed : dict):
@@ -125,8 +129,11 @@ def getPositionalArguments(func):
 def getOptionalArguments(func):
     return [param.name for (k, param) in inspect.signature(func).parameters.items() if param.default != inspect._empty]
 
-
-
+def makeToolResult(tool_name, params, result):
+    """Packages a tool call result in a dictionary."""
+    return {
+        "call" : {
+            "name" : tool_name,
+            "parameters" : params},
+        "output" : result}
             
-        
-        
