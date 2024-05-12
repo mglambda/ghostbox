@@ -100,7 +100,10 @@ def makeToolDicts(filepath, display_name="tmp_python_module"):
 
 
 def tryParseToolUse(w, predicate=lambda tool_name: True, start_string = "```json", end_string = "```"):
-    """Process AI output to see if tool use is requested. Returns a dictionary which is {} if parse failed, and the input string with json removed on a successful parse."""
+    """Process AI output to see if tool use is requested. Returns a dictionary which is {} if parse failed, and the input string with json removed on a successful parse.
+    :param w: The input string, e.g. AI generated response.
+    :param predicate: Optional boolean filter function which takes tool names as input.
+    :return: A pair of (dict, str), with the parsed json and the input string with json removed if parse succeeded."""
     m = re.match(".*" + start_string + "(.*)" + end_string + ".*", w, flags=re.DOTALL)
     if not(m):
         return {}, w

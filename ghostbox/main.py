@@ -389,8 +389,9 @@ class Program(object):
         try:
             for (tool, params) in tools_requested.items():
                 maybeResult = self.session.callTool(tool, params)
-                if maybeResult is not None:
-                    results.append(agency.makeToolResult(tool, params, maybeResult))
+                #if maybeResult is not None:
+                    #results.append(agency.makeToolResult(tool, params, maybeResult))
+                results.append(agency.makeToolResult(tool, params, maybeResult))                    
         except:
             printerr("warning: Caught the following exception while applying tools.")
             printerr(traceback.format_exc())
