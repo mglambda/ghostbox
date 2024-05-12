@@ -1,7 +1,8 @@
 {
 	"mode" : "default",
-	"chat_ia" : "Scribe",
+	"chat_ai" : "Scribe",
 	"tools_example" : false,
 	"cli_prompt" : "\n 🪶",
-	"cli_prompt_color" : "blue"
+	"cli_prompt_color" : "blue",
+	"temperature" : 0.1
 }

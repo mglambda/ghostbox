@@ -106,13 +106,8 @@ If there are templated tokens that are normally inserted as part of the prompt f
 This command is also executed when you hit enter without any text."""
 
     prog.setOption("continue", "1")
-    #experimental: bias logits in chat mode
-    # often while chatting it happens that people want to extend the ai msg, but the ai starts talking for the user. you can prevent this with stopwords, but that can cut off generation, and the ai is now stuck until the user says something.
-    # If we bias the logits against the first token of the user's name/chat handle, the backend can still generate and will also not speak for user.
-    # Of course, this will also prevent the llm from generating anything with the users first token as a normal part of whatever the ai wants to say, with weird and unforeseen results, but since this only happens in the specific situation of continuing the AI's speech, it might be ok.
-    # FIXME: not implemented yet
-
-    
+    # FIXME: often we just get EOS. this is sort of risky though.
+    #prog.setOption("ignore_eos", True)
     if prog.session.stories.empty():
         return ""
     

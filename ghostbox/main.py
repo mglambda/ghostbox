@@ -96,6 +96,7 @@ class Program(object):
         self.initializeBackend(self.getOption("backend"), self.getOption("endpoint"))
         self.session = Session(chat_user=options.get("chat_user", ""))
         self.lastResult = {}
+        self._tools_continue = 0
         self.tts_flag = False
         self.initial_print_flag = False
         self.initial_cli_prompt = initial_cli_prompt
@@ -154,7 +155,18 @@ class Program(object):
         if self.hasImages():
             d["image_data"] = [packageImageDataLlamacpp(d["data"], id) for (id, d) in self.images.items()]
         return d
-            
+    def isContinue(self):
+        return self.getOption("continue") or self._tools_continue != 0
+
+    def resetContinue(self):
+        if self._tools_continue < 2:
+            self.setOption("ignore_eos", False)
+        
+        self.setOption("continue", False)
+        self._tools_continue = max(0, self._tools_continue - 1)
+        # FIXME: this is experimental.
+        
+    
     def _newTranscriber(self):
         # makes a lazy WhisperTranscriber, because model loading can be slow
         return Proxy(lambda: WhisperTranscriber(model_name = self.getOption("whisper_model"),
@@ -362,6 +374,10 @@ class Program(object):
         if not(self.getOption("use_tools")):
             return w
 
+        if self._tools_continue > 0:
+            # prevent infinite recursion
+            return w
+        
         # FIXME: implement some form of checking e.g. tools requested match the tools defined for ai
         (tools_requested, w_clean) = agency.tryParseToolUse(w)
         if tools_requested == {}:
@@ -381,6 +397,10 @@ class Program(object):
 
         # FIXME: consider removing the tool json before returning w
         if results != []:
+            # FIXME: having results usually means the Ai does something with them, so we continue, but this may not always be wanted
+            # FIXME: infinite loop potential. Is this a bad thing?
+            if self.getOption("tools_reflection"):
+                self._tools_continue = 2
             w_clean += "```json\n" + json.dumps(results, indent=4) + "\n```"
         return w_clean
         
@@ -607,8 +627,7 @@ class Program(object):
     
     def modifyInput(prog, w):
         """Takes user input (w), returns pair of (modified user input, and a hint to give to the ai."""
-        if prog.getOption("continue") and prog.continue_with == "": # user entered /cont or equivalent
-            #setOption(prog, ["continue", "False"])
+        if prog.isContinue() and prog.continue_with == "": # user entered /cont or equivalent
             if prog.getMode().startswith("chat"):
                 # prevent AI from talking for us
                 if prog.showStory().endswith("\n"):
@@ -666,7 +685,7 @@ class Program(object):
             sf = self.session.stories
         else:
             sf = story_folder
-        if self.getOption("continue"):
+        if self.isContinue() and not(self._tools_continue):
             # user hit enter and wants ai to keep talking. this is kind of like using the entire last reply as a hint -> no templating needed
             return self.getRawTemplate().body(sf.get(), append_hint, **self.session.getVars())
         return self.getTemplate().body(sf.get(), append_hint, **self.session.getVars())
@@ -765,7 +784,7 @@ returns - A string ready to be sent to the backend, including the full conversat
             self.setLastJSON(backend.getLastJSON())            
 
         if not(result):
-            printerr("error: " + backend.getLastError())
+            printerr("error: Backend yielded no result. Reason: " + backend.getLastError())
             return ""
         # FIXME: we're currently formatting the AI string twice. Here and in addAIText. that's not a big deal, though
         result = self.applyTools(result)
@@ -854,7 +873,15 @@ def main():
                 prog.initial_print_flag = False
                 print("\n\n" + prog.formatStory(), end="")
 
-            w = input(prog.showCLIPrompt())
+            #printerr(f"{prog._tools_continue=}")
+            #printerr(f"{prog.getOption('ignore_eos')=}")            
+            if prog._tools_continue == 0 or not(prog.getOption("tools_reflection")):
+                w = input(prog.showCLIPrompt())
+            else:
+                # tool use
+                prog.setOption("ignore_eos", False)
+                w = "/cont"
+
 
             # check for multiline
             # this works different wether we have multiline mode enabled, or are doing ad-hoc multilines
@@ -886,7 +913,7 @@ def main():
                 if w.startswith(cmd):
                     v = f(prog, w.split(" ")[1:])
                     printerr(v)
-                    if not(prog.getOption("continue")):
+                    if not(prog.isContinue()):
                         # skip means we don't send a prompt this iteration, which we don't want to do when user issues a command, except for the /continue command
                         skip = True
                     break #need this to not accidentally execute multiple commands like /tts and /ttsdebug
@@ -896,10 +923,11 @@ def main():
                 continue
 
             # this is the main event
+            #printerr(f"\n{prog.getOption('ignore_eos')=}")
             (modified_w, hint) = prog.modifyInput(w)
             prog.addUserText(modified_w)
             prog.addAIText(prog.communicate(prog.buildPrompt(hint)))
-            setOption(prog, ["continue", "False"])
+            prog.resetContinue()
         except KeyboardInterrupt:
             prog.running = False
             sys.exit
@@ -924,4 +952,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 

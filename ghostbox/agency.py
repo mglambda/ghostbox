@@ -161,7 +161,8 @@ def makeToolSystemMsg(tools, example=True, instructions=True):
     w += "\n## Tools Available\nHere are the tools available to you, as a json dictionary.\n\n"
     w += json.dumps(tools, indent= 2)
     if instructions:
-        w += '\nInvoke them by outputting json as described. The json for a tool call should come at the end of your output. The tools will be applied user side, and you will receive a structured json list, with each tool you called and its respective output. Refer to the contents of the "output" field for a tools results.'
-        w += "\nDo not talk to the user about the tool names, parameters, or any technical details. You may refer to your tool capabilities in general terms, and you may reference the descriptions.\n"
+        #w += 'Invoke them by outputting json as described. The json for a tool call should come at the end of your output. The tools will be applied user side, and you will receive a structured json list, with each tool you called and its respective output. Refer to the contents of the "output" field for a tools results.\n'
+        w += 'Invoke a tool by outputting json as described. Only output the json and nothing else. The tools will be applied user-side, and their respective output will be at the start of your message. Refer to the "output" field for their respective return values.'
+        w += "nly talk to the user about the tools in general terms. Keep it vague and non-technical.\n"
         w += "If a tool allows you to retrieve, read, refer, fetch, pull, inspect, or otherwise gather data and the user requests it, give a simple and terse confirmation, and then output the json. The data will be available after you do this."
     return w
