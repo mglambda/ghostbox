@@ -382,7 +382,10 @@ class Program(object):
             return ""
         
         # FIXME: implement some form of checking e.g. tools requested match the tools defined for ai
-        (tools_requested, w_clean) = agency.tryParseToolUse(w)
+        (tools_requested, w_clean) = agency.tryParseToolUse(w,
+                                                            start_string=self.getOption("tools_magic_begin"),
+                                                            end_string=self.getOption("tools_magic_end"),
+                                                            magic_word=self.getOption("tools_magic_word"))
         if tools_requested == []:
             # no parse, either because none were requested or they were malformatted.
             return ""
@@ -512,6 +515,11 @@ class Program(object):
 
     def _streamCallback(self, token):
         self.stream_queue.append(token)
+        if self.getOption("use_tools"):
+            if ("".join(self.stream_queue)).strip().startswith(self.getOption("tools_magic_word")):
+                self.print("\r" + (" " * len(self.getOption("tools_magic_word"))), end="", flush=True)
+                return
+        
         method = self.getOption("stream_flush")
         if method == "token":
             self.print(self.getAIColorFormatter().format(token), end="", flush=True)
@@ -653,8 +661,8 @@ class Program(object):
         w = prog.session.expandVars(w)
         (w, ai_hint) = prog.adjustForChat(w)
         
-        if prog.getOption("use_tools"):
-            tool_hint = agency.makeToolInstructionMsg()
+        tool_hint = agency.makeToolInstructionMsg() if prog.getOption("use_tools") else ""
+
         
         # user may also provide a hint. unclear how to best append it, we put it at the end
         user_hint = prog.session.expandVars(prog.getOption("hint"))
@@ -691,8 +699,7 @@ class Program(object):
     def showSystem(self):
         # vars contains system_msg and others that may or may not be replaced in the template
         vars = self.session.getVars().copy()
-        # new: tools are added at the end of the system prompt
-        if "system_msg" in vars:
+        if self.getOption("tools_instructions") and "system_msg" in vars:
             vars["system_msg"] += self.showTools()
         return self.getTemplate().header(**vars)
 
@@ -780,7 +787,7 @@ returns - A string ready to be sent to the backend, including the full conversat
         return (w, v)
     
     def communicate(self, prompt_text):
-        """Sends prompt_text to the backend and prints results."""
+        """Sends prompt_text to the backend and returns results."""
         backend = self.getBackend()
         payload = self.makeGeneratePayload(prompt_text)
         self._lastPrompt = prompt_text
