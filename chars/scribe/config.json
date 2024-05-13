@@ -2,7 +2,7 @@
 	"mode" : "default",
 	"chat_ai" : "Scribe",
 	"tools_example" : false,
-	"tools_reflection" : false,
+	"tools_reflection" : true,
 	"cli_prompt" : "\n 🪶",
 	"cli_prompt_color" : "blue",
 	"temperature" : 0.1

@@ -101,7 +101,6 @@ class Program(object):
         self.initializeBackend(self.getOption("backend"), self.getOption("endpoint"))
         self.session = Session(chat_user=options.get("chat_user", ""))
         self.lastResult = {}
-        self._tools_continue = 0
         self.tts_flag = False
         self.initial_print_flag = False
         self.initial_cli_prompt = initial_cli_prompt
@@ -161,17 +160,11 @@ class Program(object):
             d["image_data"] = [packageImageDataLlamacpp(d["data"], id) for (id, d) in self.images.items()]
         return d
     def isContinue(self):
-        return self.getOption("continue") or self._tools_continue != 0
+        return self.getOption("continue")
 
     def resetContinue(self):
-        if self._tools_continue < 2:
-            self.setOption("ignore_eos", False)
-        
         self.setOption("continue", False)
-        self._tools_continue = max(0, self._tools_continue - 1)
-        # FIXME: this is experimental.
         
-    
     def _newTranscriber(self):
         # makes a lazy WhisperTranscriber, because model loading can be slow
         return Proxy(lambda: WhisperTranscriber(model_name = self.getOption("whisper_model"),
@@ -387,10 +380,6 @@ class Program(object):
         """Takes an input string w that is an AI generated response. If w contains tool requests, w is parsed for a structured tool request and the tools will be called. Returns a formatted string with tool results in json format and special tokens applied. Empty string if no tools were used or requ3ested."""
         if not(self.getOption("use_tools")):
             return ""
-
-        if self._tools_continue > 0:
-            # prevent infinite recursion
-            return ""
         
         # FIXME: implement some form of checking e.g. tools requested match the tools defined for ai
         (tools_requested, w_clean) = agency.tryParseToolUse(w)
@@ -412,10 +401,6 @@ class Program(object):
 
         if results == []:
             return ""
-        # FIXME: having results usually means the Ai does something with them, so we continue, but this may not always be wanted
-        # FIXME: infinite loop potential. Is this a bad thing?
-        if self.getOption("tools_reflection"):
-            self._tools_continue = 2
         return self._formatToolResults(results)
 
 
@@ -721,7 +706,7 @@ class Program(object):
             sf = self.session.stories
         else:
             sf = story_folder
-        if self.isContinue() and not(self._tools_continue):
+        if self.isContinue():
             # user hit enter and wants ai to keep talking. this is kind of like using the entire last reply as a hint -> no templating needed
             return self.getRawTemplate().body(sf.get(), append_hint, **self.session.getVars())
         return self.getTemplate().body(sf.get(), append_hint, **self.session.getVars())
@@ -906,16 +891,7 @@ def main():
             if prog.initial_print_flag:
                 prog.initial_print_flag = False
                 print("\n\n" + prog.formatStory(), end="")
-
-            #printerr(f"{prog._tools_continue=}")
-            #printerr(f"{prog.getOption('ignore_eos')=}")            
-            if prog._tools_continue == 0 or not(prog.getOption("tools_reflection")):
-                w = input(prog.showCLIPrompt())
-            else:
-                # tool use
-                prog.setOption("ignore_eos", False)
-                w = "/cont"
-
+            w = input(prog.showCLIPrompt())
 
             # check for multiline
             # this works different wether we have multiline mode enabled, or are doing ad-hoc multilines
@@ -957,22 +933,30 @@ def main():
                 continue
 
             # this is the main event
-            #printerr(f"\n{prog.getOption('ignore_eos')=}")
+            communicating = True
             (modified_w, hint) = prog.modifyInput(w)
-            prog.addUserText(modified_w)
-            generated_w = prog.communicate(prog.buildPrompt(hint))
-            tool_w = prog.applyTools(generated_w)
-            output = ""
-            if tool_w != "":
-                prog.addSystemText(tool_w)
-                if prog.getOption("verbose"):
-                    output = tool_w
-            else:
-                prog.addAIText(generated_w)
-                output = generated_w
+            prog.addUserText(modified_w)            
+            while communicating:
+                # this only runs more than once if there is auto-activation, e.g. with tool use
+                generated_w = prog.communicate(prog.buildPrompt(hint))
+                tool_w = prog.applyTools(generated_w)
+                output = ""
+                if tool_w != "":
+                    prog.addSystemText(tool_w)
+                    communicating = prog.getOption("tools_reflection") # unnecessary but here to emphasize that this is the path where we loop
+                    (w, hint) = ("", "")
+                    if prog.getOption("verbose"):
+                        output = tool_w
+                else:
+                    prog.addAIText(generated_w)
+                    communicating = False
+                    output = generated_w
 
-            if not(prog.getOption("stream")):
-                prog.print(prog.getAIFormatter(with_color=prog.getOption("color")).format(output), end="")                
+                if not(prog.getOption("stream")):
+                    prog.print(prog.getAIFormatter(with_color=prog.getOption("color")).format(output), end="")                
+
+            # end communicating loop
+
             prog.resetContinue()
         except KeyboardInterrupt:
             prog.running = False
