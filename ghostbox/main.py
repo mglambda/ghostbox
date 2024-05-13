@@ -83,7 +83,12 @@ cmds = [
         ("/continue", doContinue)
 ]
 
-# the mode formatters dictionary is a mapping from mode names to pairs of OutputFormatters (DISPLAYFORMATTER, TXTFORMATTER), where DISPLAYFORMATTER is applied to output printed to the screen in that mode, and TXTFORMATTER is applied to the text that is saved in the story. The pair is wrapped in a lambda that supplies a keyword dictionary.
+# the mode formatters dictionary is a mapping from mode names to tuples of formatters, wrapped in a lambda that supplies a dictionary with keyword options to the formatters.
+# The tuple contains indices :
+# 0 - Formats text sent to the console display
+# 1 - Formats text sent to the TTS backend
+# 2 - Formats text to be saved as user message in the chat history
+# 3 - formats text to be saved as AI message in the chat history
 mode_formatters = {
     "default" : lambda d: (DoNothing, DoNothing, DoNothing, CleanResponse),
     "chat" : lambda d: (DoNothing, NicknameRemover(d["chat_ai"]), NicknameFormatter(d["chat_user"]), ChatFormatter(d["chat_ai"]))
@@ -370,19 +375,28 @@ class Program(object):
                     
                 self.session.stories.get().addAssistantText(self.getAIFormatter().format(hint + w))
 
+    def addSystemText(self, w):
+        """Add a system message to the chat log, i.e. add a message with role=system. This is mostly used for tool/function call results."""
+        if w == "":
+            return
+
+        # FIXME: we're currently rawdogging system msgs. is this correct?
+        self.session.stories.get().addSystemText(w)
+        
     def applyTools(self, w):
+        """Takes an input string w that is an AI generated response. If w contains tool requests, w is parsed for a structured tool request and the tools will be called. Returns a formatted string with tool results in json format and special tokens applied. Empty string if no tools were used or requ3ested."""
         if not(self.getOption("use_tools")):
-            return w
+            return ""
 
         if self._tools_continue > 0:
             # prevent infinite recursion
-            return w
+            return ""
         
         # FIXME: implement some form of checking e.g. tools requested match the tools defined for ai
         (tools_requested, w_clean) = agency.tryParseToolUse(w)
         if tools_requested == []:
             # no parse, either because none were requested or they were malformatted.
-            return w
+            return ""
 
         # AI wants tools. this is obviously unstable and may have bogus formatting / wrong types. For now we just let it run and dump the dict if something explodes
         results = []
@@ -396,27 +410,26 @@ class Program(object):
             printerr("warning: Caught the following exception while applying tools.")
             printerr(traceback.format_exc())
 
-        # FIXME: consider removing the tool json before returning w
-        if results != []:
-            # FIXME: having results usually means the Ai does something with them, so we continue, but this may not always be wanted
-            # FIXME: infinite loop potential. Is this a bad thing?
-            if self.getOption("tools_reflection"):
-                self._tools_continue = 2
-            w_clean += self._formatToolResults(results)
-        return w_clean
+        if results == []:
+            return ""
+        # FIXME: having results usually means the Ai does something with them, so we continue, but this may not always be wanted
+        # FIXME: infinite loop potential. Is this a bad thing?
+        if self.getOption("tools_reflection"):
+            self._tools_continue = 2
+        return self._formatToolResults(results)
+
 
     def _formatToolResults(self, results):
         """Based on a list of dictionaries, returns a string that represents the tool outputs to an LLM."""
-        #return "```json\n" + json.dumps(results, indent=4) + "\n```"
         # FIXME: currently only intended for command-r
         w = ""
-        w += "<|START_OF_TURN_TOKEN|><|SYSTEM_TOKEN|>"
+        #w += "<|START_OF_TURN_TOKEN|><|SYSTEM_TOKEN|>"
         for tool in results:
             if len(results) > 1:
                 # tell the LLM what tool has which results
                 w += "## " + tool["tool_name"] + "\n\n"
             w += agency.showToolResult(tool["output"])
-        w += "<|END_OF_TURN_TOKEN|>"
+        #w += "<|END_OF_TURN_TOKEN|>"
         return w
 
     
@@ -654,12 +667,16 @@ class Program(object):
 
         w = prog.session.expandVars(w)
         (w, ai_hint) = prog.adjustForChat(w)
+        
+        if prog.getOption("use_tools"):
+            tool_hint = agency.makeToolInstructionMsg()
+        
         # user may also provide a hint. unclear how to best append it, we put it at the end
         user_hint = prog.session.expandVars(prog.getOption("hint"))
         if user_hint and prog.getOption("warn_hint"):
             printerr("warning: Hint is set. Try /raw to see what you're sending. Use /set hint '' to disable the hint, or /set warn_hint False to suppress this message.")
             
-        return (w, ai_hint + user_hint)
+        return (w, ai_hint + tool_hint + user_hint)
 
     def getSystemTokenCount(self):
         """Returns the number of tokens in system msg. The value is cached per session. Note that this adds +1 for the BOS token."""
@@ -695,11 +712,11 @@ class Program(object):
         return self.getTemplate().header(**vars)
 
     def showStory(self, story_folder=None, append_hint=True):
+        """Returns the current story as a unformatted string, injecting the current prompt template."""         
         # new and possibly FIXME: we need to add another hint from agency.makeToolInstructionMsg when using tools, so we disable the hint here
         if self.getOption("use_tools"):
             append_hint = False
             
-        """Returns the current story as a unformatted string, injecting the current prompt template.""" 
         if story_folder is None:
             sf = self.session.stories
         else:
@@ -775,9 +792,6 @@ returns - A string ready to be sent to the backend, including the full conversat
         if self.getMode() == "chat":
             w = mkChatPrompt(self.getOption("chat_user")) + w
             v = mkChatPrompt(self.session.getVar("chat_ai"), space=False)
-        elif self.getOption("use_tools"):
-            # FIXME: this wasn't the original intent for this function. probably should rename it to 'adjustMode' and then make tool-use a mode.
-            v = agency.makeToolInstructionMsg()
         return (w, v)
     
     def communicate(self, prompt_text):
@@ -799,7 +813,7 @@ returns - A string ready to be sent to the backend, including the full conversat
                 return ""
             backend.waitForStream()
             self.setLastJSON(backend.getLastJSON())
-            return self.applyTools(self.flushStreamQueue())
+            return self.flushStreamQueue()
         else:
             result = backend.handleGenerateResult(backend.generate(payload))
             self.setLastJSON(backend.getLastJSON())            
@@ -808,8 +822,7 @@ returns - A string ready to be sent to the backend, including the full conversat
             printerr("error: Backend yielded no result. Reason: " + backend.getLastError())
             return ""
         # FIXME: we're currently formatting the AI string twice. Here and in addAIText. that's not a big deal, though
-        result = self.applyTools(result)
-        self.print(self.getAIFormatter(with_color=self.getOption("color")).format(result), end="")
+        #result = result
         return result            
 
     def hasImages(self):
@@ -947,7 +960,19 @@ def main():
             #printerr(f"\n{prog.getOption('ignore_eos')=}")
             (modified_w, hint) = prog.modifyInput(w)
             prog.addUserText(modified_w)
-            prog.addAIText(prog.communicate(prog.buildPrompt(hint)))
+            generated_w = prog.communicate(prog.buildPrompt(hint))
+            tool_w = prog.applyTools(generated_w)
+            output = ""
+            if tool_w != "":
+                prog.addSystemText(tool_w)
+                if prog.getOption("verbose"):
+                    output = tool_w
+            else:
+                prog.addAIText(generated_w)
+                output = generated_w
+
+            if not(prog.getOption("stream")):
+                prog.print(prog.getAIFormatter(with_color=prog.getOption("color")).format(output), end="")                
             prog.resetContinue()
         except KeyboardInterrupt:
             prog.running = False

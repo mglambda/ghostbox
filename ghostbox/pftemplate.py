@@ -35,6 +35,11 @@ Files expected:
     stop_lines - Contains strings that will cause generation to stop, seperated by newlines
     hint - Contains a special string that is sometimes appended at the end of a user message. It should contain a string that guides the AI's compleetion, e.g. this may just be '<|im_start|>assistant\n' in the case of chat-ml, which will heavily discourage the LLM from speaking for the user. This is only appended when append_hint is True in the body method.
 
+The following files are optional:
+    begin_system - Special tokens to be prepended to a system message within the chat history, e.g. a tool or function call result. This will be prepended to message with role=system in the chat history.
+    end_system - Special tokens to be appended to a system message within the chat history, e.g. a tool or function call result. This will be appended to message with role=system in the chat history.
+    If optional files are missing but their conditions are met (e.g. a message  with role=system), the template will default to something reasonable (e.g. begin_assistant)
+
 All methods accept additional **kwargs, which contain replacements for double curly braced strings in the story content and system message. Things like '{{char_name}}' etc.
 Example:
     ```
@@ -80,6 +85,11 @@ The quick, brown fox jumps over the lazy hedgehog!<|im_end|><|im_start|>assistan
                 return w + self.begin_user + content + self.end_user
             elif item["role"] == "assistant":
                 return w + self.begin_assistant + content + self.end_assistant
+            elif item["role"] == "system":
+                # this is a bit more hairy
+                begin = self.__dict__.get("begin_system", self.begin_assistant)
+                end = self.__dict__.get("end_system", self.end_assistant)
+                return w + begin + content + end
             # throw if people use weird or no roles with this template
             raise ValueError(item["role"] + " is not a valid role for this template.")
         if append_hint:

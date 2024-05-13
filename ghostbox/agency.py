@@ -99,12 +99,12 @@ def makeToolDicts(filepath, display_name="tmp_python_module"):
     return (tools, module)
 
 
-def tryParseToolUse(w, predicate=lambda tool_name: True, start_string = "```json", end_string = "```"):
+def tryParseToolUse(w, predicate=lambda tool_name: True, start_string = "```json", end_string = "```", magic_string="Action:"):
     """Process AI output to see if tool use is requested. Returns a dictionary which is {} if parse failed, and the input string with json removed on a successful parse.
     :param w: The input string, e.g. AI generated response.
     :param predicate: Optional boolean filter function which takes tool names as input.
     :return: A pair of (list(dict), str), with the parsed json and the input string with json removed if parse succeeded."""
-    m = re.match(".*Action:.*" + start_string + "(.*)" + end_string + ".*", w, flags=re.DOTALL)
+    m = re.match(".*" + magic_string + ".*" + start_string + "(.*)" + end_string + ".*", w, flags=re.DOTALL)
     if not(m):
         return {}, w
 
@@ -122,9 +122,9 @@ def tryParseToolUse(w, predicate=lambda tool_name: True, start_string = "```json
         printerr("Dump: \n" + json.dumps(tools_requested, indent=4))
         
     # parse succeeded, clean the input
-    w_clean = w.replace(start_string + capture + end_string, "")
+    w_clean = w.replace(start_string + capture + end_string, "").replace(magic_string, "")
     return (tools_requested, w_clean)
-#    return [{func : params for (func, params) in tools_requested.items() if predicate(func)}, w_clean
+
 
 def tryParseAllowedToolUse(w : str,
                            tools_allowed : dict):
