@@ -103,8 +103,8 @@ def tryParseToolUse(w, predicate=lambda tool_name: True, start_string = "```json
     """Process AI output to see if tool use is requested. Returns a dictionary which is {} if parse failed, and the input string with json removed on a successful parse.
     :param w: The input string, e.g. AI generated response.
     :param predicate: Optional boolean filter function which takes tool names as input.
-    :return: A pair of (dict, str), with the parsed json and the input string with json removed if parse succeeded."""
-    m = re.match(".*" + start_string + "(.*)" + end_string + ".*", w, flags=re.DOTALL)
+    :return: A pair of (list(dict), str), with the parsed json and the input string with json removed if parse succeeded."""
+    m = re.match(".*Action:.*" + start_string + "(.*)" + end_string + ".*", w, flags=re.DOTALL)
     if not(m):
         return {}, w
 
@@ -117,14 +117,14 @@ def tryParseToolUse(w, predicate=lambda tool_name: True, start_string = "```json
         return {}, w
 
 
-    if type(tools_requested) != dict:
+    if type(tools_requested) != list:
         printerr("warning: Wrong type of tool request. Parse succeeded but no tool application possible.")
         printerr("Dump: \n" + json.dumps(tools_requested, indent=4))
         
     # parse succeeded, clean the input
     w_clean = w.replace(start_string + capture + end_string, "")
-    
-    return {func : params for (func, params) in tools_requested.items() if predicate(func)}, w_clean
+    return (tools_requested, w_clean)
+#    return [{func : params for (func, params) in tools_requested.items() if predicate(func)}, w_clean
 
 def tryParseAllowedToolUse(w : str,
                            tools_allowed : dict):
@@ -140,32 +140,57 @@ def getOptionalArguments(func):
 def makeToolResult(tool_name, params, result):
     """Packages a tool call result in a dictionary."""
     return {
-        "call" : {
-            "name" : tool_name,
-            "parameters" : params},
+        "tool_name" : tool_name,
+        "parameters" : params,
         "output" : result}
             
 
 
-def makeToolSystemMsg(tools, example=True, instructions=True):
-    example_str = """When it is appropriate to use one of your tools, output your tool use with their respective parameters in the json format, like this
-```json
-{ 
-  "<TOOL NAME1>" :
-  {
-    "<PARAMETER 1>" : <VALUE 1,
-	"<PARAMETER 2>" : <VALUE 2>},
-  "<TOOL NAME2>" : {}}"""
-
+def makeToolSystemMsg(tools):
     w = ""
-    w +="# Tools\n"    
-    if example:
-        w += example_str
-    w += "\n## Tools Available\nHere are the tools available to you, as a json dictionary.\n\n"
-    w += json.dumps(tools, indent= 2)
-    if instructions:
-        #w += 'Invoke them by outputting json as described. The json for a tool call should come at the end of your output. The tools will be applied user side, and you will receive a structured json list, with each tool you called and its respective output. Refer to the contents of the "output" field for a tools results.\n'
-        w += 'Invoke a tool by outputting json as described. Only output the json and nothing else. The tools will be applied user-side, and their respective output will be at the start of your message. Refer to the "output" field for their respective return values.'
-        w += "nly talk to the user about the tools in general terms. Keep it vague and non-technical.\n"
-        w += "If a tool allows you to retrieve, read, refer, fetch, pull, inspect, or otherwise gather data and the user requests it, give a simple and terse confirmation, and then output the json. The data will be available after you do this."
+    w += "    ## Available Tools\nHere is a list of tools that you have available to you:\n\n"
+    w += json.dumps(tools, indent= 4)
+    w += "\n\n"
     return w
+
+
+def makeToolInstructionMsg():
+    #FIXME: this is currently designed only for command-r, other llms will use different special tokens, for which we have to extend the templating, probably iwth tool_begin and tool_end 
+    w = """<|START_OF_TURN_TOKEN|><|SYSTEM_TOKEN|>
+Write 'Action:' followed by a json-formatted list of actions that you want to perform in order to produce a good response to the user's last input. You can use any of the supplied tools any number of times, but you should aim to execute the minimum number of necessary actions for the input. You should use the `directly-answer` tool if calling the other tools is unnecessary. The list of actions you want to call should be formatted as a list of json objects, for example:  
+
+```json
+[
+    {
+        "tool_name": title of the tool in the specification,
+        "parameters": a dict of parameters to input into the tool as they are defined in the specs, or {} if it takes no parameters
+    }
+]
+```
+
+<|END_OF_TURN_TOKEN|>"""
+    return w
+
+
+def showToolResult(tool_result, indent=0):
+    """Takes a tool result of any type and returns a string that can be passed to an AI. Contains no special tokens. Expects whatever is in the 'output' field of the tool use dictionary. If tool_result is a list or dictionary, this function will be recursively appplied."""
+    x = tool_result
+    pad = " " * indent
+    if type(x) == type(None):
+        return pad + "output: None\n"
+    elif type(x) == str:
+        return pad + x + "\n"
+    elif type(x) == list:
+        return (pad + "\n").join([showToolResult(y, indent=indent) for y in x])
+    elif type(x) == dict:
+        return (pad + "\n").join([k + ": " + showToolResult(v, indent=indent+4) for (k, v) in x.items()])
+    # default to json. if you pass something that isn't json serializable to the AI, we crash and it's your own fault
+    # FIXME: also this won't respect indent. maybe that's ok
+    try:
+        w = json.dumps(x, indent=4)
+    except:
+        printerr("warning: Couldn't show the result of a tool call.\nHere's the result dump:\n" + str(x) + "\n and here's the traceback:\n")
+        printerr(traceback.format_exc())
+        return ""
+    return w
+    

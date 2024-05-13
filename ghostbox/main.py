@@ -380,17 +380,17 @@ class Program(object):
         
         # FIXME: implement some form of checking e.g. tools requested match the tools defined for ai
         (tools_requested, w_clean) = agency.tryParseToolUse(w)
-        if tools_requested == {}:
+        if tools_requested == []:
             # no parse, either because none were requested or they were malformatted.
             return w
 
         # AI wants tools. this is obviously unstable and may have bogus formatting / wrong types. For now we just let it run and dump the dict if something explodes
         results = []
         try:
-            for (tool, params) in tools_requested.items():
+            for tool_dict in tools_requested:
+                tool = tool_dict["tool_name"]
+                params = tool_dict["parameters"]
                 maybeResult = self.session.callTool(tool, params)
-                #if maybeResult is not None:
-                    #results.append(agency.makeToolResult(tool, params, maybeResult))
                 results.append(agency.makeToolResult(tool, params, maybeResult))                    
         except:
             printerr("warning: Caught the following exception while applying tools.")
@@ -402,10 +402,24 @@ class Program(object):
             # FIXME: infinite loop potential. Is this a bad thing?
             if self.getOption("tools_reflection"):
                 self._tools_continue = 2
-            w_clean += "```json\n" + json.dumps(results, indent=4) + "\n```"
+            w_clean += self._formatToolResults(results)
         return w_clean
-        
-        
+
+    def _formatToolResults(self, results):
+        """Based on a list of dictionaries, returns a string that represents the tool outputs to an LLM."""
+        #return "```json\n" + json.dumps(results, indent=4) + "\n```"
+        # FIXME: currently only intended for command-r
+        w = ""
+        w += "<|START_OF_TURN_TOKEN|><|SYSTEM_TOKEN|>"
+        for tool in results:
+            if len(results) > 1:
+                # tell the LLM what tool has which results
+                w += "## " + tool["tool_name"] + "\n\n"
+            w += agency.showToolResult(tool["output"])
+        w += "<|END_OF_TURN_TOKEN|>"
+        return w
+
+    
     def appendOption(self, name, value, duplicates=True):
         if name not in self.options:
             printerr("warning: unrecognized option '" + name + "'")
@@ -668,7 +682,7 @@ class Program(object):
             return ""
 
         # FIXME: probably adjust for different templates. Also may want to do this in Session maybe?
-        return agency.makeToolSystemMsg(self.session.tools, example=self.getOption("tools_example"), instructions=self.getOption("tools_instructions"))
+        return agency.makeToolSystemMsg(self.session.tools)
 
 
     
@@ -681,6 +695,10 @@ class Program(object):
         return self.getTemplate().header(**vars)
 
     def showStory(self, story_folder=None, append_hint=True):
+        # new and possibly FIXME: we need to add another hint from agency.makeToolInstructionMsg when using tools, so we disable the hint here
+        if self.getOption("use_tools"):
+            append_hint = False
+            
         """Returns the current story as a unformatted string, injecting the current prompt template.""" 
         if story_folder is None:
             sf = self.session.stories
@@ -757,7 +775,9 @@ returns - A string ready to be sent to the backend, including the full conversat
         if self.getMode() == "chat":
             w = mkChatPrompt(self.getOption("chat_user")) + w
             v = mkChatPrompt(self.session.getVar("chat_ai"), space=False)
-
+        elif self.getOption("use_tools"):
+            # FIXME: this wasn't the original intent for this function. probably should rename it to 'adjustMode' and then make tool-use a mode.
+            v = agency.makeToolInstructionMsg()
         return (w, v)
     
     def communicate(self, prompt_text):
