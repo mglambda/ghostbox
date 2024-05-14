@@ -181,6 +181,9 @@ def showToolResult(tool_result, indent=0):
     elif type(x) == str:
         return pad + x + "\n"
     elif type(x) == list:
+        if x == []:
+            # FIXME: not sure what's best here
+            return "[]\n"
         return (pad + "\n").join([showToolResult(y, indent=indent) for y in x])
     elif type(x) == dict:
         return (pad + "\n").join([k + ": " + showToolResult(v, indent=indent+4) for (k, v) in x.items()])

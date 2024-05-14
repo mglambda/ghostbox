@@ -7,9 +7,9 @@ from ghostbox.agency import *
 class Session(object):
     special_files = "chat_ai config.json tools.py".split(" ") 
     
-    def __init__(self, dir=None, chat_user="", additional_keys=[]):
+    def __init__(self, dir=None, chat_user="", chat_ai="", additional_keys=[]):
         self.dir = dir
-        self.fileVars = {"chat_user" : chat_user, "system_msg" : "" }
+        self.fileVars = {"chat_user" : chat_user, "chat_ai" : chat_ai, "system_msg" : "" }
         self.stories = StoryFolder()
         self.tools = {}
         self.tools_file = ""

@@ -19,7 +19,7 @@ Start a new session with the character or template defined in CHARACTER_FOLDER. 
         path = os.path.normpath(path)
         failure = False
         try:
-            s = Session(dir=path, chat_user=program.getOption("chat_user"), additional_keys=program.getOption("var_file"))
+            s = Session(dir=path, chat_user=program.getOption("chat_user"), chat_ai=program.getOption("chat_ai"), additional_keys=program.getOption("var_file"))
             break
         except FileNotFoundError as e:
             # session will throw if path is not valid, we keep going through the includes
