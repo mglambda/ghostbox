@@ -1,4 +1,4 @@
-import os, getpass, shutil, base64, requests, re, csv, glob
+import os, getpass, shutil, base64, requests, re, csv, glob, time
 import tortoise.utils.audio
 from colorama import Fore, Back, Style
 import appdirs
@@ -225,7 +225,7 @@ def userSetup():
         os.makedirs(userCharDir())
 
     # try copying some example chars
-    chars = "dolphin dolphin-kitten joshu minsk".split(" ")
+    chars = "dolphin dolphin-kitten joshu minsk scribe command-r".split(" ")
     copyEntity("char", "chars", chars)
     templates = "chat-ml alpaca raw mistral user-assistant-newline vacuna command-r llama3".split(" ")
     copyEntity("template", "templates", templates)
@@ -345,3 +345,6 @@ def getVoices(prog):
             if os.path.isfile(file):
                 vs.append(os.path.split(file)[1])
     return vs
+
+def time_ms():
+    return round(time.time() * 1000)

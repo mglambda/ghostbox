@@ -1,4 +1,4 @@
-import requests, json, os, io, re, base64, random, sys, threading, signal, tempfile
+import requests, json, os, io, re, base64, random, sys, threading, signal, tempfile, string
 import feedwater
 from functools import *
 from colorama import just_fix_windows_console, Fore, Back, Style
@@ -94,13 +94,14 @@ mode_formatters = {
     "chat" : lambda d: (DoNothing, NicknameRemover(d["chat_ai"]), NicknameFormatter(d["chat_user"]), ChatFormatter(d["chat_ai"]))
 }
 
-class Program(object):
+class Plumbing(object):
     def __init__(self, options={}, initial_cli_prompt=""):
         self.options = options        
         self.backend = None
         self.initializeBackend(self.getOption("backend"), self.getOption("endpoint"))
         self.session = Session(chat_user=options.get("chat_user", ""))
         self.lastResult = {}
+        self._lastInteraction = 0
         self.tts_flag = False
         self.initial_print_flag = False
         self.initial_cli_prompt = initial_cli_prompt
@@ -505,13 +506,67 @@ class Program(object):
         self.addAIText(self.communicate(self.buildPrompt(hint + image_watch_hint)))
         print(self.showCLIPrompt(), end="")
 
+    def _print_generation_callback(self, result_str):
+        """Pass this as callback to self.interact for a nice simple console printout of generations."""
+        if result_str == "":
+            return
+                
+        self.print("\r" + (" " * len(self.showCLIPrompt())) + "\r", end="")
+        if not(self.getOption("stream")):
+            self.print(self.getAIFormatter(with_color=self.getOption("color")).format(result_str), end="")
+        self.print(self.showCLIPrompt(), end="")
+        return
+
+
+    def modifyTranscription(self, w):
+        """Checks wether an incoming user transcription by the whisper model contains activation phrases or is within timing etc. Returns the modified transcription, or the empty string if activation didn't trigger."""
+        # want to match fuzzy, so strip of all punctuation etc.
+        # FIXME: no need to do this here, again and again
+        phrase = self.getOption("audio_activation_phrase").translate(str.maketrans('','',string.punctuation)).strip().lower()
+        if not(phrase):
+            return w
+
+        # ok we have an activation phrase, but are we within the grace period where none is required?
+        if (t := self.getOption("audio_activation_period_ms")) > 0:
+            if (time_ms() - self._lastInteraction) <= t:
+                # FIXME: returning here means there might be a phrase in the input even when phrase_keep is false. Maybe it doesn't matter?
+                return w
+
+                
+        # now strip the transcription
+        test = w.translate(str.maketrans('', '', string.punctuation)).strip().lower()
+        try:
+            n = test.index(phrase)
+        except ValueError:
+            # no biggie, phrase wasn't found. we're done here
+            return ""
+
+        if self.getOption("audio_activation_phrase_keep"):
+            return w
+        # FIXME: this is 100% not correct, but it may be good enough
+        return w.replace(phrase, "").replace(self.getOption("audio_activation_phrase"), "")
+
+    def printActivationPhraseWarning(self):
+        n = self.getOption("warn_audio_activation_phrase")
+        if not(n):
+            return
+        w = "warning: Your message was received but triggered no response, because the audio activation phrase was not found in it. Hint: The activation phrase is '" + self.getOption("audio_activation_phrase") + "'."        
+        if n != -1:
+            w += " This warning will only be shown once."
+            self.setOption("warn_audio_activation_phrase", False)
+        printerr(w)
+
     def _transcriptionCallback(self, w):
-        (modified_w, hint) = self.modifyInput(w)
-        self.addUserText(modified_w)
+        """Supposed to be called whenever the whisper model has successfully transcribed a phrase."""
         if self.getOption("audio_show_transcript"):
-            print(w)
-        self.addAIText(self.communicate(self.buildPrompt(hint)))
-        print(self.showCLIPrompt(), end="")
+            self.print(w, tts=False)
+
+        w = self.modifyTranscription(w)
+        if not(w):
+            self.printActivationPhraseWarning()
+            return
+
+        self.interact(w, self._print_generation_callback)
 
     def _streamCallback(self, token):
         self.stream_queue.append(token)
@@ -610,12 +665,12 @@ class Program(object):
         self.tts.write_line(w)
         return w
 
-    def print(self, w, end="\n", flush=False, color="", style=""):
+    def print(self, w, end="\n", flush=False, color="", style="", tts=True):
         # either prints, speaks, or both, depending on settings
         if w == "":
             return
         
-        if self.getOption("tts"):
+        if tts and self.getOption("tts") and w != self.showCLIPrompt():
             self.communicateTTS(self.getTTSFormatter().format(w) + end)
             if not(self.getOption("tts_subtitles")):
                 return
@@ -817,6 +872,38 @@ returns - A string ready to be sent to the backend, including the full conversat
         #result = result
         return result            
 
+    def interact(self, w : str, generation_callback=lambda msg: printerr(" > " + msg)) -> None:
+        """This is as close to a main loop as we'll get. w may be any string or user input, which is sent to the backend. Generation(s) are then received and handled. Certain conditions may cause multiple generations. Strings returned from the backend are passed to generation_callback.
+        :param w: Any input string, which will be processed and may be modified, eventually being passed to the backend.
+        :param 
+        :param generation_callback: A function that takes a string as input. This will receive generations as they arrive from the backend. Note that a different callback handles streaming responses. If streaming is enabled and this function prints, you will print twice. Hint: check for getOption('stream') in the lambda.
+        :return: Nothing. Use the callback to process the results of an interaction, or use interactBlocking."""
+        def loop_interact(w):
+            communicating = True
+            (modified_w, hint) = self.modifyInput(w)
+            self.addUserText(modified_w)            
+            while communicating:
+                # this only runs more than once if there is auto-activation, e.g. with tool use
+                generated_w = self.communicate(self.buildPrompt(hint))
+                tool_w = self.applyTools(generated_w)
+                output = ""
+                if tool_w != "":
+                    self.addSystemText(tool_w)
+                    communicating = self.getOption("tools_reflection") # unnecessary but here to emphasize that this is the path where we loop
+                    (w, hint) = ("", "")
+                    if self.getOption("verbose"):
+                        output = tool_w
+                else:
+                    self.addAIText(generated_w)
+                    communicating = False
+                    output = generated_w
+                generation_callback(output)
+            # end communicating loop
+            self._lastInteraction = time_ms()
+        t = threading.Thread(target=loop_interact, args=[w])
+        t.start()
+        
+    
     def hasImages(self):
         return bool(self.images)
         
@@ -853,7 +940,7 @@ def main():
     just_fix_windows_console()
     parser = makeArgParser(backends.default_params)
     args = parser.parse_args()
-    prog = Program(options=args.__dict__, initial_cli_prompt=args.cli_prompt)
+    prog = Plumbing(options=args.__dict__, initial_cli_prompt=args.cli_prompt)
     if userConfigFile():    
         prog.setOption("user_config", userConfigFile())
         printerr(loadConfig(prog, [userConfigFile()], override=False))
@@ -940,29 +1027,9 @@ def main():
                 continue
 
             # this is the main event
-            communicating = True
-            (modified_w, hint) = prog.modifyInput(w)
-            prog.addUserText(modified_w)            
-            while communicating:
-                # this only runs more than once if there is auto-activation, e.g. with tool use
-                generated_w = prog.communicate(prog.buildPrompt(hint))
-                tool_w = prog.applyTools(generated_w)
-                output = ""
-                if tool_w != "":
-                    prog.addSystemText(tool_w)
-                    communicating = prog.getOption("tools_reflection") # unnecessary but here to emphasize that this is the path where we loop
-                    (w, hint) = ("", "")
-                    if prog.getOption("verbose"):
-                        output = tool_w
-                else:
-                    prog.addAIText(generated_w)
-                    communicating = False
-                    output = generated_w
-
-                if not(prog.getOption("stream")):
-                    prog.print(prog.getAIFormatter(with_color=prog.getOption("color")).format(output), end="")                
-
-            # end communicating loop
+                
+            prog.interact(w, generation_callback=self._print_generation_callback)
+            
 
             prog.resetContinue()
         except KeyboardInterrupt:

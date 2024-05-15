@@ -1,0 +1,8 @@
+{
+	"mode" : "default",
+	"chat_ai" : "Command-R",
+	"max_length" : 300,
+	"cli_prompt" : "\n ❇ ",
+	"cli_prompt_color" : "green",
+	"temperature" : 0.1
+}

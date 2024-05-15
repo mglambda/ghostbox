@@ -1,10 +1,11 @@
 import argparse, os
 from ghostbox.util import *
+from ghostbox import backends
 
 
 def makeArgParser(default_params):
     # default_params are only the hyperparameters (temp, etc.), not command line parameters
-    parser = argparse.ArgumentParser(description="ghostbox - koboldcpp Command Line Interface", formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser = argparse.ArgumentParser(description="ghostbox - LLM Command Line Interface", formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument("-I", '--include', action="append", default=[userCharDir(), "chars/"], help="Include paths that will be searched for character folders named with the /start command or the --character_folder command line argument.")
     parser.add_argument('--template_include', action="append", default=[userTemplateDir(), "templates/"], help="Include paths that will be searched for prompt templates. You can specify a template to use with the -T option.")
     parser.add_argument("-T", '--prompt_format', type=str, default="guess", help="Prompt format template to use. The default is 'guess', which means ghostbox will try to determine the format through various heuristics. Often, this will result in 'chat-ml'.")
@@ -25,6 +26,7 @@ def makeArgParser(default_params):
     parser.add_argument("--text_ai_color", type=str, default="none", help="Color for the generated text, as long as --color is enabled. Most ANSI terminal colors are supported.")
     parser.add_argument("--text_ai_style", type=str, default="bright", help="Style for the generated text, as long as --color is enabled. Most ANSI terminal styles are supported.")    
     parser.add_argument("--warn_trailing_space", action=argparse.BooleanOptionalAction, default=True, help="Warn if the prompt that is sent to the backend ends on a space. This can cause e.g. excessive emoticon use by the model.")
+    parser.add_argument("--warn_audio_activation_phrase", action=argparse.BooleanOptionalAction, default=True, help="Warn if audio is being transcribed, but no activation phrase is found. Normally this only will warn once. Set to -1 if you want to be warned every time.")
     parser.add_argument("--warn_hint", action=argparse.BooleanOptionalAction, default=True, help="Warn if you have a hint set.")
     parser.add_argument("--json", action=argparse.BooleanOptionalAction, default=False, help="Force generation output to be in JSON format. This is equivalent to using -g with a json.gbnf grammar file, but this option is provided for convenience.") 
     parser.add_argument("--stream_flush", type=str, default="token", help="When to flush the streaming buffer. When set to 'token', will print each token immediately. When set to 'sentence', it will wait for a complete sentence before printing. This can be useful for TTS software. Default is 'token'.")
@@ -52,6 +54,9 @@ def makeArgParser(default_params):
     parser.add_argument("--hide", action=argparse.BooleanOptionalAction, default=False, help="Hides some unnecessary output, providing a more immersive experience. Same as starting with /hide.")
     parser.add_argument("--audio", action=argparse.BooleanOptionalAction, default=False, help="Enable automatic transcription of audio input using openai whisper model. Obviously, you need a mic for this.")
     parser.add_argument("--audio_silence_threshold", type=int, default=2000, help="An integer value denoting the threshold for when automatic audio transcription starts recording. (default 2000)")
+    parser.add_argument("--audio_activation_phrase", type=str, default="", help="When set, the phrase must be detected in the beginning of recorded audio, or the recording will be ignored. Phrase matching is fuzzy with punctuation removed.")
+    parser.add_argument("--audio_activation_period_ms", type=int, default=0, help="Period in milliseconds where no further activation phrase is necessary to trigger a response. The period starts after any interaction with the AI, spoken or otherwise.")
+    parser.add_argument("--audio_activation_phrase_keep", action=argparse.BooleanOptionalAction, default=True, help="If false and an activation phrase is set, the triggering phrase will be removed in messages that are sent to the backend.")
     parser.add_argument("--audio_show_transcript", action=argparse.BooleanOptionalAction, default=True, help="Show transcript of recorded user speech when kaudio transcribing is enabled. When disabled, you can still see the full transcript with /log or /print.")
     parser.add_argument("--verbose", action=argparse.BooleanOptionalAction, default=False, help="Show additional output for various things.")
     parser.add_argument("--expand_user_input", action=argparse.BooleanOptionalAction, default=True, help="Expand variables in user input. E.g. {$var} will be replaced with content of var. Variables are initialized from character folders (i.e. file 'memory' will be {$memory}), or can be set manually with the /varfile command or --varfile option.")
@@ -70,3 +75,7 @@ def makeArgParser(default_params):
         
     return parser
 
+
+def makeDefaultOptions():
+    parser = makeArgParser(backends.default_params)
+    return parser.parse_args(args="")    
