@@ -1,4 +1,5 @@
 import requests, json, os, io, re, base64, random, sys, threading, signal, tempfile, string
+from queue import Queue
 import feedwater
 from functools import *
 from colorama import just_fix_windows_console, Fore, Back, Style
@@ -102,6 +103,8 @@ class Plumbing(object):
         self.session = Session(chat_user=options.get("chat_user", ""))
         self.lastResult = {}
         self._lastInteraction = 0
+        self._frozen = False
+        self._freeze_queue = Queue()
         self.tts_flag = False
         self.initial_print_flag = False
         self.initial_cli_prompt = initial_cli_prompt
@@ -306,6 +309,7 @@ class Plumbing(object):
         return mode in mode_formatters
 
     def setMode(self, mode):
+        # FIXME: this isn't affected by freeze, but since most things go through setOption we should be fine, right? ... right?
         if not(self.isValidMode(mode)):
             return
         
@@ -436,11 +440,27 @@ class Plumbing(object):
             if value in xs:
                 return
         self.options[name].append(value)
-            
-            
-            
-                
+
+        
+    def freeze(self):
+        self._frozen = True
+        
+    def unfreeze(self):
+        self._frozen = False        
+        while not(self._freeze_queue.empty()):
+            (name, value) = self._freeze_queue.get(block=False)
+            self.setOption(name, value)
+            if self.getOption("verbose"):
+                printerr("unfreezing " + name + " : " + str(value))
+
+    
     def setOption(self, name, value):
+        # new: we freeze state during some parts of execution, applying options after we unfreeze
+        if self._frozen:
+            self._freeze_queue.put((name, value))
+            return
+        
+            
         # mode gets to call dibs
         if name == "mode":
             self.setMode(value)
@@ -480,7 +500,8 @@ class Plumbing(object):
             else:
                 self.options[name] = []
             self.options[name] += value
-            
+        elif name == "chat_ai":
+            self.session.setVar(name, value)
         return ""
 
     def _ctPauseHandler(self, sig, frame):
@@ -568,7 +589,11 @@ class Plumbing(object):
 
         self.interact(w, self._print_generation_callback)
 
-    def _streamCallback(self, token):
+    def _streamCallback(self, token, user_callback=None):
+        if user_callback is None:
+            # default to printing
+            user_callback = lambda w: self.print(self.getAIColorFormatter().format(w), end="", flush=True)
+            
         self.stream_queue.append(token)
         if self.getOption("use_tools"):
             if ("".join(self.stream_queue)).strip().startswith(self.getOption("tools_magic_word")):
@@ -577,7 +602,7 @@ class Plumbing(object):
         
         method = self.getOption("stream_flush")
         if method == "token":
-            self.print(self.getAIColorFormatter().format(token), end="", flush=True)
+            user_callback(token)
         elif method == "sentence":
             self.stream_sentence_queue.append(token)
             if "\n" in token:
@@ -589,7 +614,8 @@ class Plumbing(object):
                     return
             # w is a complete sentence, or a full line
             self.stream_sentence_queue = []
-            self.print(self.getAIColorFormatter().format(w), end="", flush=True)
+            user_callback(w)
+            #self.print(self.getAIColorFormatter().format(w), end="", flush=True)
 
     def flushStreamQueue(self):
         w = "".join(self.stream_queue)
@@ -841,7 +867,7 @@ returns - A string ready to be sent to the backend, including the full conversat
             v = mkChatPrompt(self.session.getVar("chat_ai"), space=False)
         return (w, v)
     
-    def communicate(self, prompt_text):
+    def communicate(self, prompt_text, stream_callback=None):
         """Sends prompt_text to the backend and returns results."""
         backend = self.getBackend()
         payload = self.makeGeneratePayload(prompt_text)
@@ -854,8 +880,7 @@ returns - A string ready to be sent to the backend, including the full conversat
             # FIXME: this is the last hacky bit about formatting
             if self.getOption("chat_show_ai_prompt") and self.getMode().startswith("chat"):
                 self.print(self.session.getVar("chat_ai") + ": ", end="", flush=True)
-                    
-            if backend.generateStreaming(payload, self._streamCallback):
+            if backend.generateStreaming(payload, lambda token: self._streamCallback(token, user_callback=stream_callback)):
                 printerr("error: " + backend.getLastError())
                 return ""
             backend.waitForStream()
@@ -872,19 +897,20 @@ returns - A string ready to be sent to the backend, including the full conversat
         #result = result
         return result            
 
-    def interact(self, w : str, generation_callback=lambda msg: printerr(" > " + msg)) -> None:
+    def interact(self, w : str, generation_callback=lambda msg: printerr(" > " + msg), stream_callback=None, blocking=False, timeout=None) -> None:
         """This is as close to a main loop as we'll get. w may be any string or user input, which is sent to the backend. Generation(s) are then received and handled. Certain conditions may cause multiple generations. Strings returned from the backend are passed to generation_callback.
         :param w: Any input string, which will be processed and may be modified, eventually being passed to the backend.
-        :param 
         :param generation_callback: A function that takes a string as input. This will receive generations as they arrive from the backend. Note that a different callback handles streaming responses. If streaming is enabled and this function prints, you will print twice. Hint: check for getOption('stream') in the lambda.
         :return: Nothing. Use the callback to process the results of an interaction, or use interactBlocking."""
+        # internal state does not change during an interaction
+        self.freeze()
         def loop_interact(w):
             communicating = True
             (modified_w, hint) = self.modifyInput(w)
             self.addUserText(modified_w)            
             while communicating:
                 # this only runs more than once if there is auto-activation, e.g. with tool use
-                generated_w = self.communicate(self.buildPrompt(hint))
+                generated_w = self.communicate(self.buildPrompt(hint), stream_callback=stream_callback)
                 tool_w = self.applyTools(generated_w)
                 output = ""
                 if tool_w != "":
@@ -898,12 +924,25 @@ returns - A string ready to be sent to the backend, including the full conversat
                     communicating = False
                     output = generated_w
                 generation_callback(output)
+                self.unfreeze()                
             # end communicating loop
             self._lastInteraction = time_ms()
         t = threading.Thread(target=loop_interact, args=[w])
         t.start()
+        if blocking:
+            t.join(timeout = timeout)
+
         
+    def interactBlocking(self, w : str, timeout=None) -> str:
+        temp = ""
+        def f(v):
+            nonlocal temp
+            temp = v
+
+        self.interact(w, generation_callback=f, timeout=timeout, blocking=True)
+        return temp
     
+        
     def hasImages(self):
         return bool(self.images)
         
@@ -1027,8 +1066,7 @@ def main():
                 continue
 
             # this is the main event
-                
-            prog.interact(w, generation_callback=self._print_generation_callback)
+            prog.interact(w, generation_callback=prog._print_generation_callback)
             
 
             prog.resetContinue()

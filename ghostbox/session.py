@@ -41,18 +41,28 @@ class Session(object):
         if var not in self.fileVars:
             printerr("warning: session.getVar: Key not defined '" + var + "'. Did you forget to create " + self.dir + "/" + var + "?")
             return ""
-        return self.fileVars[var]
+        return self.expandVars(self.fileVars[var])
 
+    def setVar(self, name, value):
+        self.fileVars[name] = value
+    
     def getVars(self):
-        return self.fileVars
+        return {k : self.expandVars(v) for (k, v) in self.fileVars.items()}
     
     def getSystem(self):
         return self.getVar("system_msg")
 
 
-    def expandVars(self, w):
-        """Expands all variables of the form {{VAR}} in a given string w, if VAR is a key in fileVars."""
-        return replaceFromDict(w, self.getVars(), lambda k: "{{" + k + "}}")
+    def expandVars(self, w, depth=3):
+        """Expands all variables of the form {{VAR}} in a given string w, if VAR is a key in fileVars. By default, will recursively expand replacements to a depth of 3."""
+        for i in range(0, depth):
+            w_new = replaceFromDict(w, self.fileVars, lambda k: "{{" + k + "}}")
+            if w == w_new:
+                break
+            w = w_new
+        return w_new
+    
+        
     
     def _init(self, additional_keys=[]):
         if not(os.path.isdir(self.dir)):
@@ -62,7 +72,8 @@ class Session(object):
         for filepath in allfiles:
             filename = os.path.split(filepath)[1]
             if os.path.isfile(filepath) and filename not in self.special_files:
-                self.fileVars[filename] = self.expandVars(open(filepath, "r").read())
+                #self.fileVars[filename] = self.expandVars(open(filepath, "r").read())
+                self.fileVars[filename] = open(filepath, "r").read()
                 # this is useful but too verbose
                 #printerr("Found " + filename)
             elif filename == "tools.py":
