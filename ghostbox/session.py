@@ -37,10 +37,13 @@ class Session(object):
     def hasVar(self, var):
         return var in self.fileVars
     
-    def getVar(self, var):            
+    def getVar(self, var, default=None):            
         if var not in self.fileVars:
-            printerr("warning: session.getVar: Key not defined '" + var + "'. Did you forget to create " + self.dir + "/" + var + "?")
-            return ""
+            if default is None:
+                printerr("warning: session.getVar: Key not defined '" + var + "'. Did you forget to create " + self.dir + "/" + var + "?")
+                return ""                
+            else:
+                return default
         return self.expandVars(self.fileVars[var])
 
     def setVar(self, name, value):
@@ -82,7 +85,7 @@ class Session(object):
 
 
 
-        init_msg = self.fileVars.get("initial_msg", "")
+        init_msg = self.getVar("initial_msg", "")
         if init_msg:
             self.stories.get().addAssistantText(init_msg)
 

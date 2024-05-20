@@ -13,7 +13,6 @@ from ghostbox import agency
 from ghostbox._argparse import *
 from ghostbox.streaming import streamPrompt
 from ghostbox.session import Session
-from ghostbox.transcribe import WhisperTranscriber
 from ghostbox.pftemplate import *
 from ghostbox.backends import *
 from ghostbox import backends
@@ -171,10 +170,15 @@ class Plumbing(object):
         
     def _newTranscriber(self):
         # makes a lazy WhisperTranscriber, because model loading can be slow
-        return Proxy(lambda: WhisperTranscriber(model_name = self.getOption("whisper_model"),
-                                                silence_threshold = self.getOption("audio_silence_threshold"),
-                                                input_func=lambda: printerr("Started Recording. Hit enter to stop.")))
-
+        # yes this is hacky but some platforms (renpy) can't handle torch, which the whisper models rely on        
+        def delayWhisper():
+            from ghostbox.transcribe import WhisperTranscriber                    
+            return WhisperTranscriber(model_name = self.getOption("whisper_model"),
+                               silence_threshold = self.getOption("audio_silence_threshold"),
+                               input_func=lambda: printerr("Started Recording. Hit enter to stop."))
+            
+        return Proxy(delayWhisper)
+    
     def    continueWith(self, newUserInput):
         # FIXME: the entire 'continue' architecture is a trashfire. This should be refactored along with other modeswitching/input rewriting stuff in the main loop
         self.setOption("continue","1")

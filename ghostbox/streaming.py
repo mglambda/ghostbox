@@ -1,12 +1,13 @@
 import requests, json
-from requests_html import HTMLSession
+#from requests_html import HTMLSession
 from time import sleep
 from threading import Thread
 from ghostbox.util import printerr
 
 def connect_to_endpoint(url, prompt):
     try:
-        session = HTMLSession()
+        #session = HTMLSession()
+        session = requests.Session()
         r = session.post(url, json=prompt, stream=True)
         return r
     except Exception as e:

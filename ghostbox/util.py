@@ -1,5 +1,9 @@
 import os, getpass, shutil, base64, requests, re, csv, glob, time
-import tortoise.utils.audio
+
+# removed tortoise dependency because it will require torch, which import multiprocess, which won't work with renpy
+# FIXME: not a big deal because tortoise and all tts are spawned with subprocess. However, we will have to find a better way to get the voices.
+#import tortoise.utils.audio
+
 from colorama import Fore, Back, Style
 import appdirs
 import sys
@@ -339,7 +343,9 @@ def getVoices(prog):
         for voice in pollyvoices:
             vs.append(voice)
     elif prog.getOption("tts_program") == "ghostbox-tts-tortoise":
-        vs = list(tortoise.utils.audio.get_voices(extra_voice_dirs=list(filter(bool, [prog.getOption("tts_voice_dir")]))))
+        #vs = list(tortoise.utils.audio.get_voices(extra_voice_dirs=list(filter(bool, [prog.getOption("tts_voice_dir")]))))
+        # FIXME: find another way to get the list of voices
+        vs = []
     else:
         for file in glob.glob(prog.getOption("tts_voice_dir") + "/*"):
             if os.path.isfile(file):

@@ -5,9 +5,10 @@ from ghostbox.main import Plumbing
 from ghostbox._argparse import makeDefaultOptions
 from ghostbox.util import printerr
 from ghostbox import commands
+from ghostbox.definitions import *
 
 def from_llamacpp(endpoint="http://localhost:8080", **kwargs):
-    return Ghostbox(backend="llama.cpp", endpoint=endpoint, **kwargs)
+        return Ghostbox(backend="llamacpp", endpoint=endpoint, **kwargs)
 
 def from_koboldcpp(endpoint="http://localhost:5001", **kwargs):
     return Ghostbox(backend="llama.cpp", endpoint=endpoint, **kwargs)
@@ -30,14 +31,15 @@ class ChatResult:
 class CompletionResult:
     # also not sure yet
     payload : str
-@dataclass
+
 class Ghostbox:
-    backend : str
-    endpoint : str
-    character_folder : str = ""
-    config_file : str = ""
-    
-    def __post_init__(self):
+    def __init__(self,
+                 endpoint : str,
+                backend : LLMBackend,
+                **kwargs):
+        self.endpoint = endpoint
+        self.backend = LLMBackend[backend]
+        self.__dict__ |= kwargs
         self.__dict__["_plumbing"] = Plumbing(options = makeDefaultOptions().__dict__ | {k : v for (k, v) in self.__dict__.items() if not(k.startswith("_"))})
         # FIXME: set API defaults here
         
