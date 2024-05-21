@@ -140,6 +140,7 @@ class Plumbing(object):
         self.running = True
 
     def initializeBackend(self, backend, endpoint):
+        # FIXME: only llama currently
         self.backend = LlamaCPPBackend(endpoint)
 
     def getBackend(self):
@@ -984,6 +985,8 @@ def main():
     parser = makeArgParser(backends.default_params)
     args = parser.parse_args()
     prog = Plumbing(options=args.__dict__, initial_cli_prompt=args.cli_prompt)
+    # the following is setup, though it is subtly different from Plumbing.init, so beware
+    
     if userConfigFile():    
         prog.setOption("user_config", userConfigFile())
         printerr(loadConfig(prog, [userConfigFile()], override=False))

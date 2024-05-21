@@ -5,7 +5,40 @@ import threading
 import ghostbox
 
 class LlamacppTest(unittest.TestCase):
-    box = ghostbox.from_llamacpp()    
+    box = ghostbox.from_llamacpp()
+
+    def test_box_optionsrom(self):
+        # make extra box and see if setting options through **kwargs works
+        x = ghostbox.from_llamacpp(specific_option="test")
+        
+        self.assertEqual(x.specific_option, "test")
+        self.assertEqual(x._plumbing.options["specific_option"], "test")
+        self.assertEqual(x._plumbing.getOption("specific_option"), "test")
+
+        new = "another test"
+        x.specific_option = new
+        self.assertEqual(x.specific_option, new)
+        self.assertEqual(x._plumbing.options["specific_option"], new)
+        self.assertEqual(x._plumbing.getOption("specific_option"), new)
+
+
+    def test_start_session(self,):
+        bx = ghostbox.from_llamacpp(character_folder="test_dolphin")
+        w = bx.text("Hi dolphin!")
+        dolphin = "Dolphin"
+        self.assertEqual(bx._plumbing.getOption("chat_ai"), dolphin)
+        self.assertEqual(bx.chat_ai, dolphin)
+        self.assertEqual(bx.get("chat_ai"), dolphin)
+        self.assertEqual(type(w), str)
+        
+        bx.start_session("test_joshu")
+        w = bx.text("Hi Joshu!")
+        joshu = "Joshu"
+        self.assertEqual(bx._plumbing.getOption("chat_ai"), joshu)
+        self.assertEqual(bx.chat_ai, joshu)
+        self.assertEqual(bx.get("chat_ai"), joshu)
+        self.assertEqual(type(w), str)        
+    
     def test_text_basic(self):
         # this has no character set so it doesn't need to return anything sensible. however it does need to return
         w = self.box.text("Hello, how are you!")

@@ -2,6 +2,8 @@ import os, datetime, glob, sys, requests, traceback, random, json
 from ghostbox.session import Session
 from ghostbox.util import *
 from ghostbox.StoryFolder import *
+from ghostbox.definitions import *
+from ghostbox.api_internal import *
 
 def newSession(program, argv, keep=False):
     """CHARACTER_FOLDER
@@ -14,60 +16,7 @@ Start a new session with the character or template defined in CHARACTER_FOLDER. 
             return "No path provided. Cannot Start."
 
     filepath = " ".join(argv)
-    allpaths = [filepath] + [p + "/" + filepath for p in program.getOption("include")]
-    for path in allpaths:
-        path = os.path.normpath(path)
-        failure = False
-        try:
-            s = Session(dir=path, chat_user=program.getOption("chat_user"), chat_ai=program.getOption("chat_ai"), additional_keys=program.getOption("var_file"))
-            break
-        except FileNotFoundError as e:
-            # session will throw if path is not valid, we keep going through the includes
-            failure = e
-
-
-    if failure:
-        return "error: " + str(failure)
-
-    # constructing new session worked
-    if not(keep):
-        program.session = s
-    else:
-        # something like /switch happened, we want to keep some stuff
-        program.session.merge(s)
-        
-    w = ""
-    # try to load config.json if present
-    configpath = path + "/config.json"
-    if os.path.isfile(configpath):
-        w += loadConfig(program, [configpath], override=False) + "\n"
-    program.options["character_folder"] = path
-
-    # this might be very useful for people to debug their chars, so we are a bit verbose here by default
-    w += "Found vars " + ", ".join([k for k in program.session.getVars().keys() if k not in Session.special_files]) + "\n"
-
-
-    # by convention, the initial message is stored in initial_msg
-    if program.session.hasVar("initial_msg") and not(keep):
-        program.initial_print_flag = True
-
-    # enable tools if any are found
-    if program.session.tools:
-        program.setOption("use_tools", True)
-        w += "Tool dictionary generated from tools.py, setting use_tools to True. Beware, the AI will now call functions.\n"
-        if program.getOption("verbose"):
-            w += "Dumping tool dictionary. Run with --no-verbose to disable this."
-            w += json.dumps(program.session.tools, indent=4) + "\n"
-        else:
-            w += "AI tools: " + ", ".join([t["name"] for t in program.session.tools]) + "\n"
-
-        
-    # hide if option is set
-    if program.getOption("hide"):
-        hide(program, [])
-
-    w += "Ok. Loaded " + path 
-    return w
+    return start_new(program, filepath, keep=keep)
 
 def printStory(prog, argv, stderr=False, apply_filter=True):
     """[FILENAME]
@@ -418,15 +367,7 @@ The order of config file loading is as follows .ghostconf.conf.json > --config_f
     if argv == []:
         return "Please provide a filename for the config file to load."
     filename = " ".join(argv)
-    try:
-        w = open(filename, "r").read()
-    except Exception as e:
-        return str(e)
-    err = prog.loadConfig(w, override=override)
-    if err:
-        return err
-    return "Loaded config " + filename
-
+    return load_config(program, filename, override=override)
 def saveConfig(prog, argv):
     """CONFIG_FILE
     Save the current program options and their values to the file at location CONFIG_FILE. This will either create or overwrite the CONFIG_FILE, deleting all its previous contents."""
@@ -546,7 +487,7 @@ Show some performance stats for the last request."""
     if not(r):
         return "No time statistics. Either no request has been sent yet, or the backend doesn't support timing."
 
-    if prog.getOption("backend") != "llama.cpp":
+    if prog.getOption("backend") != "llamacpp":
         return "Timings are not implemented yet for this backend."
     
     w = ""

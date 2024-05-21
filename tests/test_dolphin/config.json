@@ -1,0 +1,6 @@
+{
+	"mode" : "default",
+	"cli_prompt" : "\n 🐬 ",
+	"chat_ai" : "Dolphin",
+	"cli_prompt_color" : "blue"
+}

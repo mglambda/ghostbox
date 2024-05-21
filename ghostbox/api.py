@@ -1,14 +1,16 @@
 from dataclasses import dataclass
 from contextlib import contextmanager
 from typing import Callable
+from typing_extensions import Self
 from ghostbox.main import Plumbing
 from ghostbox._argparse import makeDefaultOptions
 from ghostbox.util import printerr
 from ghostbox import commands
 from ghostbox.definitions import *
+from ghostbox.api_internal import *
 
 def from_llamacpp(endpoint="http://localhost:8080", **kwargs):
-        return Ghostbox(backend="llamacpp", endpoint=endpoint, **kwargs)
+    return Ghostbox(backend="llamacpp", endpoint=endpoint, **kwargs)
 
 def from_koboldcpp(endpoint="http://localhost:5001", **kwargs):
     return Ghostbox(backend="llama.cpp", endpoint=endpoint, **kwargs)
@@ -44,8 +46,28 @@ class Ghostbox:
         # FIXME: set API defaults here
         
         if self.config_file:
-            printerr(commands.loadConfig(self._plumbing, [self.config_file]))
+            self.load_config(self.config_file)
+        self.init()
 
+    def init(self):
+        if self.character_folder:
+            self.start_session(self.character_folder)
+
+        if self._plumbing.getOption("hide"):
+            hide(self._plumbing, [])
+
+        if self._plumbing.getOption("tts"):
+            self._plumbing.initializeTTS()
+
+        if self._plumbing.getOption("audio"):
+            self._plumbing.startAudioTranscription()
+            del self._plumbing.options["audio"]
+
+        if self._plumbing.getOption("image_watch"):
+            self._plumbing.startImageWatch()
+            del self._plumbing.options["image_watch"]
+        return self
+            
 
     @contextmanager
     def options(self, options : dict):
@@ -70,7 +92,7 @@ class Ghostbox:
             self.__dict__[option_name] = value
         self._plumbing.setOption(option_name, value)
 
-    def get(option_name : str) -> object:
+    def get(self, option_name : str) -> object:
         return self._plumbing.getOption(option_name)
 
     def __getattr__(self, k):
@@ -84,7 +106,7 @@ class Ghostbox:
             self.__dict__[k] = v
 
         if "_plumbing" in self.__dict__:
-            self.__dict["_plumbing"].setOption(k, v)
+            self.__dict__["_plumbing"].setOption(k, v)
 
 
     # diagnostics
@@ -131,3 +153,13 @@ class Ghostbox:
 
     def completion_async(self, prompt_text : str, callback : Callable[[CompletionResult], None]) -> None:
         pass
+
+    def start_session(self, filepath : str, keep=False) -> Self:
+        printerr(start_session(self._plumbing, filepath))
+        return self
+
+    def load_config(self, config_file : str) -> Self:
+        printerr(load_config(self._plumbing, config_file))
+        #FIXME: update self.__dict__?
+        return self
+    
