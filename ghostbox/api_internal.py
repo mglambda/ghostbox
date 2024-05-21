@@ -1,8 +1,10 @@
 import os, datetime, glob, sys, requests, traceback, random, json
 from ghostbox.session import Session
+from ghostbox.util import ultraglob
 
 def start_session(plumbing, filepath, keep=False) -> str:
-    allpaths = [filepath] + [p + "/" + filepath for p in plumbing.getOption("include")]
+    #allpaths = [filepath] + [p + "/" + filepath for p in plumbing.getOption("include")]
+    allpaths = [filepath] + [p + "/" + filepath for p in plumbing.getOption("include")]    
     for path in allpaths:
         path = os.path.normpath(path)
         failure = False

@@ -335,6 +335,19 @@ def envFromDict(d):
     return os.environ | {k : str(v) for (k, v) in d.items()}
 
 
+def explodeIncludeDir(include, extradir):
+    """So that we can turn 'char/' into ['/include/path/char/', 'char/'] etc."""
+    include = os.path.normpath(include)
+    extradir = os.path.normpath(extradir)
+    return [include, extradir, include + "/" + extradir]
+
+def ultraglob(include_dirs, specific_dir):
+    # everyone hates nested listcomprehensions
+    acc = []
+    for include_dir in include_dirs:
+        acc += [glob.glob(dir + "/*") for dir in explodeIncludeDir(include_dir, specific_dir)]
+    return reduce(lambda xs, ys: xs + ys, acc, [])
+    
 def getVoices(prog):
     """Returns a list of strings with voice names for a given Program object."""
     pollyvoices = "Lotte, Maxim, Ayanda, Salli, Ola, Arthur, Ida, Tomoko, Remi, Geraint, Miguel, Elin, Lisa, Giorgio, Marlene, Ines, Kajal, Zhiyu, Zeina, Suvi, Karl, Gwyneth, Joanna, Lucia, Cristiano, Astrid, Andres, Vicki, Mia, Vitoria, Bianca, Chantal, Raveena, Daniel, Amy, Liam, Ruth, Kevin, Brian, Russell, Aria, Matthew, Aditi, Zayd, Dora, Enrique, Hans, Danielle, Hiujin, Carmen, Sofie, Gregory, Ivy, Ewa, Maja, Gabrielle, Nicole, Filiz, Camila, Jacek, Thiago, Justin, Celine, Kazuha, Kendra, Arlet, Ricardo, Mads, Hannah, Mathieu, Lea, Sergio, Hala, Tatyana, Penelope, Naja, Olivia, Ruben, Laura, Takumi, Mizuki, Carla, Conchita, Jan, Kimberly, Liv, Adriano, Lupe, Joey, Pedro, Seoyeon, Emma, Niamh, Stephen".split(", ")
@@ -347,7 +360,7 @@ def getVoices(prog):
         # FIXME: find another way to get the list of voices
         vs = []
     else:
-        for file in glob.glob(prog.getOption("tts_voice_dir") + "/*"):
+        for file in ultraglob(prog.getOption("include"), prog.getOption("tts_voice_dir")):
             if os.path.isfile(file):
                 vs.append(os.path.split(file)[1])
     return vs

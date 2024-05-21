@@ -666,7 +666,10 @@ class Plumbing(object):
         # pick a voice in case of random
         if self.getOption("tts_voice") == "random":
             # no setOption to avoid recursion
-            self.options["tts_voice"] = random.choice(getVoices(self))
+            voices = getVoices(self)
+            if voices == []:
+                return "error: Cannot initialize TTS: No voices available."
+            self.options["tts_voice"] = random.choice(voices)
             printerr("Voice '" + self.getOption("tts_voice") + "' was chosen randomly.")
             
         if self.tts is not None:
@@ -678,6 +681,9 @@ class Plumbing(object):
                 printerr("warning: TTS process got lost somehow. Probably not a big deal.")
 
         self.tts = feedwater.run(tts_program, env=envFromDict(self.options))
+        self.setOption("stream_flush", "sentence")
+        if self.getOption("verbose"):
+            printerr(" Automatically set stream_flush to 'sentence'. This is recommended with TTS. Manually reset it to 'token' if you really want.")
         return ""
 
     def communicateTTS(self, w):
