@@ -393,13 +393,7 @@ def hide(prog, argv):
     This does nothing that you cannot achieve by manually setting several options, it just bundles an eclectic mix of them in one command.
     I like to use this with TTS for a more immersive experience."""
     # this is just convenient shorthand for when I want my screen reader to be less spammy
-    prog.options["cli_prompt"] = "\n"
-    prog.options["audio_show_transcript"] = False
-    prog.options["tts_subtitles"] = False
-    #prog.options["stream"] = False
-    prog.options["chat_show_ai_prompt"] = False
-    prog.options["color"] = False
-    
+    hide_some_output(prog)
     return ""
 
 def varfile(prog, argv):

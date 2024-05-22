@@ -54,7 +54,7 @@ def start_session(plumbing, filepath, keep=False) -> str:
 
     # hide if option is set
     if plumbing.getOption("hide"):
-        hide(plumbing, [])
+        hide_some_output(plumbing)
 
     w += "Ok. Loaded " + path
     return w
@@ -69,4 +69,14 @@ def load_config(plumbing, filepath, override=True) -> str:
     if err:
         return err
     return "Loaded config " + filepath
+    
+
+
+def hide_some_output(plumbing):
+    plumbing.options["cli_prompt"] = "\n"
+    plumbing.options["audio_show_transcript"] = False
+    plumbing.options["tts_subtitles"] = False
+    #plumbing.options["stream"] = False
+    plumbing.options["chat_show_ai_prompt"] = False
+    plumbing.options["color"] = False
     
