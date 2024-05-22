@@ -596,8 +596,8 @@ class Plumbing(object):
 
     def _streamCallback(self, token, user_callback=None):
         if user_callback is None:
-            # default to printing
-            user_callback = lambda w: self.print(self.getAIColorFormatter().format(w), end="", flush=True)
+            user_callback = lambda x: x
+        f =lambda w: self.print(self.getAIColorFormatter().format(w), end="", flush=True)
             
         self.stream_queue.append(token)
         if self.getOption("use_tools"):
@@ -607,7 +607,9 @@ class Plumbing(object):
         
         method = self.getOption("stream_flush")
         if method == "token":
+            f(token)
             user_callback(token)
+
         elif method == "sentence":
             self.stream_sentence_queue.append(token)
             if "\n" in token:
@@ -619,8 +621,9 @@ class Plumbing(object):
                     return
             # w is a complete sentence, or a full line
             self.stream_sentence_queue = []
+            f(w)
             user_callback(w)
-            #self.print(self.getAIColorFormatter().format(w), end="", flush=True)
+
 
     def flushStreamQueue(self):
         w = "".join(self.stream_queue)
@@ -680,12 +683,35 @@ class Plumbing(object):
             except ProcessLookupError:
                 printerr("warning: TTS process got lost somehow. Probably not a big deal.")
 
-        self.tts = feedwater.run(tts_program, env=envFromDict(self.options))
+        # let's make the path issue absolutely clear. We only track tts_voice_dir, but to the underlying tts program, we expose the tts_voice_abs_dir environment variable, which contains the absolute path to the voice dir
+        # FIXME: rewrite the entire path architecture
+        tts_voice_abs_dir = self.tryGetAbsVoiceDir()
+        self.tts = feedwater.run(tts_program, env=envFromDict(self.options | {"tts_voice_abs_dir" : tts_voice_abs_dir}))
         self.setOption("stream_flush", "sentence")
         if self.getOption("verbose"):
             printerr(" Automatically set stream_flush to 'sentence'. This is recommended with TTS. Manually reset it to 'token' if you really want.")
         return ""
 
+
+    def tryGetAbsVoiceDir(self):
+        # this is sort of a heuristic. The problem is that we allow multiple include dirs, but have only one voice dir. So right now we must pick the best from a number of candidates.
+        if os.path.isabs(self.getOption("tts_voice_dir")) and os.path.isdir(self.getOption("tts_voice_dir")):
+            return self.getOption("tts_voice_dir")
+        
+        winner = ""
+        ok = False
+        for path in self.getOption("include"):
+            file = path + "/" + self.getOption("tts_voice_dir")
+            if os.path.isdir(file):
+                winner = file
+                ok = True
+                break
+
+        abs_dir = os.path.abspath(winner)
+        if not(ok):
+            printerr("warning: Couldn't cleanly determine tts_voice_dir. Guessing it is '" + abs_dir + "'.")
+        return abs_dir
+            
     def communicateTTS(self, w):
         if not(self.getOption("tts")):
             return ""
@@ -706,6 +732,9 @@ class Plumbing(object):
         # either prints, speaks, or both, depending on settings
         if w == "":
             return
+
+        if self.getOption("quiet"):
+            return 
         
         if tts and self.getOption("tts") and w != self.showCLIPrompt():
             self.communicateTTS(self.getTTSFormatter().format(w) + end)
@@ -908,12 +937,15 @@ returns - A string ready to be sent to the backend, including the full conversat
         #result = result
         return result            
 
-    def interact(self, w : str, generation_callback=lambda msg: printerr(" > " + msg), stream_callback=None, blocking=False, timeout=None) -> None:
+    def interact(self, w : str, user_generation_callback = None, generation_callback=None, stream_callback=None, blocking=False, timeout=None) -> None:
         """This is as close to a main loop as we'll get. w may be any string or user input, which is sent to the backend. Generation(s) are then received and handled. Certain conditions may cause multiple generations. Strings returned from the backend are passed to generation_callback.
         :param w: Any input string, which will be processed and may be modified, eventually being passed to the backend.
         :param generation_callback: A function that takes a string as input. This will receive generations as they arrive from the backend. Note that a different callback handles streaming responses. If streaming is enabled and this function prints, you will print twice. Hint: check for getOption('stream') in the lambda.
         :return: Nothing. Use the callback to process the results of an interaction, or use interactBlocking."""
         # internal state does not change during an interaction
+        if generation_callback is None:
+            generation_callback = self._print_generation_callback
+            
         self.freeze()
         def loop_interact(w):
             communicating = True
@@ -934,8 +966,10 @@ returns - A string ready to be sent to the backend, including the full conversat
                     self.addAIText(generated_w)
                     communicating = False
                     output = generated_w
+                if user_generation_callback is not None:
+                    user_generation_callback(output)
                 generation_callback(output)
-                self.unfreeze()                
+            self.unfreeze()                
             # end communicating loop
             self._lastInteraction = time_ms()
         t = threading.Thread(target=loop_interact, args=[w])
@@ -950,7 +984,7 @@ returns - A string ready to be sent to the backend, including the full conversat
             nonlocal temp
             temp = v
 
-        self.interact(w, generation_callback=f, timeout=timeout, blocking=True)
+        self.interact(w, user_generation_callback=f, timeout=timeout, blocking=True)
         return temp
     
         

@@ -16,7 +16,7 @@ Start a new session with the character or template defined in CHARACTER_FOLDER. 
             return "No path provided. Cannot Start."
 
     filepath = " ".join(argv)
-    return start_new(program, filepath, keep=keep)
+    return start_session(program, filepath, keep=keep)
 
 def printStory(prog, argv, stderr=False, apply_filter=True):
     """[FILENAME]
@@ -209,7 +209,7 @@ def ttsDebug(prog, argv):
     """
 Get stdout and stderr from the underlying tts_program when TTS is enabled."""
     if not(prog.tts):
-        return ""
+        return "TTS is None."
 
     w = "tts_program: " + prog.getOption("tts_program")
     w += "\ntts exit code: " + str(prog.tts.exit_code())
@@ -367,7 +367,7 @@ The order of config file loading is as follows .ghostconf.conf.json > --config_f
     if argv == []:
         return "Please provide a filename for the config file to load."
     filename = " ".join(argv)
-    return load_config(program, filename, override=override)
+    return load_config(prog, filename, override=override)
 def saveConfig(prog, argv):
     """CONFIG_FILE
     Save the current program options and their values to the file at location CONFIG_FILE. This will either create or overwrite the CONFIG_FILE, deleting all its previous contents."""

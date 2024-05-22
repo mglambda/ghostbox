@@ -360,10 +360,13 @@ def getVoices(prog):
         # FIXME: find another way to get the list of voices
         vs = []
     else:
-        for file in ultraglob(prog.getOption("include"), prog.getOption("tts_voice_dir")):
-            if os.path.isfile(file):
-                vs.append(os.path.split(file)[1])
+        #for file in ultraglob(prog.getOption("include"), prog.getOption("tts_voice_dir")):
+        vs = [os.path.split(file)[1] for file in glob.glob(prog.tryGetAbsVoiceDir() + "/*") if os.path.isfile(file)]
     return vs
 
 def time_ms():
     return round(time.time() * 1000)
+
+
+def compose2(f, g):
+    return lambda x: f(g(x))

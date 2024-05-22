@@ -7,6 +7,7 @@ from ghostbox._argparse import makeDefaultOptions
 from ghostbox.util import printerr
 from ghostbox import commands
 from ghostbox.definitions import *
+from ghostbox import definitions
 from ghostbox.api_internal import *
 
 def from_llamacpp(endpoint="http://localhost:8080", **kwargs):
@@ -43,7 +44,9 @@ class Ghostbox:
         self.backend = LLMBackend[backend]
         self.__dict__ |= kwargs
         self.__dict__["_plumbing"] = Plumbing(options = makeDefaultOptions().__dict__ | {k : v for (k, v) in self.__dict__.items() if not(k.startswith("_"))})
-        # FIXME: set API defaults here
+        # override with some API defaults
+        self.__dict__["_plumbing"].options |= definitions.api_default_options
+        
         
         if self.config_file:
             self.load_config(self.config_file)
@@ -57,7 +60,7 @@ class Ghostbox:
             hide(self._plumbing, [])
 
         if self._plumbing.getOption("tts"):
-            self._plumbing.initializeTTS()
+            printerr(self._plumbing.initializeTTS())
 
         if self._plumbing.getOption("audio"):
             self._plumbing.startAudioTranscription()
@@ -116,24 +119,27 @@ class Ghostbox:
     # these are the payload functions
     def text(self,
              prompt_text : str,
-             timeout=None) -> str:
-        with self.option("stream", False):
+             timeout=None,
+             quiet : bool =False) -> str:
+        with self.options({"stream" : False, "quiet" : quiet}):
             return self._plumbing.interactBlocking(prompt_text, timeout=timeout)
 
     def text_async(self,
                    prompt_text : str,
-                   callback : Callable[[str], None]) -> None:
-        with self.option("stream", False):
+                   callback : Callable[[str], None],
+                   quiet : bool = False) -> None:
+        with self.options({"stream" : False, "quiet" : quiet}):
             # FIXME: this is tricky as we immediately return and set stream = True again ??? what to do
-            self._plumbing.interact(prompt_text, generation_callback=callback)
+            self._plumbing.interact(prompt_text, user_generation_callback=callback)
         return
     
     def text_stream(self,
                     prompt_text : str,
                     chunk_callback : Callable[[str], None],
-                    generation_callback : Callable[[str], None] = lambda x: None) -> None:
-        with self.option("stream", True):
-            self._plumbing.interact(prompt_text, generation_callback=generation_callback, stream_callback=chunk_callback)
+                    generation_callback : Callable[[str], None] = lambda x: None,
+                    quiet : bool = False) -> None:
+        with self.options({"stream" : True, "quiet" : quiet}):
+            self._plumbing.interact(prompt_text, user_generation_callback=generation_callback, stream_callback=chunk_callback)
         return
     
     def json(self, prompt_text : str) -> dict:
