@@ -174,3 +174,21 @@ class Ghostbox:
         #FIXME: update self.__dict__?
         return self
     
+    def tools_inject_dependency(self, symbol_name : str, obj : object) -> Self:
+        """Make a python object available in the python tool module of a running ghostbox AI, without having defined it in the tools.py.
+        This can be used to inject dependencies from the 'outside'. This is useful in cases where you must make an object available to the AI that can not be acquired during initialization of the tool module, for example, a resource manager, or a network connection.
+        Note that the AI will not be aware of an injected dependency, and be unable to reference it. However, you can refer to the symbol_name in the functions you define for the AI, which will be a bound reference as soon as you inject the dependency. The AI may then use the functions that previously didn't refer to the object now bound by symbol_name.
+        :param symbol_name: The name of the identifier to be injected. If this is e.g. 'point', point will be bound to obj in tools.py.
+        :param obj: An arbitrary python object. A reference to object will be bound to symbol_name and be available in tools.py.
+        :return: Ghostbox"""
+        module = self._plumbing.session.tools_module
+        if module is None:
+            printerr("warning: Unable to inject dependency '" + symbol_name + "'. Tool module not initialized.")
+            return Self
+
+        # FIXME: should we warn users if they overriade an existing identifier? Let's do ti since if they injected once why do they need to do it again?
+        if symbol_name in module.__dict__:
+            printerr("warning: While trying to inject a dependency: '" + symbol_name + "' already exists in tool module.")
+
+        module.__dict__[symbol_name] = obj
+        

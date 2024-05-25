@@ -1,6 +1,6 @@
 import unittest
 from collections import deque
-import threading
+import threading, os
 
 import ghostbox
 
@@ -89,7 +89,16 @@ class LlamacppTest(unittest.TestCase):
         self.assertEqual(type(tmp), str)
         self.assertEqual(tmp, "".join(chunks))
         return
-    
+
+    def test_dependency_injection(self):
+        bx = ghostbox.from_llamacpp(character_folder="test_scribe_dependency_injection")
+        # scribe doesn't have 'file' available, we will tell him what his note file is
+        test_file = "this_is_a_test_file_for_dependency_injection.txt"
+        bx.tools_inject_dependency("file", test_file)
+        bx.text("Can you take down a note that reminds me to work out next week?")
+        self.assertTrue(os.path.isfile(test_file))
+        os.remove(test_file)
+        
 def main():
     unittest.main()
 
