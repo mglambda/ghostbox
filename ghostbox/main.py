@@ -976,7 +976,8 @@ returns - A string ready to be sent to the backend, including the full conversat
         t.start()
         if blocking:
             t.join(timeout = timeout)
-
+        if self.getOption("log_time"):
+            printerr(showTime(self, []))
         
     def interactBlocking(self, w : str, timeout=None) -> str:
         temp = ""
@@ -1002,7 +1003,7 @@ returns - A string ready to be sent to the backend, including the full conversat
 
     def setLastJSON(self, json_result):
         self.lastResult = json_result
-        if self.getOption("backend") == "llama.cpp":
+        if self.getOption("backend") == "llamacpp":
             # llama does not allow to set the context size by clients, instead it dictates it server side. however i have not found a way to query it directly, it just gets set after the first request
             self.setOption("max_context_length", json_result["generation_settings"]["n_ctx"])
             self._dirtyContextLlama = True # context has been set by llama

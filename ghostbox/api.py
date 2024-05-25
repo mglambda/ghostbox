@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 from contextlib import contextmanager
-from typing import Callable
+from typing import Callable, Dict
 from typing_extensions import Self
 from ghostbox.main import Plumbing
 from ghostbox._argparse import makeDefaultOptions
@@ -98,6 +98,11 @@ class Ghostbox:
     def get(self, option_name : str) -> object:
         return self._plumbing.getOption(option_name)
 
+
+    def set_vars(self, injections : Dict[str, str]) -> Self:
+        for (k, v) in injections.items():
+            self._plumbing.session.setVar(k, v)
+        return self
     def __getattr__(self, k):
         return self.__dict__["_plumbing"].getOption(k)
 
