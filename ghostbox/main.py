@@ -587,6 +587,10 @@ class Plumbing(object):
         if self.getOption("audio_show_transcript"):
             self.print(w, tts=False)
 
+        # FIXME: this is possibly better put in the whispertranscriber when it picks up any audio
+        if self.getOption("audio_interrupt_tts"):
+            self.stopTTS()
+            
         w = self.modifyTranscription(w)
         if not(w):
             self.printActivationPhraseWarning()
@@ -690,7 +694,7 @@ class Plumbing(object):
         self.setOption("stream_flush", "sentence")
         if self.getOption("verbose"):
             printerr(" Automatically set stream_flush to 'sentence'. This is recommended with TTS. Manually reset it to 'token' if you really want.")
-        return ""
+        return "TTS initialized."
 
 
     def tryGetAbsVoiceDir(self):
@@ -711,11 +715,18 @@ class Plumbing(object):
         if not(ok):
             printerr("warning: Couldn't cleanly determine tts_voice_dir. Guessing it is '" + abs_dir + "'.")
         return abs_dir
-            
-    def communicateTTS(self, w):
+
+    def stopTTS(self):
+        # FIXME: not implemented for all TTS clients
+        self.tts.write_line("<clear>")
+    
+    def communicateTTS(self, w, interrupt=False):
         if not(self.getOption("tts")):
             return ""
 
+        if interrupt:
+            self.stopTTS()
+            
         # strip color codes - this would be nicer by just disabling color, but the fact of the matter is we sometimes want color printing on console and tts at the same time. At least regex is fast.
         w = stripANSI(w)
 

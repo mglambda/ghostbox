@@ -42,9 +42,13 @@ class Ghostbox:
                 **kwargs):
         self.endpoint = endpoint
         self.backend = LLMBackend[backend]
+       
         self.__dict__ |= kwargs
         self.__dict__["_plumbing"] = Plumbing(options = makeDefaultOptions().__dict__ | {k : v for (k, v) in self.__dict__.items() if not(k.startswith("_"))})
+
+        
         # override with some API defaults
+        # FIXME: only if not specified by user
         self.__dict__["_plumbing"].options |= definitions.api_default_options
         
         
@@ -52,6 +56,8 @@ class Ghostbox:
             self.load_config(self.config_file)
         self.init()
 
+
+        
     def init(self):
         if self.character_folder:
             self.start_session(self.character_folder)
@@ -120,20 +126,20 @@ class Ghostbox:
     # diagnostics
     def status(self):
         pass
-    
+
+    def is_busy(self) -> bool:
+        return self._plumbing._frozen
     # these are the payload functions
     def text(self,
              prompt_text : str,
-             timeout=None,
-             quiet : bool =False) -> str:
-        with self.options({"stream" : False, "quiet" : quiet}):
+             timeout=None) -> str:
+        with self.options({"stream" : False}):
             return self._plumbing.interactBlocking(prompt_text, timeout=timeout)
 
     def text_async(self,
                    prompt_text : str,
-                   callback : Callable[[str], None],
-                   quiet : bool = False) -> None:
-        with self.options({"stream" : False, "quiet" : quiet}):
+                   callback : Callable[[str], None]) -> None:
+        with self.options({"stream" : False}):
             # FIXME: this is tricky as we immediately return and set stream = True again ??? what to do
             self._plumbing.interact(prompt_text, user_generation_callback=callback)
         return
@@ -141,9 +147,8 @@ class Ghostbox:
     def text_stream(self,
                     prompt_text : str,
                     chunk_callback : Callable[[str], None],
-                    generation_callback : Callable[[str], None] = lambda x: None,
-                    quiet : bool = False) -> None:
-        with self.options({"stream" : True, "quiet" : quiet}):
+                    generation_callback : Callable[[str], None] = lambda x: None) -> None:
+        with self.options({"stream" : True}):
             self._plumbing.interact(prompt_text, user_generation_callback=generation_callback, stream_callback=chunk_callback)
         return
     
@@ -192,3 +197,11 @@ class Ghostbox:
 
         module.__dict__[symbol_name] = obj
         
+    def tts_say(self, text : str, interrupt : bool = False) -> Self:
+        self._plumbing.communicateTTS(text, interrupt=interrupt)
+        return self
+    
+    def tts_stop(self) -> Self:
+        self._plumbing.stopTTS()
+        return self
+    

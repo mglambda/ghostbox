@@ -1,6 +1,6 @@
 import unittest
 from collections import deque
-import threading, os
+import threading, os, time
 
 import ghostbox
 
@@ -98,6 +98,17 @@ class LlamacppTest(unittest.TestCase):
         bx.text("Can you take down a note that reminds me to work out next week?")
         self.assertTrue(os.path.isfile(test_file))
         os.remove(test_file)
+
+    def test_tts(self):
+        box = ghostbox.from_llamacpp(include=["/home/marius/prog/ai/ghostbox"],
+                                     character_folder="test_dolphin",
+                                     tts = True,
+                                     quiet = True,
+                                     tts_voice_dir="voices",
+                                     tts_program="/home/marius/prog/ai/ghostbox/tts.sh")
+
+        box.tts_say("This is an API use of the TTS.")
+        time.sleep(30)
         
 def main():
     unittest.main()

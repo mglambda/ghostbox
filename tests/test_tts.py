@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 import unittest
 from collections import deque
 import threading, time, json
@@ -8,6 +9,7 @@ import ghostbox
 class TTSTest(unittest.TestCase):
 
     def test_speak(self):
+        time.sleep(20)
         box = ghostbox.from_llamacpp(character_folder="test_dolphin",
                                      tts = True,
                                      tts_voice_dir="voices",
@@ -61,7 +63,27 @@ class TTSTest(unittest.TestCase):
         print(ttsDebug(box._plumbing, []))        
         box._plumbing.tts.close()
         
-        
+    def test_interrupt(self):
+        time.sleep(10)
+        box = ghostbox.from_llamacpp(character_folder="test_dolphin",
+                                     tts = True,
+                                     tts_voice_dir="voices",
+                                     tts_program="/home/marius/prog/ai/ghostbox/tts.sh",
+                                     verbose=True,
+                                     include=["/home/marius/prog/ai/ghostbox"])
+
+        w = "This is an extremely long sentence that should be interrupted after about 5 seconds. It was handcrafted to be extremely long and obnoxious, and it will be repeated 3 times unless I get interrupted."
+        done = threading.Event()
+        def stop_this(w):
+            return w
+
+
+            
+        box.text_async(w, callback=stop_this)
+        #done.wait(timeout=60)
+        time.sleep(20)
+        box.tts_stop()
+        box._plumbing.tts.close()
         
 def main():
     unittest.main()
