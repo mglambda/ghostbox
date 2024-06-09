@@ -231,7 +231,7 @@ def userSetup():
     # try copying some example chars
     chars = "dolphin dolphin-kitten joshu minsk scribe command-r".split(" ")
     copyEntity("char", "chars", chars)
-    templates = "chat-ml alpaca raw mistral user-assistant-newline vacuna command-r llama3".split(" ")
+    templates = "chat-ml alpaca raw mistral user-assistant-newline vacuna command-r llama3 phi3-instruct".split(" ")
     copyEntity("template", "templates", templates)
     
 
