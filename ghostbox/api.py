@@ -1,8 +1,13 @@
+from __future__ import annotations
+from pydantic import BaseModel
+from typing import *
 from dataclasses import dataclass
 from contextlib import contextmanager
 from typing import Callable, Dict
 from typing_extensions import Self
+import json
 from ghostbox.main import Plumbing
+from ghostbox.StoryFolder import StoryFolder
 from ghostbox._argparse import makeDefaultOptions
 from ghostbox.util import printerr
 from ghostbox import commands
@@ -18,11 +23,14 @@ def from_koboldcpp(endpoint="http://localhost:5001", **kwargs):
 
 
 
-@dataclass
-class ChatMessage:
-    role : str
-    text : str
 
+class ChatMessage(BaseModel):
+    role : str
+    content : str
+
+class ChatHistory(BaseModel):
+    data: List[ChatMessage]
+    
 
 @dataclass
 class ChatResult:
@@ -205,3 +213,23 @@ class Ghostbox:
         self._plumbing.stopTTS()
         return self
     
+    def set_char(self, character_folder: str, chat_history: Union[ChatHistory, List[Dict[str, str]], None] = None) -> Self:
+        """Set an active character_folder, which may be the same one, and optionally set the chat history.
+        Note: This will wipe the previous history unless chat_history is None."""
+        if character_folder != self._plumbing.getOption("character_folder"):
+            start_session(self._plumbing, character_folder)
+            
+        if chat_history is None:
+            return self
+
+        if type(chat_history) == list:
+            chat_history = ChatHistory(data=[ChatMessage(**chat_message) for chat_message in chat_history])
+
+
+        # we know now that chat_history is a valid ChatHistory pydantic object
+        new_stories = StoryFolder()
+        new_stories.get().data = [msg.model_dump() for msg in chat_history.data]
+        self._plumbing.session.stories = new_stories
+        return self
+    
+            

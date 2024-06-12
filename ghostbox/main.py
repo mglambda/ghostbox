@@ -982,7 +982,11 @@ returns - A string ready to be sent to the backend, including the full conversat
                     if self.getOption("verbose"):
                         output = tool_w
                 else:
-                    output = self.addAIText(generated_w)
+                    if self.getMode() != "chat":
+                        output = self.addAIText(generated_w)
+                    else:
+                        # formatting is a bit broken in chat mode. Actually chat mode is a bit broken
+                        output = generated_w
                     communicating = False
                 if user_generation_callback is not None:
                     user_generation_callback(output)
