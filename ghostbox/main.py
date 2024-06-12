@@ -366,17 +366,25 @@ class Plumbing(object):
             self.session.stories.get().addUserText(self.getUserFormatter().format(w))
 
     def addAIText(self, w):
-        if w:
-            if self.getOption("continue"):
-                self.session.stories.get().extendAssistantText(w)
+        """Adds text toe the AI's history in a cleanly formatted way according to the AI formatter. Returns the formatted addition or empty string if nothing was added.."""
+        if w == "":
+            return ""
+        
+        if self.getOption("continue"):
+            continuation = self.getAIFormatter().format(w)
+            self.session.stories.get().extendAssistantText(continuation)
+            return continuation
+        else:
+            # hint may have been sent to the backend but we have to add it to the story ourselves.
+            if self.getOption("hint_sticky"):
+                hint = self.getOption("hint")
             else:
-                # hint may have been sent to the backend but we have to add it to the story ourselves.
-                if self.getOption("hint_sticky"):
-                    hint = self.getOption("hint")
-                else:
-                    hint = ""
-                    
-                self.session.stories.get().addAssistantText(self.getAIFormatter().format(hint + w))
+                hint = ""
+
+            addition = self.getAIFormatter().format(hint + w)
+            self.session.stories.get().addAssistantText(addition)
+            return addition
+            
 
     def addSystemText(self, w):
         """Add a system message to the chat log, i.e. add a message with role=system. This is mostly used for tool/function call results."""
@@ -974,9 +982,8 @@ returns - A string ready to be sent to the backend, including the full conversat
                     if self.getOption("verbose"):
                         output = tool_w
                 else:
-                    self.addAIText(generated_w)
+                    output = self.addAIText(generated_w)
                     communicating = False
-                    output = generated_w
                 if user_generation_callback is not None:
                     user_generation_callback(output)
                 generation_callback(output)
