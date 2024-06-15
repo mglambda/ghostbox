@@ -217,7 +217,7 @@ class Ghostbox:
         """Set an active character_folder, which may be the same one, and optionally set the chat history.
         Note: This will wipe the previous history unless chat_history is None."""
         if character_folder != self._plumbing.getOption("character_folder"):
-            start_session(self._plumbing, character_folder)
+            printerr(start_session(self._plumbing, character_folder))
             
         if chat_history is None:
             return self

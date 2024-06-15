@@ -45,6 +45,10 @@ def start_session(plumbing, filepath, keep=False) -> str:
     if plumbing.session.tools:
         plumbing.setOption("use_tools", True)
         w += "Tool dictionary generated from tools.py, setting use_tools to True. Beware, the AI will now call functions.\n"
+        if (callback := plumbing.getOption("tools_inject_dependency_function")):
+            if plumbing.session.tools_module             is not None:
+                callback(plumbing.session.tools_module            )
+        
         if plumbing.getOption("verbose"):
             w += "Dumping tool dictionary. Run with --no-verbose to disable this."
             w += json.dumps(plumbing.session.tools, indent=4) + "\n"
