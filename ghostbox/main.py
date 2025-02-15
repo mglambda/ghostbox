@@ -150,7 +150,7 @@ class Plumbing(object):
                 # this is rough but we are in init phase so it's ok
                 sys.exit()
             self.backend = OpenAIBackend(api_key)
-        elif backend == LLMBackend.openai_generic.name:
+        elif backend == LLMBackend.generic.name:
             self.backend = OpenAIBackend(api_key, endpoint=endpoint)
         else:
             # Handle other backends...

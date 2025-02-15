@@ -13,7 +13,7 @@ def makeArgParser(default_params):
     #parser.add_argument('--stop', action="append", default=[], help="Forbidden strings that will stop the LLM backend generation.")
     parser.add_argument("-c", '--character_folder', type=str, default="", help="character folder to load at startup. The folder may contain templates, as well as arbitrary text files that may be injected in the templates. See the examples for more. Path is attempted to be resolved relative to the include paths, if any are provided.")    
     parser.add_argument("--endpoint", type=str, default="http://localhost:8080", help="Address of koboldcpp http endpoint.")
-    parser.add_argument("--backend", type=str, default=LLMBackend.llamacpp.name, help="Backend to use. Possible values are " + ", ".join([e.name for e in LLMBackend]) + ".")
+    parser.add_argument("--backend", type=str, default=LLMBackend.generic.name, help="Backend to use. The default is `generic`, which conforms to the OpenAI REST API, and is supported by most LLM providers. Choosing a more specific backend may provide additional functionality. Other possible values are " + ", ".join([e.name for e in LLMBackend]) + ".")
     parser.add_argument("--openai_api_key", type=str, default="", help="API key for OpenAI. Without the `--backend openai` option, this has no effect.")    
     parser.add_argument("--max_length", type=int, default=300, help="Number of tokens to request from koboldcpp for generation.")
     parser.add_argument("--max_context_length", type=int, default=4092, help="Maximum number of tokens to keep in context.")
