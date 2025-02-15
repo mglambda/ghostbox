@@ -2,9 +2,13 @@ import time, requests, threading
 from abc import ABC, abstractmethod
 from functools import *
 from ghostbox.util import *
+from ghostbox.definitions import *
 from ghostbox.streaming import *
 
+# Server request parameters
 # defined here for convenience, and as reference. These parameters should be handled by the generate method as payload.
+# note that these are based on the parameters for the llama.cpp server. Since ghostbox was developed with llama.cpp as its main backend, these serve as the default and
+#  reference. Other backends need to translate these to their respective parameters if necessary.
 default_params = {
     "repeat_penalty": 1.1,
     "repeat_last_n" : 64,
@@ -41,6 +45,8 @@ default_params = {
     "image_data" : [],
     "n_predict" : 0,
     #"n_ctx" : 0, # this one seems to have no effect on llama
+    # update: I think n_ctx has been renamed to max_tokens - they aren't documenting this.
+    #  Anyhow, max_tokens would match the OAI API.
     "cache_prompt" : True
 }
 
@@ -68,7 +74,13 @@ class AIBackend(ABC):
     def getName(self):
         """Returns the name of the backend. This can be compared to the --backend command line option."""
         pass
-        
+
+    @abstractmethod
+    def getMaxContextLength(self):
+        """Returns the default setting for maximum context length that is set serverside. Often, this should be the maximum context the model is trained on.
+        This should return -1 if the backend is unable to determine the maximum context (some backends don't let you query this at all)."""
+        pass
+
     @abstractmethod        
     def generate(self, payload):
         """Takes a payload dictionary similar to default_params. Returns a result object specific to the backend. Use handleResult to unpack its content."""
@@ -104,7 +116,7 @@ class AIBackend(ABC):
     
     
 class LlamaCPPBackend(AIBackend):
-    """Bindings for the formidable Llama.cpp program."""
+    """Bindings for the formidable Llama.cpp based llama-server program."""
 
     def __init__(self, endpoint="http://localhost:8080"):
         super().__init__(endpoint)
@@ -117,7 +129,11 @@ class LlamaCPPBackend(AIBackend):
         return self._lastResult
 
     def getName(self):
-        return "llama.cpp"
+        #return "llama.cpp"
+        return LLMBackend.llamacpp.name
+
+    def getMaxContextLength(self):
+        return -1
     
     def generate(self, payload):
         super().generate(payload)
@@ -165,3 +181,101 @@ class LlamaCPPBackend(AIBackend):
         if r.status_code != 200:
             return "error " + str(r.status_code)
         return r.json()["status"]
+
+
+class OpenAIBackend(AIBackend):
+    """Backend for the official OpenAI API. This is used for the company of Altman et al, but also serves as a general purpose API suported by many backends, including llama.cpp, kobold.cpp, and many others. It can be used seamlessly with all of these."""
+    
+    def __init__(self, api_key, endpoint="https://api.openai.com"):
+        super().__init__(endpoint)
+        self.api_key = api_key
+        self._lastResult = None
+
+    def getLastError(self):
+        return super().getLastError()
+
+    def getLastJSON(self):
+        return self._lastResult
+
+    def getName(self):
+        return LLMBackend.openai.name
+
+    def getMaxContextLength(self):
+        return -1
+    
+    def generate(self, payload):
+        headers = {
+            'Authorization': f'Bearer {self.api_key}',
+            'Content-Type': 'application/json'
+        }
+        data = {
+            "model": payload.get("model", "text-davinci-003"),
+            "prompt": payload["prompt"],
+            "max_tokens": payload.get("n_predict", 150),
+            "temperature": payload.get("temperature", 0.7),
+            "top_p": payload.get("top_p", 1.0),
+            "frequency_penalty": payload.get("frequency_penalty", 0.0),
+            "presence_penalty": payload.get("presence_penalty", 0.0)
+        }
+        response = requests.post(self.endpoint + "/v1/completions", headers=headers, json=data)
+        if response.status_code != 200:
+            self.last_error = f"HTTP request with status code {response.status_code}: {response.text}"
+            return None
+        self._lastResult = response.json()
+        return response.json()
+
+    def handleGenerateResult(self, result):
+        if not result:
+            return ""
+        return result['choices'][0]['text']
+
+    def generateStreaming(self, payload, callback=lambda w: print(w)):
+        headers = {
+            'Authorization': f'Bearer {self.api_key}',
+            'Content-Type': 'application/json'
+        }
+        data = {
+            "model": payload.get("model", "text-davinci-003"),
+            "prompt": payload["prompt"],
+            "max_tokens": payload.get("n_predict", 150),
+            "temperature": payload.get("temperature", 0.7),
+            "top_p": payload.get("top_p", 1.0),
+            "frequency_penalty": payload.get("frequency_penalty", 0.0),
+            "presence_penalty": payload.get("presence_penalty", 0.0),
+            "stream": True
+        }
+        #response = requests.post(self.endpoint + "/v1/completions", headers=headers, json=data)
+        def openaiCallback(d):
+            callback(d['choices'][0]['text'])
+            
+        response = streamPrompt(openaiCallback, self.stream_done, self.endpoint + "/v1/completions", json=data, headers=headers)
+        if response.status_code != 200:
+            self.last_error = f"HTTP request with status code {response.status_code}: {response.text}"
+            return True
+
+    def tokenize(self, w):
+        headers = {
+            'Authorization': f'Bearer {self.api_key}',
+            'Content-Type': 'application/json'
+        }
+        data = {"prompt": w}
+        response = requests.post(self.endpoint + "/v1/tokenize", headers=headers, json=data)
+        if response.status_code == 200:
+            return response.json()["tokens"]
+        return []
+
+    def detokenize(self, ts):
+        headers = {
+            'Authorization': f'Bearer {self.api_key}',
+            'Content-Type': 'application/json'
+        }
+        data = {"tokens": ts}
+        response = requests.post(self.endpoint + "/v1/detokenize", headers=headers, json=data)
+        if response.status_code == 200:
+            return response.json()["content"]
+        return []
+
+    def health(self):
+        # OpenAI API does not have a direct health check endpoint
+        return "OpenAI API is assumed to be healthy."
+    

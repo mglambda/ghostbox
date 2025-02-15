@@ -139,10 +139,23 @@ class Plumbing(object):
         self.setMode(self.getOption("mode"))
         self.running = True
 
-    def initializeBackend(self, backend, endpoint):
-        # FIXME: only llama currently
-        self.backend = LlamaCPPBackend(endpoint)
 
+    def initializeBackend(self, backend, endpoint):
+        api_key = self.getOption("openai_api_key")        
+        if backend == LLMBackend.llamacpp.name:
+            self.backend = LlamaCPPBackend(endpoint)
+        elif backend == LLMBackend.openai.name:
+            if not api_key:
+                printerr("error: OpenAI API key is required for the OpenAI backend. Did you forget to provide --openai_api_key?")
+                # this is rough but we are in init phase so it's ok
+                sys.exit()
+            self.backend = OpenAIBackend(api_key)
+        elif backend == LLMBackend.openai_generic.name:
+            self.backend = OpenAIBackend(api_key, endpoint=endpoint)
+        else:
+            # Handle other backends...
+            pass
+       
     def getBackend(self):
         return self.backend
     
@@ -158,11 +171,13 @@ class Plumbing(object):
 
         # these 2 have unintuitive names so we explicitly mention them here
         #d["n_ctx"] = self.getOption("max_context_length"), # this is sort of undocumented in llama.cpp server
-        d["n_predict"] = self.getOption("max_length")
+        #d["max_tokens"] = self.getOption("max_context_length") # was changed recently in llama-server, now also complies with OAI aAPI
+        d["n_predict"] = self.getOption("max_length") 
             
         if self.hasImages():
             d["image_data"] = [packageImageDataLlamacpp(d["data"], id) for (id, d) in self.images.items()]
         return d
+    
     def isContinue(self):
         return self.getOption("continue")
 
@@ -1025,15 +1040,8 @@ returns - A string ready to be sent to the backend, including the full conversat
 
     def setLastJSON(self, json_result):
         self.lastResult = json_result
-        if self.getOption("backend") == "llamacpp":
-            # llama does not allow to set the context size by clients, instead it dictates it server side. however i have not found a way to query it directly, it just gets set after the first request
-            # FIXME: newer versions of llama.cpp have removed n_ctx so we try/catch here for backwards compatibility
-            try:
-                self.setOption("max_context_length", json_result["generation_settings"]["n_ctx"])
-                self._dirtyContextLlama = True # context has been set by llama
-            except KeyError:
-                printerr("warning: KeyError when accessing 'n_ctx' in json result from server query.")
-                
+        if self.getOption("backend") == LLMBackend.llamacpp.name:
+            pass
 
     def backup(self):
         """Returns a data structure that can be restored to return to a previous state of the program."""

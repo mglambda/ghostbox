@@ -523,7 +523,7 @@ Give an overall report about the program and some subprocesses."""
         w += "backend status: " + str(prog.getBackend().health()) + "\n"
         w += "max_context_length: " + str(prog.getOption("max_context_length"))
         if prog._dirtyContextLlama:
-            # context has been changed by llama server
+            # context has been set by server
             w += " (set by llama.cpp)\n"
         else:
             w += "\n"
