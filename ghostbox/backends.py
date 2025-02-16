@@ -364,25 +364,30 @@ class OpenAIBackend(AIBackend):
     def _dataFromPayload(self, payload):
         """Take a payload dictionary from Plumbing and return dictionary with elements specific to the chat/completions endpoint.
         This expects payload to include the messages key, with various dictionaries in it, unlike other backends."""
+        import json
+        #print("payload")
+        #print(json.dumps(payload, indent=4))
         messages = [{"role": "system",
                      "content" : payload["system"]}]
         # story is list of dicts with role and content keys
         messages += payload["story"]
         
         # images is more complicated, see https://platform.openai.com/docs/guides/vision
-        image_message = {"role":"user", "content": []}
-        if "image_message" in payload:
-            # this is e.g. 'describe this image'
-            image_message["content"].append({"type":"text",
-                                             "text": payload["image_message"]})
-
+        if "images" in payload:
+            # API wants the content field of an image message to be a list of dicts, not a string
+            # the dicts have the type field, which determines wether its a user msg (text) or image (image-url)
+            # -> here we first construct this list, and then change the last message above
+            image_content_list = []
             for (id, image_data) in payload["images"].items():
                 ext = getImageExtension(image_data["url"], default="png")
                 base64_image = image_data["data"].decode("utf-8")
-                image_message["content"].append({"type":"image_url",
+                image_content_list.append({"type":"image_url",
                                                  "image_url" : {"url": f"data:image/{ext};base64,{base64_image}"}})
 
-            messages.append(image_message)
+            image_content_list.append({"type":"text",
+                                   "content": messages[-1]["content"]})                
+            # we replace the previous content field with the constructed list
+            messages[-1]["content"] = image_content_list
         return {"messages": messages}
         
 

@@ -110,6 +110,8 @@ class Plumbing(object):
         self.stream_queue = []
         self.stream_sentence_queue = []
         self. images = {}
+        # flag to show wether image data needs to be resent to the backend
+        self._images_dirty = False
         self._lastPrompt = ""
         self._dirtyContextLlama = False
         self._smartShifted = False
@@ -176,16 +178,20 @@ class Plumbing(object):
         #d["n_ctx"] = self.getOption("max_context_length"), # this is sort of undocumented in llama.cpp server
         #d["max_tokens"] = self.getOption("max_context_length") # was changed recently in llama-server, now also complies with OAI aAPI
         d["n_predict"] = self.getOption("max_length")
+        
         if self.getOption("backend") == LLMBackend.generic.name or self.getOption["backend"] == LLMBackend.openai.name:
             # openai chat/completion needs the system prompt and story
             d["system"] = self.session.getSystem()
-            d["story"] = self.session.stories.get().getData()
+            d["story"] = copy.deepcopy(self.session.stories.get().getData())
             
         if self.hasImages():
             # currently only supporting /v1/chat/completions style endpoints
             if not(self.getOption("backend") == LLMBackend.generic.name or self.getOption["backend"] == LLMBackend.openai.name):
                 return d
             d["images"] = self.images
+            # FIXME: experimental. keep the images only in story log?
+
+
             # FIXME: place image hint here maybe
             #d["image_message"] = 
 
@@ -1043,16 +1049,18 @@ returns - A string ready to be sent to the backend, including the full conversat
     
         
     def hasImages(self):
-        return bool(self.images)
+        return bool(self.images) and self._images_dirty
         
     def loadImage(self, url, id):
-        url = os.path.expanduser(url)
+        url = os.path.expanduser(url.strip())
         if not(os.path.isfile(url)):
             printerr("warning: Could not load image '" + url + "'. File not found.")
             return
 
         self.images[id] = {"url" : url,
                            "data" : loadImageData(url)}
+        self._images_dirty = True
+
 
     def setLastJSON(self, json_result):
         self.lastResult = json_result

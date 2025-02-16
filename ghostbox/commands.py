@@ -447,6 +447,8 @@ Can you compare [img-1] and [img-2]?
         ws = []
         for (id, imagedata) in sorted(prog.images.items()):
             ws.append(mkImageEmbeddingString(id) + "\t" + imagedata["url"])
+        # FIXME: secret, undocumented function: /image without arguments dirties the image cache
+        prog._images_dirty = True
         return "\n".join(ws)
 
     if argv[0].startswith("--id="):
