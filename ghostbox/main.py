@@ -152,6 +152,8 @@ class Plumbing(object):
             self.backend = OpenAIBackend(api_key)
         elif backend == LLMBackend.generic.name:
             self.backend = OpenAIBackend(api_key, endpoint=endpoint)
+        elif backend == LLMBackend.legacy.name:
+            self.backend = OpenAILegacyBackend(api_key, endpoint=endpoint)
         else:
             # Handle other backends...
             pass
@@ -175,6 +177,8 @@ class Plumbing(object):
         d["n_predict"] = self.getOption("max_length") 
             
         if self.hasImages():
+            #d["images"] = repackImageDataOpenAI(self.images)
+            # disabled because llama-server hasn't supported this in a while
             d["image_data"] = [packageImageDataLlamacpp(d["data"], id) for (id, d) in self.images.items()]
         return d
     

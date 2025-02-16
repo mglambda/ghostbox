@@ -288,7 +288,11 @@ def loadImageData(image_path):
 
 def packageImageDataLlamacpp(data_base64, id):
     return {"data" : data_base64.decode("utf-8"), "id" : id}
-    
+
+#def repackImages(images):
+#    """Takes the plumbing.images object and makes sure its base64 encoded."""
+#    return [{"data" : data_base64.decode("utf-8"), "id" : id}
+
 def mkImageEmbeddingString(image_id):
     return "[img-" + str(image_id) + "]"
 

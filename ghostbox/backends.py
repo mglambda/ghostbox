@@ -183,8 +183,8 @@ class LlamaCPPBackend(AIBackend):
         return r.json()["status"]
 
 
-class OpenAIBackend(AIBackend):
-    """Backend for the official OpenAI API. This is used for the company of Altman et al, but also serves as a general purpose API suported by many backends, including llama.cpp, kobold.cpp, and many others. It can be used seamlessly with all of these."""
+class OpenAILegacyBackend(AIBackend):
+    """Backend for the official OpenAI API. The legacy version routes to /v1/completions, instead of the regular /v1/chat/completion."""
     
     def __init__(self, api_key, endpoint="https://api.openai.com"):
         super().__init__(endpoint)
@@ -278,4 +278,103 @@ class OpenAIBackend(AIBackend):
     def health(self):
         # OpenAI API does not have a direct health check endpoint
         return "OpenAI API is assumed to be healthy."
+    
+    
+
+class OpenAIBackend(AIBackend):
+    """Backend for the official OpenAI API. This is used for the company of Altman et al, but also serves as a general purpose API suported by various backends, including llama.cpp, llama-box, and many others."""
+    
+    def __init__(self, api_key, endpoint="https://api.openai.com"):
+        super().__init__(endpoint)
+        self.api_key = api_key
+        self._lastResult = None
+
+    def getLastError(self):
+        return super().getLastError()
+
+    def getLastJSON(self):
+        return self._lastResult
+
+    def getName(self):
+        return LLMBackend.openai.name
+
+    def getMaxContextLength(self):
+        return -1
+    
+    def generate(self, payload):
+        headers = {
+            'Authorization': f'Bearer {self.api_key}',
+            'Content-Type': 'application/json'
+        }
+        data = {
+            "model": payload.get("model", "text-davinci-003"),
+            "prompt": payload["prompt"],
+            "max_tokens": payload.get("n_predict", 150),
+            "temperature": payload.get("temperature", 0.7),
+            "top_p": payload.get("top_p", 1.0),
+            "frequency_penalty": payload.get("frequency_penalty", 0.0),
+            "presence_penalty": payload.get("presence_penalty", 0.0)
+        }
+        response = requests.post(self.endpoint + "/v1/completions", headers=headers, json=data)
+        if response.status_code != 200:
+            self.last_error = f"HTTP request with status code {response.status_code}: {response.text}"
+            return None
+        self._lastResult = response.json()
+        return response.json()
+
+    def handleGenerateResult(self, result):
+        if not result:
+            return ""
+        return result['choices'][0]['text']
+
+    def generateStreaming(self, payload, callback=lambda w: print(w)):
+        headers = {
+            'Authorization': f'Bearer {self.api_key}',
+            'Content-Type': 'application/json'
+        }
+        data = {
+            "model": payload.get("model", "text-davinci-003"),
+            "prompt": payload["prompt"],
+            "max_tokens": payload.get("n_predict", 150),
+            "temperature": payload.get("temperature", 0.7),
+            "top_p": payload.get("top_p", 1.0),
+            "frequency_penalty": payload.get("frequency_penalty", 0.0),
+            "presence_penalty": payload.get("presence_penalty", 0.0),
+            "stream": True
+        }
+        #response = requests.post(self.endpoint + "/v1/completions", headers=headers, json=data)
+        def openaiCallback(d):
+            callback(d['choices'][0]['text'])
+            
+        response = streamPrompt(openaiCallback, self.stream_done, self.endpoint + "/v1/completions", json=data, headers=headers)
+        if response.status_code != 200:
+            self.last_error = f"HTTP request with status code {response.status_code}: {response.text}"
+            return True
+
+    def tokenize(self, w):
+        headers = {
+            'Authorization': f'Bearer {self.api_key}',
+            'Content-Type': 'application/json'
+        }
+        data = {"prompt": w}
+        response = requests.post(self.endpoint + "/v1/tokenize", headers=headers, json=data)
+        if response.status_code == 200:
+            return response.json()["tokens"]
+        return []
+
+    def detokenize(self, ts):
+        headers = {
+            'Authorization': f'Bearer {self.api_key}',
+            'Content-Type': 'application/json'
+        }
+        data = {"tokens": ts}
+        response = requests.post(self.endpoint + "/v1/detokenize", headers=headers, json=data)
+        if response.status_code == 200:
+            return response.json()["content"]
+        return []
+
+    def health(self):
+        # OpenAI API does not have a direct health check endpoint
+        return "OpenAI API is assumed to be healthy."
+
     

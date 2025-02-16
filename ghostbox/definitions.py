@@ -1,7 +1,7 @@
 
 from enum import Enum
 
-LLMBackend = Enum("LLMBackend", "generic llamacpp koboldcpp openai dummy")
+LLMBackend = Enum("LLMBackend", "generic legacy llamacpp koboldcpp openai dummy")
 
 api_default_options = {
     "color" : False,
