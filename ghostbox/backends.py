@@ -309,13 +309,17 @@ class OpenAIBackend(AIBackend):
         data = {
             "model": payload.get("model", "text-davinci-003"),
             "prompt": payload["prompt"],
-            "max_tokens": payload.get("n_predict", 150),
+            "max_tokens": payload.get("n_predict", 150), # FIXME: this is changed in the API for o1 and up
             "temperature": payload.get("temperature", 0.7),
             "top_p": payload.get("top_p", 1.0),
             "frequency_penalty": payload.get("frequency_penalty", 0.0),
             "presence_penalty": payload.get("presence_penalty", 0.0)
         }
-        response = requests.post(self.endpoint + "/v1/completions", headers=headers, json=data)
+
+        # the /V1/chat/completions endpoint expects structured data of user/assistant pairs        
+        data |= self._dataFromPayload(payload)
+        
+        response = requests.post(self.endpoint + "/v1/chat/completions", headers=headers, json=data)
         if response.status_code != 200:
             self.last_error = f"HTTP request with status code {response.status_code}: {response.text}"
             return None
@@ -325,7 +329,7 @@ class OpenAIBackend(AIBackend):
     def handleGenerateResult(self, result):
         if not result:
             return ""
-        return result['choices'][0]['text']
+        return result['choices'][0]["message"]["content"]
 
     def generateStreaming(self, payload, callback=lambda w: print(w)):
         headers = {
@@ -333,8 +337,7 @@ class OpenAIBackend(AIBackend):
             'Content-Type': 'application/json'
         }
         data = {
-            "model": payload.get("model", "text-davinci-003"),
-            "prompt": payload["prompt"],
+            "model": payload.get("model", "gpt-3"),
             "max_tokens": payload.get("n_predict", 150),
             "temperature": payload.get("temperature", 0.7),
             "top_p": payload.get("top_p", 1.0),
@@ -342,15 +345,48 @@ class OpenAIBackend(AIBackend):
             "presence_penalty": payload.get("presence_penalty", 0.0),
             "stream": True
         }
-        #response = requests.post(self.endpoint + "/v1/completions", headers=headers, json=data)
+
+        # the /V1/chat/completions endpoint expects structured data of user/assistant pairs        
+        data |= self._dataFromPayload(payload)
+        import json
+        #print(json.dumps(data, indent=4))
+        
         def openaiCallback(d):
-            callback(d['choices'][0]['text'])
+            maybeChunk = d["choices"][0]["delta"].get("content", None)
+            if maybeChunk is not None:
+                callback(maybeChunk)
             
-        response = streamPrompt(openaiCallback, self.stream_done, self.endpoint + "/v1/completions", json=data, headers=headers)
+        response = streamPrompt(openaiCallback, self.stream_done, self.endpoint + "/v1/chat/completions", json=data, headers=headers)
         if response.status_code != 200:
             self.last_error = f"HTTP request with status code {response.status_code}: {response.text}"
             return True
 
+    def _dataFromPayload(self, payload):
+        """Take a payload dictionary from Plumbing and return dictionary with elements specific to the chat/completions endpoint.
+        This expects payload to include the messages key, with various dictionaries in it, unlike other backends."""
+        messages = [{"role": "system",
+                     "content" : payload["system"]}]
+        # story is list of dicts with role and content keys
+        messages += payload["story"]
+        
+        # images is more complicated, see https://platform.openai.com/docs/guides/vision
+        image_message = {"role":"user", "content": []}
+        if "image_message" in payload:
+            # this is e.g. 'describe this image'
+            image_message["content"].append({"type":"text",
+                                             "text": payload["image_message"]})
+
+            for (id, image_data) in payload["images"].items():
+                ext = getImageExtension(image_data["url"], default="png")
+                base64_image = image_data["data"].decode("utf-8")
+                image_message["content"].append({"type":"image_url",
+                                                 "image_url" : {"url": f"data:image/{ext};base64,{base64_image}"}})
+
+            messages.append(image_message)
+        return {"messages": messages}
+        
+
+        
     def tokenize(self, w):
         headers = {
             'Authorization': f'Bearer {self.api_key}',

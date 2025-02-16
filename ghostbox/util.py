@@ -308,6 +308,12 @@ def isImageFile(file):
     # good enuff
     return file.endswith(".png")
 
+def getImageExtension(url, default="png"):
+    ws = url.split(".")
+    if len(ws) < 2:
+        return default
+    return ws[-1]
+
     
 
 def dirtyGetJSON(url):

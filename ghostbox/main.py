@@ -162,6 +162,7 @@ class Plumbing(object):
         return self.backend
     
     def makeGeneratePayload(self, text):
+        # FIXME: make backends export static method that returns default params
         d = backends.default_params.copy()
         for key in d.keys():
             if key in self.options:
@@ -174,12 +175,23 @@ class Plumbing(object):
         # these 2 have unintuitive names so we explicitly mention them here
         #d["n_ctx"] = self.getOption("max_context_length"), # this is sort of undocumented in llama.cpp server
         #d["max_tokens"] = self.getOption("max_context_length") # was changed recently in llama-server, now also complies with OAI aAPI
-        d["n_predict"] = self.getOption("max_length") 
+        d["n_predict"] = self.getOption("max_length")
+        if self.getOption("backend") == LLMBackend.generic.name or self.getOption["backend"] == LLMBackend.openai.name:
+            # openai chat/completion needs the system prompt and story
+            d["system"] = self.session.getSystem()
+            d["story"] = self.session.stories.get().getData()
             
         if self.hasImages():
-            #d["images"] = repackImageDataOpenAI(self.images)
+            # currently only supporting /v1/chat/completions style endpoints
+            if not(self.getOption("backend") == LLMBackend.generic.name or self.getOption["backend"] == LLMBackend.openai.name):
+                return d
+            d["images"] = self.images
+            # FIXME: place image hint here maybe
+            #d["image_message"] = 
+
+
             # disabled because llama-server hasn't supported this in a while
-            d["image_data"] = [packageImageDataLlamacpp(d["data"], id) for (id, d) in self.images.items()]
+            #d["image_data"] = [packageImageDataLlamacpp(d["data"], id) for (id, d) in self.images.items()]
         return d
     
     def isContinue(self):
