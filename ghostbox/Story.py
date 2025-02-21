@@ -4,8 +4,11 @@ class Story(object):
     def __init__(self):
         self.data = []
 
-    def addUserText(self, w, **kwargs):
-        self.data.append({ "role" : "user", "content" : w} | kwargs)
+    def addUserText(self, w, image_id=None, **kwargs):
+        new_data = { "role" : "user", "content" : w} | kwargs
+        if image_id is not None:
+            new_data["image_id"] = image_id
+        self.data.append(new_data)
 
     def addAssistantText(self, w, **kwargs):
         self.data.append({ "role" : "assistant", "content" : w} | kwargs)

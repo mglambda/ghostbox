@@ -230,6 +230,7 @@ class OpenAILegacyBackend(AIBackend):
         return result['choices'][0]['text']
 
     def generateStreaming(self, payload, callback=lambda w: print(w)):
+        self.stream_done.clear()        
         headers = {
             'Authorization': f'Bearer {self.api_key}',
             'Content-Type': 'application/json'
@@ -251,7 +252,10 @@ class OpenAILegacyBackend(AIBackend):
         response = streamPrompt(openaiCallback, self.stream_done, self.endpoint + "/v1/completions", json=data, headers=headers)
         if response.status_code != 200:
             self.last_error = f"HTTP request with status code {response.status_code}: {response.text}"
+            self.stream_done.set()
             return True
+        return False
+    
 
     def tokenize(self, w):
         headers = {
@@ -318,7 +322,6 @@ class OpenAIBackend(AIBackend):
 
         # the /V1/chat/completions endpoint expects structured data of user/assistant pairs        
         data |= self._dataFromPayload(payload)
-        
         response = requests.post(self.endpoint + "/v1/chat/completions", headers=headers, json=data)
         if response.status_code != 200:
             self.last_error = f"HTTP request with status code {response.status_code}: {response.text}"
@@ -332,6 +335,7 @@ class OpenAIBackend(AIBackend):
         return result['choices'][0]["message"]["content"]
 
     def generateStreaming(self, payload, callback=lambda w: print(w)):
+        self.stream_done.clear()        
         headers = {
             'Authorization': f'Bearer {self.api_key}',
             'Content-Type': 'application/json'
@@ -348,9 +352,6 @@ class OpenAIBackend(AIBackend):
 
         # the /V1/chat/completions endpoint expects structured data of user/assistant pairs        
         data |= self._dataFromPayload(payload)
-        import json
-        #print(json.dumps(data, indent=4))
-        
         def openaiCallback(d):
             maybeChunk = d["choices"][0]["delta"].get("content", None)
             if maybeChunk is not None:
@@ -359,35 +360,42 @@ class OpenAIBackend(AIBackend):
         response = streamPrompt(openaiCallback, self.stream_done, self.endpoint + "/v1/chat/completions", json=data, headers=headers)
         if response.status_code != 200:
             self.last_error = f"HTTP request with status code {response.status_code}: {response.text}"
+            self.stream_done.set()            
             return True
+        return False
 
     def _dataFromPayload(self, payload):
         """Take a payload dictionary from Plumbing and return dictionary with elements specific to the chat/completions endpoint.
         This expects payload to include the messages key, with various dictionaries in it, unlike other backends."""
-        import json
-        #print("payload")
-        #print(json.dumps(payload, indent=4))
         messages = [{"role": "system",
                      "content" : payload["system"]}]
         # story is list of dicts with role and content keys
-        messages += payload["story"]
-        
-        # images is more complicated, see https://platform.openai.com/docs/guides/vision
-        if "images" in payload:
-            # API wants the content field of an image message to be a list of dicts, not a string
-            # the dicts have the type field, which determines wether its a user msg (text) or image (image-url)
-            # -> here we first construct this list, and then change the last message above
-            image_content_list = []
-            for (id, image_data) in payload["images"].items():
+        # we go through story one by one, mostly because of images
+        for story_item in payload["story"]:
+            if "image_id" in story_item:
+                # images is more complicated, see https://platform.openai.com/docs/guides/vision
+                # API wants the content field of an image message to be a list of dicts, not a string
+                # the dicts have the type field, which determines wether its a user msg (text) or image (image-url)
+                image_id = story_item["image_id"]
+                image_content_list = []
+                image_content_list.append({"type":"text",
+                                           "content": story_item["content"]})
+                if "images" not in payload or image_id not in payload["images"]:
+                    printerr("warning: image with id " + str(image_id) + " not found.")
+                    continue
+                
+                # actually packaging the image
+                image_data = payload["images"][image_id]
                 ext = getImageExtension(image_data["url"], default="png")
                 base64_image = image_data["data"].decode("utf-8")
                 image_content_list.append({"type":"image_url",
                                                  "image_url" : {"url": f"data:image/{ext};base64,{base64_image}"}})
 
-            image_content_list.append({"type":"text",
-                                   "content": messages[-1]["content"]})                
-            # we replace the previous content field with the constructed list
-            messages[-1]["content"] = image_content_list
+                messages.append({ "role": story_item["role"], "content": image_content_list})
+            else:
+                messages.append(story_item)
+               
+
         return {"messages": messages}
         
 

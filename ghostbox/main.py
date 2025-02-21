@@ -183,12 +183,11 @@ class Plumbing(object):
             # openai chat/completion needs the system prompt and story
             d["system"] = self.session.getSystem()
             d["story"] = copy.deepcopy(self.session.stories.get().getData())
-            
-        if self.hasImages():
             # currently only supporting /v1/chat/completions style endpoints
             if not(self.getOption("backend") == LLMBackend.generic.name or self.getOption["backend"] == LLMBackend.openai.name):
                 return d
             d["images"] = self.images
+            self._images_dirty = False
             # FIXME: experimental. keep the images only in story log?
 
 
@@ -398,9 +397,9 @@ class Plumbing(object):
     def getAIFormatter(self, with_color=False):
         return self.getAIColorFormatter() + self.getFormatters()[3]        
     
-    def addUserText(self, w):
+    def addUserText(self, w, image_id=None):
         if w:
-            self.session.stories.get().addUserText(self.getUserFormatter().format(w))
+            self.session.stories.get().addUserText(self.getUserFormatter().format(w), image_id=image_id)
 
     def addAIText(self, w):
         """Adds text toe the AI's history in a cleanly formatted way according to the AI formatter. Returns the formatted addition or empty string if nothing was added.."""
@@ -571,8 +570,9 @@ class Plumbing(object):
             return
         
         self.loadImage(image_path, image_id)
+        # FIXME: what if loadImage fails?
         (modified_w, hint) = self.modifyInput(w)
-        self.addUserText(modified_w)
+        self.addUserText(modified_w, image_id=image_id)
         image_watch_hint = self.getOption("image_watch_hint")
         self.addAIText(self.communicate(self.buildPrompt(hint + image_watch_hint)))
         print(self.showCLIPrompt(), end="")
@@ -1201,5 +1201,6 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
