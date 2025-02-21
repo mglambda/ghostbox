@@ -96,14 +96,14 @@ mode_formatters = {
 
 class Plumbing(object):
     def __init__(self, options={}, initial_cli_prompt=""):
+        self._frozen = False
+        self._freeze_queue = Queue()        
         self.options = options        
         self.backend = None
         self.initializeBackend(self.getOption("backend"), self.getOption("endpoint"))
         self.session = Session(chat_user=options.get("chat_user", ""))
         self.lastResult = {}
         self._lastInteraction = 0
-        self._frozen = False
-        self._freeze_queue = Queue()
         self.tts_flag = False
         self.initial_print_flag = False
         self.initial_cli_prompt = initial_cli_prompt
@@ -127,7 +127,7 @@ class Plumbing(object):
         else:
             self.setOption("grammar", "")
         # template
-        self.loadTemplate(self.getOption("prompt_format"))
+        self.loadTemplate(self.getOption("prompt_format"), startup=True)
             
             # whisper stuff. We do this with a special init function because it's lazy
         self.whisper = self._newTranscriber()
@@ -152,8 +152,10 @@ class Plumbing(object):
                 # this is rough but we are in init phase so it's ok
                 sys.exit()
             self.backend = OpenAIBackend(api_key)
+            self.setOption("prompt_format", "auto")
         elif backend == LLMBackend.generic.name:
             self.backend = OpenAIBackend(api_key, endpoint=endpoint)
+            self.setOption("prompt_format", "auto")            
         elif backend == LLMBackend.legacy.name:
             self.backend = OpenAILegacyBackend(api_key, endpoint=endpoint)
         else:
@@ -265,8 +267,15 @@ class Plumbing(object):
         printerr("Failed to guess prompt format after exhausting all options 😦. Defaulting.")
         return "raw"
         
-    def loadTemplate(self, name):
-        # special case
+    def loadTemplate(self, name, startup=False):
+        # special cases
+        if name == "auto":
+            if startup:
+                # don't set this twice
+                return
+            printerr("Prompt format template set to 'auto': Formatting is handled server side.")
+            self.template = RawTemplate()
+            return
         if name == "guess":
             name = self.guessPromptFormat()
             
@@ -274,7 +283,7 @@ class Plumbing(object):
         for path in allpaths:
             path = os.path.normpath(path)
             if not(os.path.isdir(path)):
-                failure = "Could not find template '" + name + "'. Did you supply a --template_include option?"
+                failure = "Could not find prompt format template '" + name + "'. Did you supply a --template_include option?"
                 continue
             failure = False
             try:
