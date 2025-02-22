@@ -9,8 +9,12 @@ parser.add_argument("-l", "--language", type=str, default="en", help="Language f
 parser.add_argument("-p", "--pause_duration", type=int, default=1, help="Duration of pauses after newlines. A value of 0 means no or minimal-duration pause.")
 parser.add_argument("-y", "--voice_sample", type=str, default="cloning.wav", help="Path to wav file used as a voice sample to clone.")
 parser.add_argument("-i", "--volume", type=float, default=1.0, help="Volume for the voice playback.")
+parser.add_argument("-s", "--seed", type=int, default=420, help="Random seed for voice models that use it.")
 parser.add_argument("--sound_dir", type=str, default="sounds", help="Directory where sound files are located to be played with #sound <SNDNAME>")
 parser.add_argument("-m", "--model", type=str, default="zonos", help="Text-to-speech model to use.")
+
+# zonos specific
+parser.add_argument("--zonos_model", type=str, default="hybrid", help="The pretrained checkpoint to use with the Zonos TTS engine. Try picking 'transformer' or 'hybrid' for good defaults, otherwise consult the zonos project for more checkpoints. Tip: Hybrid seems to give better results than transformer, but requires the mamba-ssm and flash-attn pip packages and doesn't work on all GPUs.")
 args = parser.parse_args()
 
 from ghostbox.tts_util import *
@@ -18,7 +22,7 @@ from ghostbox.tts_state import *
 from ghostbox.tts_backends import *
 import time, threading, os
 prog = TTSState(args)
-tts = initTTS(prog.args.model)
+tts = initTTS(prog.args.model, config=vars(prog.args))
 if args.filepath == "":
     output_file = tempfile.NamedTemporaryFile(suffix=".wav")
 else:
@@ -37,6 +41,9 @@ msg_queue = Queue()
 done = threading.Event()
 def input_loop():
     global done
+    global prog
+    global tts
+    
     while True:
         try:
             w = input()
@@ -46,15 +53,25 @@ def input_loop():
                     msg_queue.queue.clear()
                 prog.clearRetries()
                 continue
-            msg_queue.put(w)
-        except:# EOFError as e:
+
+            #msg_queue.put(w)
+            ws = tts.split_into_sentences(w)
+            for chunk in ws:
+                msg_queue.put(chunk)
+        except EOFError as e:
+            prog.handleMixins()
+            time.sleep(3)
+            done.set()
+            break
+        except:
             print("Exception caught while blocking. Shutting down gracefully. Below is the full exception.")
             print(traceback.format_exc())                    
             prog.handleMixins()
             #print("EOF encountered. Closing up.")
             time.sleep(3)
-            #os._exit(1)
             done.set()
+            break
+        
 
 t = threading.Thread(target=input_loop)
 t.daemon = True
@@ -90,9 +107,8 @@ while True:
     if cont:
         continue
 #    xs = tts.split_into_sentences(msg)
-#    print(str(len(xs)))
     try:
-        tts.tts_to_file(text=msg, speaker_file=prog.getVoiceSampleFile(), file_path=output_file.name)
+        tts.tts_to_file(text=msg, speaker_file=prog.getVoiceSampleFile(), file_path=output_file.name, seed=prog.args.seed)
     except ZeroDivisionError:
         print("Caught zero division error. Ignoring.")
         # this happens when the tts is asked to process whitespace and produces a wav file in 0 seconds :) nothing to worry about

@@ -78,11 +78,14 @@ class TTSState(object):
 
     def handleMixins(self):
         # adds background music etc. to the accumulated file
-        clips = [AudioFileClip(self.accfile)]
+        clips = [AudioFileClip(self.accfile.name)]
         for (mixfile, timestamp) in self.mixins:
             clips.append(AudioFileClip(mixfile).with_start(timestamp))
 
         outclip = CompositeAudioClip(clips)
+        # this is due to a bug (I think) in moviepy with fps not being defined
+        if "fps" not in outclip.__dict__:
+            outclip.fps = 44100
         outclip.write_audiofile(self.tmpfile.name)
         subprocess.run(["cp", self.tmpfile.name, self.accfile.name])        
         
