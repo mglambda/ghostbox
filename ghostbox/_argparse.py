@@ -38,7 +38,7 @@ def makeArgParser(default_params):
     parser.add_argument("--hint", type=str, default="", help="Hint for the AI. This string will be appended to the prompt behind the scenes. It's the first thing the AI sees. Try setting it to 'Of course,' to get a more compliant AI.")
     parser.add_argument("--hint_sticky", action=argparse.BooleanOptionalAction, default=True, help="If disabled, hint will be shown to the AI as part of prompt, but will be omitted from the story.")
     parser.add_argument("--tts", action=argparse.BooleanOptionalAction, default=False, help="Enable text to speech on generated text.")
-    parser.add_argument("--tts_program", type=str, default="ghostbox-tts-tortoise", help="Path to a TTS (Text-to-speech) program to verbalize generated text. The TTS program should read lines from standard input. Many examples are provided in scripts/ghostbox-tts-* .")
+    parser.add_argument("--tts_program", type=str, default="ghostbox-tts", help="Path to a TTS (Text-to-speech) program to verbalize generated text. The TTS program should read lines from standard input. Many examples are provided in scripts/ghostbox-tts-* . The ghostbox-tts script offers a native solution using various supported models.")
     parser.add_argument("--tts_voice_dir", type=str, default="voices", help="Directory to check first for voice file.")
     parser.add_argument("--tts_tortoise_quality", type=str, default="fast", help="Quality preset. tortoise-tts only. Can be 'ultra_fast', 'fast' (default), 'standard', or 'high_quality'")
     parser.add_argument("--tts_volume", type=float, default=1.0, help="Volume for TTS voice program. Is passed to tts_program as environment variable.")

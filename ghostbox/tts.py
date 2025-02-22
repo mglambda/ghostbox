@@ -1,14 +1,5 @@
 #!/usr/bin/env python
 import argparse, traceback
-import pygame
-from ghostbox.tts_util import *
-from ghostbox.tts_state import *
-from ghostbox.tts_backends import *
-import time, threading, os
-
-
-
-pygame.mixer.init()
 
 parser = argparse.ArgumentParser(description="tts.py - TTS program to consume text from stdin and speak it out/ save it as wav file.")
 parser.add_argument("-f", '--filepath', type=str, default="", help="Filename to save accumulated spoken lines in. Output is in wav format.")
@@ -18,8 +9,18 @@ parser.add_argument("-y", "--voice_sample", type=str, default="cloning.wav", hel
 parser.add_argument("-i", "--volume", type=float, default=1.0, help="Volume for the voice playback.")
 parser.add_argument("--sound_dir", type=str, default="sounds", help="Directory where sound files are located to be played with #sound <SNDNAME>")
 parser.add_argument("-m", "--model", type=str, default="xtts", help="Text-to-speech model to use.")
-prog = TTSState(parser.parse_args())
+args = parser.parse_args()
+
+from ghostbox.tts_util import *
+from ghostbox.tts_state import *
+from ghostbox.tts_backends import *
+import time, threading, os
+prog = TTSState(args)
 tts = initTTS(prog.args.model)
+
+# do pygame here because of wonderful hello from pygame message
+import pygame
+pygame.mixer.init()
 
 # ok we are hacking this to allow stopping of all sounds
 from queue import Queue, Empty

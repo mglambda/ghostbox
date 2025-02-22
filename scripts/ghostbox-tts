@@ -1,4 +1,17 @@
 #!/bin/bash
-echo $@
-python -m ghostbox.tts -y "${tts_voice_abs_dir}/${tts_voice}" --volume $tts_volume $tts_additional_arguments
 
+# invoking without arguments prints help
+if [ -z "$1" ]
+then
+    python -m ghostbox.tts --help
+    exit 0
+fi
+
+
+if [ -n "${tts_voice_abs_dir}" ]
+then
+# this case is for invocation of this script by ghostbox proper, which sets some environment vars
+    python -m ghostbox.tts -y "${tts_voice_abs_dir}/${tts_voice}" --volume $tts_volume $tts_additional_arguments		
+else
+    python -m ghostbox.tts $@	
+fi
