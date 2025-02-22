@@ -1,0 +1,4 @@
+#!/bin/bash
+echo $@
+python -m ghostbox.tts -y "${tts_voice_abs_dir}/${tts_voice}" --volume $tts_volume $tts_additional_arguments
+

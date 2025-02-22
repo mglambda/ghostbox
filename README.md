@@ -6,11 +6,12 @@ Ghostbox was made to be blind-accessible, and is fully compatible with any scree
 ## Features
 
  - Command line interface that plays well with standard input and output
+ - Supports various backends, including llama.cpp, llama.box, as well as anything using the OpenAI API
  - Character templates to define AI characters in a simple, file based manner
  - Includes prompt templates for many popular formats (like chat-ml)
  - Chat functionality, including retrying or rewriting prompts, and a chat history that can be saved and reloaded
  - Live audio transcription using OpenAI's Whisper model
- - Multimodal support for images (llava), including automatic descriptions for screenshots or arbitrary image files.
+ - Multimodal support for images (llava, qwen2-vl), including automatic descriptions for screenshots or arbitrary image files.
  - Painless JSON output (just do --json)
  - Grammars to arbitrarily restrict token output 
  - TTS (text-to-speech) capabilities (experimental) 
