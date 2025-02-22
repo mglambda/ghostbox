@@ -1,7 +1,8 @@
 #!/usr/bin/env python
-import argparse, traceback
+import argparse, traceback, sys
 
-parser = argparse.ArgumentParser(description="tts.py - TTS program to consume text from stdin and speak it out/ save it as wav file.")
+program_name = sys.argv[0]
+parser = argparse.ArgumentParser(description= program_name + " - TTS program to consume text from stdin and speak it out/ save it as wav file.")
 parser.add_argument("-f", '--filepath', type=str, default="", help="Filename to save accumulated spoken lines in. Output is in wav format.")
 parser.add_argument("-q", "--quiet", action=argparse.BooleanOptionalAction, default=False, help="Do not play any audio.")
 parser.add_argument("-p", "--pause_duration", type=int, default=1, help="Duration of pauses after newlines. A value of 0 means no or minimal-duration pause.")
