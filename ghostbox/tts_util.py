@@ -1,18 +1,14 @@
-import subprocess
+import subprocess, tempfile
 import datetime
 import os
-from TTS.tts.layers.xtts.tokenizer import split_sentence
+#from TTS.tts.layers.xtts.tokenizer import split_sentence
 
-def getAccumulatorFilename(filepath=""):
-    dir = "output/"
+def getAccumulatorFile(filepath=""):
     if filepath:
-        w = filepath
+        f = open(filepath, "w")
     else:
-        if not(os.path.isdir(dir)):
-            os.mkdir(dir)
-        w = dir + datetime.datetime.now().strftime("%Y-%m-%d-%H:%M:%S") + ".wav"
-    subprocess.run(["cp", "empty.wav", w])
-    return w
+        f = tempfile.NamedTemporaryFile(suffix=datetime.datetime.now().strftime("%Y-%m-%d-%H:%M:%S") + ".wav", delete=False)
+    return f
 
 def maybeGetTag(w):
     # returns pair of (tag, tagargs) as (string,. list of strings)

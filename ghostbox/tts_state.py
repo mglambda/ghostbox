@@ -1,13 +1,29 @@
-import os, subprocess
+import os, subprocess, tempfile
 from moviepy.editor import *
+import ghostbox
 from ghostbox.tts_util import *
 from queue import Queue
 
 class TTSState(object):
     def __init__(self, args):
         self.args = args
-        self.accfile = getAccumulatorFilename(args.filepath)
-        self.tmpfile = "tmp.wav"
+        if args.model == "xtts":
+            self._default_samplerate = "24000"
+        else:
+            self._default_samplerate = "44100"
+            
+        if args.filepath != "":
+            # user wants to keep acc file
+            self._keep_acc = True
+        else:
+            self._keep_acc = False
+        self.accfile = getAccumulatorFile(args.filepath)
+        self.accfile.close()
+        self._empty_filename = ghostbox.get_ghostbox_data("empty." + self._default_samplerate + ".wav")
+        self._silence_filename = ghostbox.get_ghostbox_data("silence.1." + self._default_samplerate + ".wav")
+        subprocess.run(["cp", self._empty_filename, self.accfile.name])        
+        self.tmpfile = tempfile.NamedTemporaryFile(suffix=".wav", delete=False)
+        self.tmpfile.close()
         self.mixins = [] # list of (musicfilename, timestampe)
         self.retry_queue = Queue()
         
@@ -16,6 +32,13 @@ class TTSState(object):
             "sound" : self._soundTag,
             "mixin" : self._mixinTag}
 
+    def cleanup(self):
+        os.remove(self.tmpfile.name)
+        if not(self._keep_acc):
+            os.remove(self.accfile.name)
+            
+        
+        
     def getVoiceSampleFile(self):
         return self.args.voice_sample
         
@@ -60,19 +83,19 @@ class TTSState(object):
             clips.append(AudioFileClip(mixfile).with_start(timestamp))
 
         outclip = CompositeAudioClip(clips)
-        outclip.write_audiofile(self.tmpfile)
-        subprocess.run(["cp", self.tmpfile, self.accfile])        
+        outclip.write_audiofile(self.tmpfile.name)
+        subprocess.run(["cp", self.tmpfile.name, self.accfile.name])        
         
     def accumulateSound(self, sndFile):
-        subprocess.run(["sox", self.accfile, sndFile, self.tmpfile])
-        subprocess.run(["cp", self.tmpfile, self.accfile])
+        subprocess.run(["sox", self.accfile.name, sndFile, self.tmpfile.name])
+        subprocess.run(["cp", self.tmpfile.name, self.accfile.name])
         
     def addPause(self):
         if self.args.pause_duration == 0:
             return
 
         for n in range(0, self.args.pause_duration):
-            self.accumulateSound(self.args.sound_dir + "/silence.1.wav")
+            self.accumulateSound(self._silence_filename)
 
     def isRetrying(self):
         return not(self.retry_queue.empty())

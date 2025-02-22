@@ -1,15 +1,16 @@
 #!/usr/bin/env python
-import argparse, traceback, sys
+import argparse, traceback, sys, tempfile
 
 program_name = sys.argv[0]
 parser = argparse.ArgumentParser(description= program_name + " - TTS program to consume text from stdin and speak it out/ save it as wav file.")
 parser.add_argument("-f", '--filepath', type=str, default="", help="Filename to save accumulated spoken lines in. Output is in wav format.")
 parser.add_argument("-q", "--quiet", action=argparse.BooleanOptionalAction, default=False, help="Do not play any audio.")
+parser.add_argument("-l", "--language", type=str, default="en", help="Language for the TTS output. Not all TTS models support all language, and many don't need this option.")
 parser.add_argument("-p", "--pause_duration", type=int, default=1, help="Duration of pauses after newlines. A value of 0 means no or minimal-duration pause.")
 parser.add_argument("-y", "--voice_sample", type=str, default="cloning.wav", help="Path to wav file used as a voice sample to clone.")
 parser.add_argument("-i", "--volume", type=float, default=1.0, help="Volume for the voice playback.")
 parser.add_argument("--sound_dir", type=str, default="sounds", help="Directory where sound files are located to be played with #sound <SNDNAME>")
-parser.add_argument("-m", "--model", type=str, default="xtts", help="Text-to-speech model to use.")
+parser.add_argument("-m", "--model", type=str, default="zonos", help="Text-to-speech model to use.")
 args = parser.parse_args()
 
 from ghostbox.tts_util import *
@@ -18,6 +19,13 @@ from ghostbox.tts_backends import *
 import time, threading, os
 prog = TTSState(args)
 tts = initTTS(prog.args.model)
+if args.filepath == "":
+    output_file = tempfile.NamedTemporaryFile(suffix=".wav")
+else:
+    output_file = open(args.filepath, "w")
+
+output_file.close()    
+
 
 # do pygame here because of wonderful hello from pygame message
 import pygame
@@ -84,7 +92,7 @@ while True:
 #    xs = tts.split_into_sentences(msg)
 #    print(str(len(xs)))
     try:
-        tts.tts_to_file(text=msg, speaker_wav=prog.getVoiceSampleFile(), language="en", file_path="output.wav")
+        tts.tts_to_file(text=msg, speaker_file=prog.getVoiceSampleFile(), file_path=output_file.name)
     except ZeroDivisionError:
         print("Caught zero division error. Ignoring.")
         # this happens when the tts is asked to process whitespace and produces a wav file in 0 seconds :) nothing to worry about
@@ -95,15 +103,17 @@ while True:
         continue # we retry the msg that was too long
         
         
-    prog.accumulateSound("output.wav")
+    prog.accumulateSound(output_file.name)
     prog.addPause()
     if prog.args.quiet:
         continue
-    snd = pygame.mixer.Sound("output.wav")
+    snd = pygame.mixer.Sound(output_file.name)
     while pygame.mixer.get_busy():
         pygame.time.delay(10) #ms
 
     snd.set_volume(prog.args.volume)
     snd.play()
 
-    
+prog.cleanup()
+os.remove(output_file.name)
+

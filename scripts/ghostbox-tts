@@ -3,9 +3,7 @@
 if [ -n "${tts_voice_abs_dir}" ]
 then
 # this case is for invocation of this script by ghostbox proper, which sets some environment vars
-	echo "ghostbox"
     python -m ghostbox.tts -y "${tts_voice_abs_dir}/${tts_voice}" --volume $tts_volume $tts_additional_arguments		
 else
-	echo "user"
     python -m ghostbox.tts $@	
 fi
