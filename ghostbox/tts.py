@@ -4,6 +4,7 @@ import argparse, traceback, sys, tempfile, ast
 program_name = sys.argv[0]
 parser = argparse.ArgumentParser(description= program_name + " - TTS program to consume text from stdin and speak it out/ save it as wav file.")
 parser.add_argument("-f", '--filepath', type=str, default="", help="Filename to save accumulated spoken lines in. Output is in wav format.")
+parser.add_argument("--voices", action=argparse.BooleanOptionalAction, default=False, help="List all available voices for chosen model, then exit the program.")
 parser.add_argument("-q", "--quiet", action=argparse.BooleanOptionalAction, default=False, help="Do not play any audio.")
 parser.add_argument("-l", "--language", type=str, default="en", help="Language for the TTS output. Not all TTS models support all language, and many don't need this option.")
 parser.add_argument("-p", "--pause_duration", type=int, default=1, help="Duration of pauses after newlines. A value of 0 means no or minimal-duration pause.")
@@ -23,6 +24,14 @@ from ghostbox.tts_backends import *
 import time, threading, os
 prog = TTSState(args)
 tts = initTTS(prog.args.model, config=vars(prog.args))
+
+# list voices if requested
+if args.voices:
+    for voice_name in tts.get_voices():
+        print(voice_name)
+    sys.exit()
+
+
 config_options = dump_config(tts)
 if config_options != []:
     printerr("Dumping TTS config options. Set them with '/<OPTION> <VALUE>'. /ls to list again.")

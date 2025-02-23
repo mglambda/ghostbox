@@ -744,7 +744,7 @@ class Plumbing(object):
         # let's make the path issue absolutely clear. We only track tts_voice_dir, but to the underlying tts program, we expose the tts_voice_abs_dir environment variable, which contains the absolute path to the voice dir
         # FIXME: rewrite the entire path architecture
         tts_voice_abs_dir = self.tryGetAbsVoiceDir()
-        self.tts = feedwater.run(tts_program, env=envFromDict(self.options | {"tts_voice_abs_dir" : tts_voice_abs_dir}))
+        self.tts = feedwater.run(tts_program, env=envFromDict(self.options | {"tts_voice_abs_dir" : tts_voice_abs_dir, "ONNX_PROVIDER":"CUDAExecutionProvider"}))
         self.setOption("stream_flush", "sentence")
         if self.getOption("verbose"):
             printerr(" Automatically set stream_flush to 'sentence'. This is recommended with TTS. Manually reset it to 'token' if you really want.")

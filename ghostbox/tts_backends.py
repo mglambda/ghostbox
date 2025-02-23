@@ -1,10 +1,19 @@
-import traceback
+import traceback, appdirs, os, wget
 from abc import ABC, abstractmethod
 from functools import *
 from typing import *
 from ghostbox.util import *
 from ghostbox.definitions import *
 
+def assert_downloaded(filepath: str, download_url: str) -> None:
+    """Makes sure a file FILEPATH exists, downloading it from DOWNLOAD_URL if necessary."""
+    if os.path.isfile(filepath):
+        return
+    os.makedirs(os.path.dirname(filepath), exist_ok=True)
+    printerr("Downloading " + os.path.basename(filepath) + " from " + download_url)
+    wget.download(download_url, out=filepath)
+    printerr("\nSuccessfully saved to " + filepath)
+    
 import nltk.data
 nltk.download('punkt_tab')
 tokenizer = nltk.data.load('tokenizers/punkt/english.pickle')
@@ -28,22 +37,31 @@ class TTSBackend(ABC):
         The default implementation splits on common punctuation marks."""
         return tokenizer.tokenize(text)
 
-
     @abstractmethod
     def configure(self, **kwargs) -> None:
         """Set parameters specific to a TTS model."""
         pass
 
-
+    @abstractmethod
+    def get_voices(self) -> List[str]:
+        """Returns a list of all voices supported by the model.
+        This may be empty or inexhaustive for some models, e.g. if files need to be provided for cloning."""
+        pass
+    
 def initTTS(model: str, config: Dict[str, Any] = {}) -> TTSBackend:
     if model == "xtts":
         return XTTSBackend()
     elif model == "zonos":
         return ZonosBackend(config=config)
-    # FIXME: more models
+    elif model == "kokoro":
+        return KokoroBackend(config=config)
+    raise ValueError("Not a valid TTS model: " + model) 
 
-def dump_config(backend: TTSBackend) -> str:
-        return ["    " + key + "\t" + str(value) for key, value in backend.config.items()]
+
+def dump_config(backend: TTSBackend) -> List[str]:
+    if "config" not in backend.__dict__:
+        return []
+    return ["    " + key + "\t" + str(value) for key, value in backend.config.items()]
 
     
         
@@ -68,7 +86,10 @@ This immplementation remains here as a reference implementation."""
 
     def configure(self, **kwargs) -> None:
         super().configure(**kwargs)
-        
+
+    def get_voices(self) -> List[str]:
+        return []
+    
 class ZonosBackend(TTSBackend):
     """Bindings for the zonos v0.1 model. See https://github.com/Zyphra/Zonos"""
 
@@ -167,3 +188,80 @@ class ZonosBackend(TTSBackend):
         import torchaudio        
         wav, sampling_rate = torchaudio.load(speaker_file)
         self._speakers[speaker_file] = self._model.make_speaker_embedding(wav, sampling_rate)
+
+    def get_voices(self) -> List[str]:
+        return []
+    
+class KokoroBackend(TTSBackend):
+    """Bindings for the indomitable kokoro tts https://github.com/hexgrad/kokoro ."""
+
+
+    def __init__(self, config: Dict[str, Any]={}) -> None:
+        super().__init__(config=config)
+        self._default_onnx_file = "kokoro-v1.0.onnx"
+        self._default_voice_file = "voices-v1.0.bin"
+        self._init()
+
+    def _init(self) -> None:
+        printerr("Initializing kokoro.")
+        # import even if unused just to fail early
+        import soundfile as sf
+        from kokoro_onnx import Kokoro
+        # FIXME: ok there is a problem upstream with kokoro and gpu support. problem is it tends to default to CPU
+        # we need to make sure that user did
+        # pip install kokoro_onnx[gpu]
+        # which is annoying, additionally, we require
+        #export ONNX_PROVIDER=CUDAExecutionProvider
+        # then it will run with cuda, but apparently the latest cuda libs aren't supported. wip.
+        # update: it actually works with
+        # pacman -S cudnn
+        # still, it's all a bit hairy.
+
+        self._model = Kokoro(self._get_onnx_path(), self._get_voice_path())
+
+    def _data_dir(self) -> str:
+        return appdirs.AppDirs("ghostbox-tts").user_data_dir
+
+    def _get_onnx_path(self) -> str:
+        onnx_path = self._data_dir() + "/" + self._default_onnx_file
+        # FIXME: maybe host these yourself
+        assert_downloaded(onnx_path, "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/kokoro-v1.0.onnx")
+        return onnx_path
+
+    def _get_voice_path(self) -> str:
+        voice_file = appdirs.AppDirs("ghostbox-tts").user_data_dir + "/" + self._default_voice_file
+        assert_downloaded(voice_file, "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/voices-v1.0.bin")
+        return voice_file
+    
+    def tts_to_file(self, text: str, file_path: str, language:str = "en-us", speaker_file:str = "") -> None:
+        """Given a message, writes the message spoken as audio to a wav file."""
+        import soundfile as sf
+        if language == "en":
+            language = "en-us"
+
+        # FIXME: bit of a hack that exists simply because ghostbox always passes the absolute path to voices, which is meaningless for kokoro
+        speaker_file = os.path.basename(speaker_file)
+        
+        try:
+            samples, sample_rate = self._model.create(
+                text, voice=speaker_file, speed=1.0, lang=language
+            )
+            sf.write(file_path, samples, sample_rate)            
+        except:
+            # this happens e.g. when a wrong voice is picked. we exit to avoid infinite loop with the main thread retries.
+                printerr(traceback.format_exc())
+                sys.exit()
+
+    def split_into_sentences(self, text:str) -> List[str]:
+        """Returns a list of sentences, where a 'sentence' is any string the TTS backend wants to process as a chunk.
+        The default implementation splits on common punctuation marks."""
+        # kokoro doesn't really need this
+        return [text]
+
+    def configure(self, **kwargs) -> None:
+        """Set parameters specific to a TTS model."""
+        pass
+
+    def get_voices(self) -> List[str]:
+        return self._model.get_voices()
+    
