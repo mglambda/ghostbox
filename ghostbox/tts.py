@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-import argparse, traceback, sys, tempfile
+import argparse, traceback, sys, tempfile, ast
 
 program_name = sys.argv[0]
 parser = argparse.ArgumentParser(description= program_name + " - TTS program to consume text from stdin and speak it out/ save it as wav file.")
@@ -23,6 +23,13 @@ from ghostbox.tts_backends import *
 import time, threading, os
 prog = TTSState(args)
 tts = initTTS(prog.args.model, config=vars(prog.args))
+config_options = dump_config(tts)
+if config_options != []:
+    printerr("Dumping TTS config options. Set them with '/<OPTION> <VALUE>'. /ls to list again.")
+    for w in config_options:
+        printerr(w)
+
+
 if args.filepath == "":
     output_file = tempfile.NamedTemporaryFile(suffix=".wav")
 else:
@@ -53,8 +60,22 @@ def input_loop():
                     msg_queue.queue.clear()
                 prog.clearRetries()
                 continue
+            elif w.startswith("/"):
+                vs = w[1:].split(" ")
+                option = vs[0]
+                if option == "ls":
+                    for u in dump_config(tts):
+                        printerr(u)
+                    continue
+                elif option in tts.config:
+                    try:
+                        value = ast.literal_eval(" ".join(vs[1:]))
+                    except:
+                        printerr("Couldn't set config option '" + vs[0] + "'. Error in value literal?")
+                        continue
+                    tts.configure(**{option:value})
+                    continue
 
-            #msg_queue.put(w)
             ws = tts.split_into_sentences(w)
             for chunk in ws:
                 msg_queue.put(chunk)
@@ -108,7 +129,7 @@ while True:
         continue
 #    xs = tts.split_into_sentences(msg)
     try:
-        tts.tts_to_file(text=msg, speaker_file=prog.getVoiceSampleFile(), file_path=output_file.name, seed=prog.args.seed)
+        tts.tts_to_file(text=msg, speaker_file=prog.getVoiceSampleFile(), file_path=output_file.name)
     except ZeroDivisionError:
         print("Caught zero division error. Ignoring.")
         # this happens when the tts is asked to process whitespace and produces a wav file in 0 seconds :) nothing to worry about

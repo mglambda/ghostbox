@@ -9,13 +9,7 @@ import nltk.data
 nltk.download('punkt_tab')
 tokenizer = nltk.data.load('tokenizers/punkt/english.pickle')
 
-def initTTS(model: str, config: Dict[str, Any] = {}):
-    if model == "xtts":
-        return XTTSBackend()
-    elif model == "zonos":
-        return ZonosBackend(config=config)
-    # FIXME: more models
-    
+
 class TTSBackend(ABC):
     """Abstract interface to a TTS model, like xtts2 (now derelict), tortoise, or zonos."""
 
@@ -24,7 +18,7 @@ class TTSBackend(ABC):
         pass
 
     @abstractmethod
-    def tts_to_file(self, text: str, file_path: str, language:str = "en", speaker_file:str = "", seed: int = 420) -> None:
+    def tts_to_file(self, text: str, file_path: str, language:str = "en", speaker_file:str = "") -> None:
         """Given a message, writes the message spoken as audio to a wav file."""
         pass
 
@@ -39,6 +33,18 @@ class TTSBackend(ABC):
     def configure(self, **kwargs) -> None:
         """Set parameters specific to a TTS model."""
         pass
+
+
+def initTTS(model: str, config: Dict[str, Any] = {}) -> TTSBackend:
+    if model == "xtts":
+        return XTTSBackend()
+    elif model == "zonos":
+        return ZonosBackend(config=config)
+    # FIXME: more models
+
+def dump_config(backend: TTSBackend) -> str:
+        return ["    " + key + "\t" + str(value) for key, value in backend.config.items()]
+
     
         
 class XTTSBackend(TTSBackend):
@@ -54,7 +60,7 @@ This immplementation remains here as a reference implementation."""
         printerr("Using " + device)        
         self.tts = TTS("tts_models/multilingual/multi-dataset/xtts_v2").to(device)        
 
-    def tts_to_file(self, text: str, file_path: str, language:str = "en", speaker_file:str = "", seed: int = 420) -> None:
+    def tts_to_file(self, text: str, file_path: str, language:str = "en", speaker_file:str = "") -> None:
         self.tts.tts_to_file(text=text, speaker_wav=speaker_file, language=language, file_path=file_path)
         
     def split_into_sentences(self, text:str) -> List[str]:
@@ -70,7 +76,10 @@ class ZonosBackend(TTSBackend):
         super().__init__(config=config)
         self._speakers = {}        
         # default config
-        self.config = {"zonos_model": "Zyphra/Zonos-v0.1-transformer"}
+        self.config = {"zonos_model": "Zyphra/Zonos-v0.1-transformer",
+                       "pitch_std" : 200.0,
+                       "seed" : 420}
+        self.config |= self.get_default_emotions()
         self._model_fallback = self.config["zonos_model"]
         self.configure(**config)
         self._init()
@@ -116,7 +125,7 @@ class ZonosBackend(TTSBackend):
             else:
                 self.config[key] = value
         
-    def tts_to_file(self, text: str, file_path: str, language:str = "en-us", speaker_file:str = "", seed:int = 420) -> None:
+    def tts_to_file(self, text: str, file_path: str, language:str = "en-us", speaker_file:str = "") -> None:
         import torch
         import torchaudio
         from zonos.conditioning import make_cond_dict
@@ -129,10 +138,8 @@ class ZonosBackend(TTSBackend):
             self._create_speaker(speaker_file)
         speaker = self._speakers[speaker_file]
 
-        torch.manual_seed(seed)
-        e = self.get_default_emotions()
-        e["other"] = 10.0
-        cond_dict = make_cond_dict(text=text, speaker=speaker, language=language, emotion=list(e.values()), pitch_std=200.0)
+        torch.manual_seed(self.config["seed"])
+        cond_dict = make_cond_dict(text=text, speaker=speaker, language=language, emotion=list(self.get_config_emotions().values()), pitch_std=self.config["pitch_std"])
         conditioning = self._model.prepare_conditioning(cond_dict)
         codes = self._model.generate(conditioning)
         wavs = self._model.autoencoder.decode(codes).cpu()
@@ -146,12 +153,15 @@ class ZonosBackend(TTSBackend):
         return ws
     
 
-    def get_default_emotions(self):
+    def get_default_emotions(self) -> Dict[str, float]:
         names = "happiness sadness disgust fear surprise anger other neutral".split(" ")
         emotions = [0.3077, 0.0256, 0.0256, 0.0256, 0.0256, 0.0256, 0.2564, 0.3077]
         return dict(list(zip(names, emotions)))
         return 
-        
+
+    def get_config_emotions(self) -> Dict[str, float]:
+        names = self.get_default_emotions().keys()
+        return {name: self.config[name] for name in names}
     
     def _create_speaker(self, speaker_file):
         import torchaudio        
