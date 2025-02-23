@@ -14,7 +14,7 @@ Ghostbox was made to be blind-accessible, and is fully compatible with any scree
  - Multimodal support for images (llava, qwen2-vl), including automatic descriptions for screenshots or arbitrary image files.
  - Painless JSON output (just do --json)
  - Grammars to arbitrarily restrict token output 
- - TTS (text-to-speech) capabilities (experimental) 
+ - TTS (text-to-speech) with various backends, including Zonos and Amazon Polli, using ghostbox-tts.
  - Token streaming
  - Model hyperparameter control (temperature, top p, etc.), including with config-files
  - Simple design. By default, ghostbox let's you just send raw text to your LLM, and returns the generated output. This is great if you want to learn about proper prompting, which was part of my motivation for making this.
