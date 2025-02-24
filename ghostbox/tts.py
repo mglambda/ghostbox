@@ -55,6 +55,7 @@ pygame.mixer.init()
 from queue import Queue, Empty
 msg_queue = Queue()
 done = threading.Event()
+snd_stop_flag = threading.Event()
 def input_loop():
     global done
     global prog
@@ -64,8 +65,9 @@ def input_loop():
         try:
             w = input()
             if w == "<clear>":
-                pygame.mixer.stop()
+                pygame.mixer.stop() 
                 with msg_queue.mutex:
+                    snd_stop_flag.set()                                                        
                     msg_queue.queue.clear()
                 prog.clearRetries()
                 continue
@@ -85,6 +87,8 @@ def input_loop():
                     tts.configure(**{option:value})
                     continue
 
+            # main event -> speak input msg w
+            snd_stop_flag.clear()
             ws = tts.split_into_sentences(w)
             for chunk in ws:
                 msg_queue.put(chunk)
@@ -155,8 +159,14 @@ while True:
         continue
     snd = pygame.mixer.Sound(output_file.name)
     while pygame.mixer.get_busy():
+        if snd_stop_flag.isSet():
+            snd.stop()
+            break
         pygame.time.delay(10) #ms
 
+    if snd_stop_flag.isSet():
+        snd_stop_flag.clear()            
+        continue
     snd.set_volume(prog.args.volume)
     snd.play()
 
