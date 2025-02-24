@@ -1,4 +1,4 @@
-import requests, json, os, io, re, base64, random, sys, threading, signal, tempfile, string
+import requests, json, os, io, re, base64, random, sys, threading, signal, tempfile, string, uuid
 from queue import Queue
 import feedwater
 from functools import *
@@ -109,6 +109,7 @@ class Plumbing(object):
         self.initial_cli_prompt = initial_cli_prompt
         self.stream_queue = []
         self.stream_sentence_queue = []
+        self._stream_only_once_token_bag = set()
         self. images = {}
         # flag to show wether image data needs to be resent to the backend
         self._images_dirty = False
@@ -591,10 +592,10 @@ class Plumbing(object):
         if result_str == "":
             return
                 
-        self.print("\r" + (" " * len(self.showCLIPrompt())) + "\r", end="")
+        self.print("\r" + (" " * len(self.showCLIPrompt())) + "\r", end="", tts=False)
         if not(self.getOption("stream")):
             self.print(self.getAIFormatter(with_color=self.getOption("color")).format(result_str), end="")
-        self.print(self.showCLIPrompt(), end="")
+        self.print(self.showCLIPrompt(), end="", tts=False)
         return
 
 
@@ -652,10 +653,18 @@ class Plumbing(object):
 
         self.interact(w, self._print_generation_callback)
 
-    def _streamCallback(self, token, user_callback=None):
+    def _streamCallback(self, token, user_callback=None, only_once=None):
+        if only_once not in self._stream_only_once_token_bag:
+            # this is so that we can print tokens/sentences without interrupting the TTS every time
+            # except that we want to interrupt the TTS exactly once -> when we start streaming
+            # If you do this elsewhere, i.e. communicate(), we risk a race condition
+            self._stream_only_once_token_bag.add(only_once)
+            if self.getOption("tts_interrupt"):
+                self.stopTTS()
+
         if user_callback is None:
             user_callback = lambda x: x
-        f =lambda w: self.print(self.getAIColorFormatter().format(w), end="", flush=True)
+        f =lambda w: self.print(self.getAIColorFormatter().format(w), end="", flush=True, interrupt=False)
             
         self.stream_queue.append(token)
         if self.getOption("use_tools"):
@@ -793,7 +802,7 @@ class Plumbing(object):
         self.tts.write_line(w)
         return w
 
-    def print(self, w, end="\n", flush=False, color="", style="", tts=True):
+    def print(self, w, end="\n", flush=False, color="", style="", tts=True, interrupt=None):
         # either prints, speaks, or both, depending on settings
         if w == "":
             return
@@ -802,7 +811,7 @@ class Plumbing(object):
             return 
         
         if tts and self.getOption("tts") and w != self.showCLIPrompt():
-            self.communicateTTS(self.getTTSFormatter().format(w) + end)
+            self.communicateTTS(self.getTTSFormatter().format(w) + end, interrupt=self.getOption("tts_interrupt") if interrupt is None else interrupt)
             if not(self.getOption("tts_subtitles")):
                 return
 
@@ -984,8 +993,8 @@ returns - A string ready to be sent to the backend, including the full conversat
         if self.getOption("stream"):
             # FIXME: this is the last hacky bit about formatting
             if self.getOption("chat_show_ai_prompt") and self.getMode().startswith("chat"):
-                self.print(self.session.getVar("chat_ai") + ": ", end="", flush=True)
-            if backend.generateStreaming(payload, lambda token: self._streamCallback(token, user_callback=stream_callback)):
+                self.print(self.session.getVar("chat_ai") + ": ", end="", flush=True, interrupt=False)
+            if backend.generateStreaming(payload, lambda token, only_once=uuid.uuid4(): self._streamCallback(token, user_callback=stream_callback, only_once=only_once)):
                 printerr("error: " + backend.getLastError())
                 return ""
             backend.waitForStream()
@@ -1162,7 +1171,11 @@ def main():
 
             # for convenience when chatting
             if w == "":
-                w = "/cont"
+                # New: changed from
+                # w = "/cont"
+                # to the below because /cont wasn't used much and continue doesn't work very well with OAI API which is getting more prevalent
+                prog.stopTTS()
+                continue
 
             # expand session vars, so we can do e.g. /tokenize {{system_msg}}
             w = prog.session.expandVars(w)

@@ -236,6 +236,9 @@ class KokoroBackend(TTSBackend):
     def tts_to_file(self, text: str, file_path: str, language:str = "en-us", speaker_file:str = "") -> None:
         """Given a message, writes the message spoken as audio to a wav file."""
         import soundfile as sf
+        if text == "":
+            return
+        
         if language == "en":
             language = "en-us"
 

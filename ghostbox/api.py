@@ -15,14 +15,32 @@ from ghostbox.definitions import *
 from ghostbox import definitions
 from ghostbox.api_internal import *
 
+def from_openai_generic(endpoint="http://localhost:8080", **kwargs):
+    """Returns a Ghostbox instance that connects to an OpenAI API compatible endpoint.
+    This generic backend adapter works with many backends, including llama.cpp, llama-box, ollama, as well as online providers, like OpenAI, Anthropic, etc. However, to use features specific to a given backend, that are not part of the OpenAI API, you may need to use a more specific backend.
+    Note: Expects ENDPOINT to serve /v1/chat/completions and similar, so e.g. http://localhost:8080/v1/chat/completions should be reachable."""
+    return Ghostbox(backend=LLMBackend.generic.name, endpoint=endpoint, **kwargs)
+
+def from_openai_legacy(endpoint="http://localhost:8080", **kwargs):
+    """Returns a Ghostbox instance that connects to an OpenAI API compatible endpoint using the legacy /v1/completions interface.
+    This generic backend adapter works with many backends, including llama.cpp, llama-box, ollama, as well as online providers, like OpenAI, Anthropic, etc. However, to use features specific to a given backend, that are not part of the OpenAI API, you may need to use a more specific backend.
+    Note: There is usually no reason to use this over the generic variant."""
+    return Ghostbox(backend=LLMBackend.legacy.name, endpoint=endpoint, **kwargs)
+
+
 def from_llamacpp(endpoint="http://localhost:8080", **kwargs):
-    return Ghostbox(backend="llamacpp", endpoint=endpoint, **kwargs)
+    """Returns a Ghostbox instance bound to the formidable LLama.cpp. See https://github.com/ggml-org/llama.cpp .
+    This uses endpoints described in the llama-server documentation, and will make use of Llama.cpp specific features."""
+    return Ghostbox(backend=LLMBackend.llamacpp.name, endpoint=endpoint, **kwargs)
 
-def from_koboldcpp(endpoint="http://localhost:5001", **kwargs):
-    return Ghostbox(backend="llama.cpp", endpoint=endpoint, **kwargs)
+# FIXME: temporarily disabled due to being untested
+#ndef from_koboldcpp(endpoint="http://localhost:5001", **kwargs):
+#    return Ghostbox(backend="llama.cpp", endpoint=endpoint, **kwargs)
 
-
-
+def from_openai_official():
+    """Returns a Ghostbox instance that connects to the illustrious OpenAI API at their official servers.
+    The endpoint is hardcoded for this one. Use the 'generic' backend to connect to arbitrary URLs using the OpenAI API."""
+    return Ghostbox(backend=LLMBackend.openai.name, **kwargs)
 
 class ChatMessage(BaseModel):
     role : str
@@ -31,12 +49,10 @@ class ChatMessage(BaseModel):
 class ChatHistory(BaseModel):
     data: List[ChatMessage]
     
-
 @dataclass
 class ChatResult:
     # not sure yet
     payload : str
-
 
 @dataclass
 class CompletionResult:
