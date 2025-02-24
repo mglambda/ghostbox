@@ -108,16 +108,20 @@ This function will record from the point it is called and until the user hits en
         temp_file.close()
         return result
 
-    def transcribeContinuously(self, callback=None):
+    def transcribeContinuously(self, callback=None, on_threshold=None):
         """Starts recording continuously, transcribing audio when a given volume threshold is reached.
         This function is non-blocking, but returns a ContinuousTranscriber object, which runs asynchronously and can be polled to get the latest transcription (if any).
-        Alternatively or in addition to polling, you can allso supply a callback, which gets called whenever a string is transcribed with the string as argument."""
-        return ContinuousTranscriber(self.model, self.silence_threshold, callback=callback)
+        Alternatively or in addition to polling, you can allso supply a callback, which gets called whenever a string is transcribed with the string as argument.
+        :param callback: Function taking a string as argument. Gets called on a successful transcription.
+        :param on_threshold: A zero argument function that gets called whenever the audio threshold is crossed while recording.
+        :return: A ContinuousTranscriber object."""
+        return ContinuousTranscriber(self.model, self.silence_threshold, callback=callback, on_threshold=on_threshold)
 
 class ContinuousTranscriber(object):
-    def __init__(self, model, silence_threshold, callback=None):
+    def __init__(self, model, silence_threshold, callback=None, on_threshold=None):
         self.model = model
         self.callback = callback
+        self.on_threshold = on_threshold
         self.silence_threshold = silence_threshold
         self.buffer = []
         self.running = False
@@ -211,6 +215,8 @@ of the phrase."""
                 if(not started):
                     # recording starts here
                     started = True
+                    if self.on_threshold is not None:
+                        self.on_threshold()
             elif (started is True):
                 started = False
                 listen = False

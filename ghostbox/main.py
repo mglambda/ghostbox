@@ -11,7 +11,7 @@ from ghostbox.output_formatter import *
 from ghostbox.util import *
 from ghostbox import agency
 from ghostbox._argparse import *
-from ghostbox.streaming import streamPrompt
+from ghostbox import streaming
 from ghostbox.session import Session
 from ghostbox.pftemplate import *
 from ghostbox.backends import *
@@ -115,6 +115,7 @@ class Plumbing(object):
         self._images_dirty = False
         self._lastPrompt = ""
         self._dirtyContextLlama = False
+        self._stop_generation = threading.Event()
         self._smartShifted = False
         self._systemTokenCount = None
         self.continue_with = ""
@@ -643,8 +644,9 @@ class Plumbing(object):
             self.print(w, tts=False)
 
         # FIXME: this is possibly better put in the whispertranscriber when it picks up any audio
-        if self.getOption("audio_interrupt_tts"):
-            self.stopTTS()
+        # update: moved to whisper transcriber
+        #if self.getOption("audio_interrupt"):
+            #self.stopAll()
             
         w = self.modifyTranscription(w)
         if not(w):
@@ -653,6 +655,11 @@ class Plumbing(object):
 
         self.interact(w, self._print_generation_callback)
 
+    def _transcriptionOnThresholdCallback(self):
+        """Gets called whenever the continuous transcriber picks up audio above the threshold."""
+        if self.getOption("audio_interrupt"):
+            self.stopAll()
+            
     def _streamCallback(self, token, user_callback=None, only_once=None):
         if only_once not in self._stream_only_once_token_bag:
             # this is so that we can print tokens/sentences without interrupting the TTS every time
@@ -710,7 +717,7 @@ class Plumbing(object):
         printerr("Beginning automatic transcription. CTRL + c to pause.")
         if self.ct:
             self.ct.stop()
-        self.ct = self.whisper.transcribeContinuously(callback=self._transcriptionCallback)
+        self.ct = self.whisper.transcribeContinuously(callback=self._transcriptionCallback, on_threshold=self._transcriptionOnThresholdCallback)
         signal.signal(signal.SIGINT, self._ctPauseHandler)
 
     def stopImageWatch(self):
@@ -781,6 +788,9 @@ class Plumbing(object):
 
     def stopTTS(self):
         # FIXME: not implemented for all TTS clients
+        if self.tts is None:
+            return
+        
         self.tts.write_line("<clear>")
     
     def communicateTTS(self, w, interrupt=False):
@@ -1022,6 +1032,7 @@ returns - A string ready to be sent to the backend, including the full conversat
             
         self.freeze()
         def loop_interact(w):
+            self._stop_generation.clear()
             communicating = True
             (modified_w, hint) = self.modifyInput(w)
             self.addUserText(modified_w)            
@@ -1065,6 +1076,19 @@ returns - A string ready to be sent to the backend, including the full conversat
         self.interact(w, user_generation_callback=f, timeout=timeout, blocking=True)
         return temp
     
+    def _stopInteraction(self):
+        """Stops an ongoing generation, regardless of wether it is streaming, blocking, or async.
+        This is a low level function. Consider using stopAll instead.
+        Note: Currently only works for streaming generations."""
+        streaming.stop_streaming.set()
+        self._stop_generation.set()
+
+    def stopAll(self):
+        """Stops ongoing generation and interrupts the TTS.
+        The side effects of stopping generation depend on the method used, i.e. streaming generation will yield some partially generated results, while a blocking generation may be entirely discarded.
+        Note: Currently only works for streaming generations."""
+        self._stopInteraction()
+        self.stopTTS()
         
     def hasImages(self):
         return bool(self.images) and self._images_dirty
@@ -1149,7 +1173,10 @@ def main():
             if prog.initial_print_flag:
                 prog.initial_print_flag = False
                 print("\n\n" + prog.formatStory(), end="")
-            w = input(prog.showCLIPrompt())
+
+            # input actually prints to stderr, which we don't want, so we have an extra print step
+            print(prog.showCLIPrompt(), end="", flush=True)
+            w = input()
 
             # check for multiline
             # this works different wether we have multiline mode enabled, or are doing ad-hoc multilines
@@ -1174,7 +1201,7 @@ def main():
                 # New: changed from
                 # w = "/cont"
                 # to the below because /cont wasn't used much and continue doesn't work very well with OAI API which is getting more prevalent
-                prog.stopTTS()
+                prog.stopAll()
                 continue
 
             # expand session vars, so we can do e.g. /tokenize {{system_msg}}
@@ -1195,8 +1222,10 @@ def main():
                 continue
 
             # this is the main event
-            prog.interact(w, generation_callback=prog._print_generation_callback)
             
+            # for CLI use, we want a new generation to first stop all ongoing generation and TTS
+            prog.stopAll()
+            prog.interact(w, generation_callback=prog._print_generation_callback)
 
             prog.resetContinue()
         except KeyboardInterrupt:

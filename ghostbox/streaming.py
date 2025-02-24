@@ -1,8 +1,11 @@
 import requests, json
 #from requests_html import HTMLSession
 from time import sleep
-from threading import Thread
+from threading import Thread, Event
 from ghostbox.util import printerr
+
+# FIXME:   # poor man's closure; somehow this isn't enough yet to warrant making a class
+stop_streaming = Event()
 
 def connect_to_endpoint(url, prompt, headers=""):
     try:
@@ -14,8 +17,16 @@ def connect_to_endpoint(url, prompt, headers=""):
         printerr(f"Error connecting to {url}: {e}")
         return None
 
-def process_sse_streaming_events(callback, flag, r):
+
+
+  
+    
+def process_sse_streaming_events(callback, done_flag, r):
+    global stop_streaming
     for event in r.iter_lines():
+        if stop_streaming.isSet():
+            break
+            
         if event:
             w = event.decode()
             if w == "data: [DONE]":
@@ -24,12 +35,15 @@ def process_sse_streaming_events(callback, flag, r):
             elif w.startswith("data: "):
                 d = json.loads(w[6:])            
                 callback(d)
-    flag.set()
+    done_flag.set()
 
 
-def streamPrompt(callback, flag, url, json="", headers=""):
+def streamPrompt(callback, done_flag, url, json="", headers=""):
+    global stop_streaming
+    stop_streaming.clear()
+    
     response = connect_to_endpoint(url, json, headers=headers)
     if response:
-        thread = Thread(target=process_sse_streaming_events, args=(callback, flag, response))
+        thread = Thread(target=process_sse_streaming_events, args=(callback, done_flag, response))
         thread.start()
     return response

@@ -61,7 +61,7 @@ def makeArgParser(default_params):
     parser.add_argument("--audio_silence_threshold", type=int, default=2000, help="An integer value denoting the threshold for when automatic audio transcription starts recording. (default 2000)")
     parser.add_argument("--audio_activation_phrase", type=str, default="", help="When set, the phrase must be detected in the beginning of recorded audio, or the recording will be ignored. Phrase matching is fuzzy with punctuation removed.")
     parser.add_argument("--audio_activation_period_ms", type=int, default=0, help="Period in milliseconds where no further activation phrase is necessary to trigger a response. The period starts after any interaction with the AI, spoken or otherwise.")
-    parser.add_argument("--audio_interrupt_tts", action=argparse.BooleanOptionalAction, default=True, help="Stops speaking of TTS when you start speaking. Does not require activation phrase.")
+    parser.add_argument("--audio_interrupt", action=argparse.BooleanOptionalAction, default=True, help="Stops generation and TTS  when you start speaking. Does not require activation phrase.")
     parser.add_argument("--audio_activation_phrase_keep", action=argparse.BooleanOptionalAction, default=True, help="If false and an activation phrase is set, the triggering phrase will be removed in messages that are sent to the backend.")
     parser.add_argument("--audio_show_transcript", action=argparse.BooleanOptionalAction, default=True, help="Show transcript of recorded user speech when kaudio transcribing is enabled. When disabled, you can still see the full transcript with /log or /print.")
     parser.add_argument("--verbose", action=argparse.BooleanOptionalAction, default=False, help="Show additional output for various things.")
