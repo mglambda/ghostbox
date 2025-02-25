@@ -593,7 +593,7 @@ class Plumbing(object):
         if result_str == "":
             return
                 
-        self.print("\r" + (" " * len(self.showCLIPrompt())) + "\r", end="", tts=False)
+        self.print("\n\r" + (" " * len(self.showCLIPrompt())) + "\r", end="", tts=False)
         if not(self.getOption("stream")):
             self.print(self.getAIFormatter(with_color=self.getOption("color")).format(result_str), end="")
         self.print(self.showCLIPrompt(), end="", tts=False)
@@ -717,7 +717,11 @@ class Plumbing(object):
         printerr("Beginning automatic transcription. CTRL + c to pause.")
         if self.ct:
             self.ct.stop()
-        self.ct = self.whisper.transcribeContinuously(callback=self._transcriptionCallback, on_threshold=self._transcriptionOnThresholdCallback)
+        self.ct = self.whisper.transcribeContinuously(callback=self._transcriptionCallback,
+                                                      on_threshold=self._transcriptionOnThresholdCallback,
+                                                      websock=self.getOption("audio_websock"),
+                                                      websock_host=self.getOption("audio_websock_host"),
+                                                      websock_port=self.getOption("audio_websock_port"))
         signal.signal(signal.SIGINT, self._ctPauseHandler)
 
     def stopImageWatch(self):

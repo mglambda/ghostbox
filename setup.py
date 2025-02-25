@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 import os
 
 
-GHOSTBOX_VERSION='0.18.2'
+GHOSTBOX_VERSION='0.18.3'
 
 
 with open("README.md", "r", encoding="utf-8") as readme_file:
@@ -21,6 +21,6 @@ setup(
     package_data = {"ghostbox" : ["data/*.wav"]},
     scripts=["scripts/ghostbox", "scripts/ghostbox-tts-polly", "scripts/ghostbox-aws-client", "scripts/ghostbox-install", "scripts/ghostbox-tts-spd-say", "scripts/ghostbox-tortoise-loop", "scripts/ghostbox-tts-tortoise", "scripts/ghostbox-tts"],
     packages=find_packages(include=['ghostbox']),
-    install_requires=["requests", "boto3", "appdirs", "lazy-object-proxy", "pygame", "openai-whisper", "pyaudio", "pydub", "colorama", "automodinit", "deepspeed", "docstring_parser", "jsonpickle", "shutils", "moviepy2", "nltk", "wget", "kokoro_onnx[gpu]"] 
+    install_requires=["requests", "boto3", "appdirs", "lazy-object-proxy", "pygame", "openai-whisper", "pyaudio", "pydub", "colorama", "automodinit", "deepspeed", "docstring_parser", "jsonpickle", "shutils", "moviepy2", "nltk", "wget", "kokoro_onnx[gpu]", "websockets"] 
 )
 
