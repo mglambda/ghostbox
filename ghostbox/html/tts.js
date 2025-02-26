@@ -1,6 +1,7 @@
 let tts_audioContext;
 let tts_socket;
 let isMuted = true;
+let tts_audioBuffer;
 
 function init_tts_socket () {
     tts_socket = new WebSocket('ws://localhost:5052');
@@ -12,6 +13,7 @@ function init_tts_socket () {
 
     tts_socket.onclose = () => {
         console.log('WebSocket TTS connection closed');
+        tts_audioBufferSource.stop()
         // reconnect!
 		init_tts_socket();
     };
@@ -26,10 +28,10 @@ function init_tts_socket () {
 
         // Decode and play audio
         tts_audioContext.decodeAudioData(audioData).then((audioBuffer) => {
-            const source = tts_audioContext.createBufferSource();
-            source.buffer = audioBuffer;
-            source.connect(tts_audioContext.destination);
-            source.start(0);
+            tts_audioBufferSource = tts_audioContext.createBufferSource();
+            tts_audioBufferSource.buffer = audioBuffer;
+            tts_audioBufferSource.connect(tts_audioContext.destination);
+            tts_audioBufferSource.start(0);
         }).catch((error) => {
             console.error('Error decoding audio data:', error);
         });
