@@ -16,6 +16,8 @@ parser.add_argument("-s", "--seed", type=int, default=420, help="Random seed for
 parser.add_argument("--sound_dir", type=str, default="sounds", help="Directory where sound files are located to be played with #sound <SNDNAME>")
 parser.add_argument("-m", "--model", type=str, choices=[tm.name for tm in TTSModel], default=TTSModel.zonos.name, help="Text-to-speech model to use.")
 parser.add_argument("-o", "--output-method", type=str, choices=[om.name for om in TTSOutputMethod], default=TTSOutputMethod.default.name, help="How to play the generated speech.")
+parser.add_argument("--websock-host", type=str, default="localhost", help="The hostname to bind to when using websock as output method.")
+parser.add_argument("--websock-port", type=int, default=5052, help="The port to listen on for connections when using websock as output method.")
 # zonos specific
 parser.add_argument("--zonos_model", type=str, default="hybrid", help="The pretrained checkpoint to use with the Zonos TTS engine. Try picking 'transformer' or 'hybrid' for good defaults, otherwise consult the zonos project for more checkpoints. Tip: Hybrid seems to give better results than transformer, but requires the mamba-ssm and flash-attn pip packages and doesn't work on all GPUs.")
 args = parser.parse_args()
@@ -35,14 +37,16 @@ def initTTS(model: str, config: Dict[str, Any] = {}) -> TTSBackend:
         return KokoroBackend(config=config)
     raise ValueError("Not a valid TTS model: " + model + ". Valid choices are " + "\n  ".join([tm.name for tm in TTSModel]))
 
-def initOutputMethod(method: str) -> TTSOutput:
+def initOutputMethod(method: str, args) -> TTSOutput:
     if method == TTSOutputMethod.default.name:
         return DefaultTTSOutput()
+    elif method == TTSOutputMethod.websock.name:
+        return WebsockTTSOutput(host=args.websock_host, port=args.websock_port)
     raise ValueError("Not a valid output method: " + method + ". Valid choices are " + "\n  ".join([om.name for om in TTSOutputMethod]))
 
 # initialization happens here
 prog = TTSState(args)
-output_module = initOutputMethod(prog.args.output_method)
+output_module = initOutputMethod(prog.args.output_method, prog.args)
 tts = initTTS(prog.args.model, config=vars(prog.args))
 
 # list voices if requested
@@ -80,8 +84,8 @@ def input_loop():
         try:
             w = input()
             if w == "<clear>":
-                output_module.stop()                
                 with msg_queue.mutex:
+                    output_module.stop()                                    
                     msg_queue.queue.clear()
                 prog.clearRetries()
                 continue
@@ -180,5 +184,6 @@ while True:
 
     
 prog.cleanup()
+output_module.shutdown()
 os.remove(output_file.name)
 

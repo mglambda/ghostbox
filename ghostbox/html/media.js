@@ -1,7 +1,7 @@
 let audioContext;
 let mediaStreamAudioSourceNode;
 let scriptProcessorNode;
-let socket;
+let media_socket;
 
 document.getElementById('startBtn').addEventListener('click', async () => {
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -21,13 +21,13 @@ document.getElementById('startBtn').addEventListener('click', async () => {
     scriptProcessorNode.connect(audioContext.destination);
 
     // Connect to the WebSocket server
-    socket = new WebSocket('ws://localhost:5051');
+    media_socket = new WebSocket('ws://localhost:5051');
 
-    socket.onopen = () => {
+    media_socket.onopen = () => {
         console.log('WebSocket connection established');
     };
 
-    socket.onclose = () => {
+    media_socket.onclose = () => {
         console.log('WebSocket connection closed');
     };
 
@@ -45,8 +45,8 @@ document.getElementById('startBtn').addEventListener('click', async () => {
             pcmData[i] = Math.min(1, Math.max(-1, outputData[i])) * 0x7FFF;
         }
 
-        if (socket.readyState === WebSocket.OPEN) {
-            socket.send(pcmData.buffer);
+        if (media_socket.readyState === WebSocket.OPEN) {
+            media_socket.send(pcmData.buffer);
         }
     };
 
@@ -55,9 +55,9 @@ document.getElementById('startBtn').addEventListener('click', async () => {
 });
 
 document.getElementById('stopBtn').addEventListener('click', () => {
-    if (socket.readyState === WebSocket.OPEN) {
-        socket.send('END');
-        socket.close();
+    if (media_socket.readyState === WebSocket.OPEN) {
+        media_socket.send('END');
+        media_socket.close();
     }
     mediaStreamAudioSourceNode.disconnect();
     scriptProcessorNode.disconnect();
