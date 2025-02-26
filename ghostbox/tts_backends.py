@@ -47,17 +47,7 @@ class TTSBackend(ABC):
         """Returns a list of all voices supported by the model.
         This may be empty or inexhaustive for some models, e.g. if files need to be provided for cloning."""
         pass
-    
-def initTTS(model: str, config: Dict[str, Any] = {}) -> TTSBackend:
-    if model == "xtts":
-        return XTTSBackend()
-    elif model == "zonos":
-        return ZonosBackend(config=config)
-    elif model == "kokoro":
-        return KokoroBackend(config=config)
-    raise ValueError("Not a valid TTS model: " + model) 
-
-
+   
 def dump_config(backend: TTSBackend) -> List[str]:
     if "config" not in backend.__dict__:
         return []

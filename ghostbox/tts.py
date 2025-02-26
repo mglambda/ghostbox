@@ -1,5 +1,7 @@
 #!/usr/bin/env python
 import argparse, traceback, sys, tempfile, ast
+from ghostbox.definitions import TTSOutputMethod, TTSModel
+
 
 program_name = sys.argv[0]
 parser = argparse.ArgumentParser(description= program_name + " - TTS program to consume text from stdin and speak it out/ save it as wav file.")
@@ -12,8 +14,8 @@ parser.add_argument("-y", "--voice_sample", type=str, default="cloning.wav", hel
 parser.add_argument("-i", "--volume", type=float, default=1.0, help="Volume for the voice playback.")
 parser.add_argument("-s", "--seed", type=int, default=420, help="Random seed for voice models that use it.")
 parser.add_argument("--sound_dir", type=str, default="sounds", help="Directory where sound files are located to be played with #sound <SNDNAME>")
-parser.add_argument("-m", "--model", type=str, default="zonos", help="Text-to-speech model to use.")
-
+parser.add_argument("-m", "--model", type=str, choices=[tm.name for tm in TTSModel], default=TTSModel.zonos.name, help="Text-to-speech model to use.")
+parser.add_argument("-o", "--output-method", type=str, choices=[om.name for om in TTSOutputMethod], default=TTSOutputMethod.default.name, help="How to play the generated speech.")
 # zonos specific
 parser.add_argument("--zonos_model", type=str, default="hybrid", help="The pretrained checkpoint to use with the Zonos TTS engine. Try picking 'transformer' or 'hybrid' for good defaults, otherwise consult the zonos project for more checkpoints. Tip: Hybrid seems to give better results than transformer, but requires the mamba-ssm and flash-attn pip packages and doesn't work on all GPUs.")
 args = parser.parse_args()
@@ -21,8 +23,26 @@ args = parser.parse_args()
 from ghostbox.tts_util import *
 from ghostbox.tts_state import *
 from ghostbox.tts_backends import *
+from ghostbox.tts_output import *
 import time, threading, os
+
+def initTTS(model: str, config: Dict[str, Any] = {}) -> TTSBackend:
+    if model == TTSModel.xtts.name:
+        return XTTSBackend()
+    elif model == TTSModel.zonos.name:
+        return ZonosBackend(config=config)
+    elif model == TTSModel.kokoro.name:
+        return KokoroBackend(config=config)
+    raise ValueError("Not a valid TTS model: " + model + ". Valid choices are " + "\n  ".join([tm.name for tm in TTSModel]))
+
+def initOutputMethod(method: str) -> TTSOutput:
+    if method == TTSOutputMethod.default.name:
+        return DefaultTTSOutput()
+    raise ValueError("Not a valid output method: " + method + ". Valid choices are " + "\n  ".join([om.name for om in TTSOutputMethod]))
+
+# initialization happens here
 prog = TTSState(args)
+output_module = initOutputMethod(prog.args.output_method)
 tts = initTTS(prog.args.model, config=vars(prog.args))
 
 # list voices if requested
@@ -46,28 +66,22 @@ else:
 
 output_file.close()    
 
-
-# do pygame here because of wonderful hello from pygame message
-import pygame
-pygame.mixer.init()
-
-# ok we are hacking this to allow stopping of all sounds
 from queue import Queue, Empty
 msg_queue = Queue()
 done = threading.Event()
-snd_stop_flag = threading.Event()
+#snd_stop_flag = threading.Event()
 def input_loop():
     global done
     global prog
     global tts
+    global output_module
     
     while True:
         try:
             w = input()
             if w == "<clear>":
-                pygame.mixer.stop() 
+                output_module.stop()                
                 with msg_queue.mutex:
-                    snd_stop_flag.set()                                                        
                     msg_queue.queue.clear()
                 prog.clearRetries()
                 continue
@@ -88,7 +102,7 @@ def input_loop():
                     continue
 
             # main event -> speak input msg w
-            snd_stop_flag.clear()
+            #snd_stop_flag.clear()
             ws = tts.split_into_sentences(w)
             for chunk in ws:
                 msg_queue.put(chunk)
@@ -111,7 +125,11 @@ t = threading.Thread(target=input_loop)
 t.daemon = True
 t.start()
 
+
+# this is so muggels know to type stuff when they accidentally run ghostbox-tts standalone
+printerr("Good to go. Reading messages from standard input. Hint: Type stuff and it will be spoken.")
 while True:
+    # here we handle text chunks that were placed on the msg_queue
     if done.is_set():
         break
     
@@ -140,7 +158,7 @@ while True:
     print(err)
     if cont:
         continue
-#    xs = tts.split_into_sentences(msg)
+
     try:
         tts.tts_to_file(text=msg, speaker_file=prog.getVoiceSampleFile(), file_path=output_file.name)
     except ZeroDivisionError:
@@ -157,19 +175,10 @@ while True:
     prog.addPause()
     if prog.args.quiet:
         continue
-    snd = pygame.mixer.Sound(output_file.name)
-    while pygame.mixer.get_busy():
-        if snd_stop_flag.isSet():
-            snd.stop()
-            break
-        pygame.time.delay(10) #ms
+    
+    output_module.play(output_file.name, volume=prog.args.volume)
 
-    if snd_stop_flag.isSet():
-        snd_stop_flag.clear()            
-        continue
-    snd.set_volume(prog.args.volume)
-    snd.play()
-
+    
 prog.cleanup()
 os.remove(output_file.name)
 
