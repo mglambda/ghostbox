@@ -76,6 +76,8 @@ class WebsockTTSOutput(TTSOutput):
         super().__init__(**kwargs)
         self.clients = []
         self.stop_flag = threading.Event()
+        self.go_flag = threading.Event()
+        self.go_flag.set()
         self.server_running = threading.Event()
         self.host = host
         self.port = port
@@ -94,11 +96,18 @@ class WebsockTTSOutput(TTSOutput):
             self.clients.append(websocket)
             try:
                 while self.server_running.isSet():
-                    websocket.recv()
+                    msg = websocket.recv()
+                    print(msg)
+                    if msg == "done":
+                        # current sound has finished playing
+                        self.go_flag.set()
+                        
             except websockets.exceptions.ConnectionClosed:
                 pass
             finally:
                 self.clients.remove(websocket)
+                # FIXME: this doesn't work with multiple clients. see play()
+                self.go_flag.set()
                 printerr("[WEBSOCK] Closed connection with " + str(remote_address))                
 
         self.server_running.set() 
@@ -124,13 +133,20 @@ class WebsockTTSOutput(TTSOutput):
                 try:
                     client.send(data, text=False)
                 except ConnectionClosedError:
-                        print("[WEBSOCK] error: Unable to send data to " + str(client.remote_address) + ": Connection closed.")        
+                        print("[WEBSOCK] error: Unable to send data to " + str(client.remote_address) + ": Connection closed.")
+        # we block now, just as if we were playing the sound waiting for it to finish
+        self.go_flag.clear()
+        while True:
+            # FIXME: this doesn't work 100% correctly with multiple clients (it might be ok though), but that is not the intended use case
+            if self.go_flag.isSet():
+                break
+            time.sleep(0.1)
 
     def stop(self) -> None:
         self.stop_flag.set()
+        self.go_flag.clear()
         for client in self.clients:
             client.close()
-        #self.clients.clear()
         printerr("[WEBSOCK] TTS output stopped.")        
 
     def shutdown(self) -> None:

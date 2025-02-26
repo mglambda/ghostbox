@@ -30,6 +30,10 @@ function init_tts_socket () {
         tts_audioContext.decodeAudioData(audioData).then((audioBuffer) => {
             tts_audioBufferSource = tts_audioContext.createBufferSource();
             tts_audioBufferSource.buffer = audioBuffer;
+			tts_audioBufferSource.onended = () => {
+				tts_socket.send("done");
+			};
+			
             tts_audioBufferSource.connect(tts_audioContext.destination);
             tts_audioBufferSource.start(0);
         }).catch((error) => {
