@@ -147,16 +147,20 @@ class ContinuousTranscriber(object):
 
     def _handle_client(self, websocket):
         while self.running:
-            packet = websocket.recv(1024)
-            if packet == 'END':
+            try:
+                packet = websocket.recv(1024)
+                if packet == 'END':
+                    self.running = False
+                    self.resume_flag.set()
+                else:
+                    #self.audio_buffer += packet
+                    # FIXME: using queue here means chunks might be < 1024, we could use a bytearray in this loop to buffer until we have a chunk
+                    # this only happens on buffer underrun though, e.g. during high network latency. It's ok to fail transcribing in such cases, this should be handled by record_on_detect
+                    self.audio_buffer.put(packet)
+            except ConnectionClosedError:
                 self.running = False
                 self.resume_flag.set()
-            else:
-                #self.audio_buffer += packet
-                # FIXME: using queue here means chunks might be < 1024, we could use a bytearray in this loop to buffer until we have a chunk
-                # this only happens on buffer underrun though, e.g. during high network latency. It's ok to fail transcribing in such cases, this should be handled by record_on_detect
-                self.audio_buffer.put(packet)
-                
+
                 
     def _setup_websocket_server(self):
         def run_server():

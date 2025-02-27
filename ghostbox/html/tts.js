@@ -1,10 +1,11 @@
 let tts_audioContext;
 let tts_socket;
 let isMuted = true;
-let tts_audioBuffer;
+let tts_audioBufferSource;
 
 function init_tts_socket () {
-    tts_socket = new WebSocket('ws://localhost:5052');
+	console.log("host: " + window.location.hostname);
+    tts_socket = new WebSocket('ws://' + window.location.hostname + ':5052');
 	tts_socket.binaryType = 'arraybuffer'
 
     tts_socket.onopen = () => {
@@ -13,7 +14,17 @@ function init_tts_socket () {
 
     tts_socket.onclose = () => {
         console.log('WebSocket TTS connection closed');
-        tts_audioBufferSource.stop()
+		try {
+        tts_audioBufferSource.stop();
+		} catch (err) {
+			console.log("debug: caught " + err.name + " during regular closing of connection. Ignoring.");
+			/* FIXME: damn you javascript, the error type is never in scope for instanceof
+			if (err instanceof InvalidStateError) {
+				console.log("debug: no biggie");
+			} else {
+				throw err;
+			}*/
+		}
         // reconnect!
 		init_tts_socket();
     };
@@ -56,7 +67,9 @@ document.addEventListener('DOMContentLoaded', (event) => {
         if (isMuted) {
             // Create an AudioContext
             const tts_AudioContext = window.AudioContext || window.webkitAudioContext;
-            tts_audioContext = new tts_AudioContext();
+            tts_audioContext = new AudioContext();
+			tts_audioContext.resume()
+            tts_audioBufferSource = tts_audioContext.createBufferSource();			
             console.log('TTS AudioContext initialized');
 
             document.getElementById('unmuteTTSBtn').textContent = 'Mute TTS';

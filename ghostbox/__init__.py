@@ -11,3 +11,6 @@ import os
 _ROOT = os.path.abspath(os.path.dirname(__file__))
 def get_ghostbox_data(path):
     return os.path.join(_ROOT, 'data', path)
+
+def get_ghostbox_html_path():
+    return os.path.join(_ROOT, 'html')

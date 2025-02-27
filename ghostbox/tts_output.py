@@ -123,6 +123,7 @@ class WebsockTTSOutput(TTSOutput):
 
     def play(self, filename: str, volume: float = 1.0) -> None:
         from websockets import ConnectionClosedError
+        printerr("[WEBSOCK] Playing with " + str(len(self.clients)) + " clients.")
 
         with open(filename, 'rb') as wf:
             # Read the entire file content
@@ -130,6 +131,7 @@ class WebsockTTSOutput(TTSOutput):
             data = wf.read()
 
             for client in self.clients:
+                printerr("[WEBSOCK] Playing audio to " + str(client.remote_address) + " with file " + filename)
                 try:
                     client.send(data, text=False)
                 except ConnectionClosedError:

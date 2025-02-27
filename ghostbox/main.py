@@ -16,6 +16,7 @@ from ghostbox.session import Session
 from ghostbox.pftemplate import *
 from ghostbox.backends import *
 from ghostbox import backends
+import ghostbox
 
 
 def showHelp(prog, argv):
@@ -138,6 +139,9 @@ class Plumbing(object):
 
         #imagewatching
         self.image_watch = None
+
+        # http server
+        self.http = None
         
         # formatters is to be idnexed with modes
         self.setMode(self.getOption("mode"))
@@ -541,6 +545,11 @@ class Plumbing(object):
             self.whisper = self._newTranscriber()
         #elif name == "cli_prompt":
             #self.initial_cli_prompt = value
+        elif name == "tts_websock":
+            if value:
+                self.setOption("tts_output_method", TTSOutputMethod.websock.name)
+            else:
+                self.setOption("tts_output_method", TTSOutputMethod.default.name)
         elif name == "max_context_length":
             self._dirtyContextLlama = False
         elif name =="prompt_format":
@@ -1123,9 +1132,36 @@ returns - A string ready to be sent to the backend, including the full conversat
         self.session = session
         for (k, v) in options.items():
             self.setOption(k, v)
-            
 
+    def _initializeHTTP(self):
+        """Spawns a simple web server on its own thread.
+        This will only serve the html/ folder included in ghostbox, along with the js files. This includes a minimal UI, and capabilities for streaming TTS audio and transcribing from user microphone input.
+        Note: By default, this method will override audio and tts websock addresses. Use --no-http_override to supress this behaviour."""
+        import http.server
+        import socketserver
+        host, port = self.getOption("http_host"), self.getOption("http_port")
+
+        #take care of audio and tts
+        if self.getOption("http_override"):
+            config = {"audio_websock_host": host,
+                      "audio_websock_port": port+1,
+                      "audio_websock": True,
+                      "tts_websock_host": host,
+                      "tts_websock_port": port+2,
+                      "tts_websock": True}
+            for opt, value in config.items():
+                self.setOption(opt, value)
                 
+        handler = partial(http.server.SimpleHTTPRequestHandler, directory=ghostbox.get_ghostbox_html_path())
+        def httpLoop():
+            with socketserver.TCPServer((host, port), handler) as httpd:
+                printerr(f"Starting HTTP server. Visit http://{host}:{port} for the web interface.")
+                httpd.serve_forever()
+        
+        http_thread = threading.Thread(target=httpLoop)
+        http_thread.daemon = True
+        http_thread.start()
+
 def main():
     just_fix_windows_console()
     parser = makeArgParser(backends.default_params)
@@ -1152,9 +1188,15 @@ def main():
         # FIXME: this shouldn't be deleted so that it stays persistent when user does /start or /restart, but it's also a useless option. implement a emchanism for hidden options?
     #del prog.options["hide"]
 
+
+    if prog.getOption("http"):
+        prog._initializeHTTP()
+        del prog.options["http"]
+    
+    
     if prog.getOption("tts"):
         prog.tts_flag = True
-    
+       
     if prog.getOption("audio"):
         prog.startAudioTranscription()
     del prog.options["audio"]
@@ -1162,8 +1204,8 @@ def main():
     if prog.getOption("image_watch"):
         prog.startImageWatch()
         del prog.options["image_watch"]
+
         
-    
     skip = False        
     while prog.running:
         last_state = prog.backup()
@@ -1256,6 +1298,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 

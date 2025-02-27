@@ -73,7 +73,7 @@ output_file.close()
 from queue import Queue, Empty
 msg_queue = Queue()
 done = threading.Event()
-#snd_stop_flag = threading.Event()
+
 def input_loop():
     global done
     global prog

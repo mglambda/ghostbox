@@ -21,7 +21,7 @@ document.getElementById('startBtn').addEventListener('click', async () => {
     scriptProcessorNode.connect(audioContext.destination);
 
     // Connect to the WebSocket server
-    media_socket = new WebSocket('ws://localhost:5051');
+    media_socket = new WebSocket('ws://' + window.location.hostname + ':5051');
 
     media_socket.onopen = () => {
         console.log('WebSocket connection established');
