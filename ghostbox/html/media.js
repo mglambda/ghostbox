@@ -1,3 +1,4 @@
+let MIC_DESTINATION_WEBSOCK = 'ws://' + window.location.hostname + ':5051';
 let audioContext;
 let mediaStreamAudioSourceNode;
 let scriptProcessorNode;
@@ -7,9 +8,11 @@ document.getElementById('startBtn').addEventListener('click', async () => {
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
 
     // Attempt to create an AudioContext with a sample rate of 44100 Hz
+
     const AudioContext = window.AudioContext || window.webkitAudioContext;
-    const options = { sampleRate: 44100 };
-//const options = {};	
+		// update: nope, browsers don't like this
+    //const options = { sampleRate: 44100 };
+const options = {};	
     audioContext = new AudioContext(options);
     console.log('AudioContext sample rate:', audioContext.sampleRate);
 	
@@ -21,10 +24,11 @@ document.getElementById('startBtn').addEventListener('click', async () => {
     scriptProcessorNode.connect(audioContext.destination);
 
     // Connect to the WebSocket server
-    media_socket = new WebSocket('ws://' + window.location.hostname + ':5051');
+    media_socket = new WebSocket(MIC_DESTINATION_WEBSOCK);
 
     media_socket.onopen = () => {
         console.log('WebSocket connection established');
+		media_socket.send("samplerate:" + audioContext.sampleRate);
     };
 
     media_socket.onclose = () => {

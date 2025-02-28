@@ -1,3 +1,4 @@
+let TTS_SOURCE_WEBSOCK = 'ws://' + window.location.hostname + ':5052';
 let tts_audioContext;
 let tts_socket;
 let isMuted = true;
@@ -5,7 +6,7 @@ let tts_audioBufferSource;
 
 function init_tts_socket () {
 	console.log("host: " + window.location.hostname);
-    tts_socket = new WebSocket('ws://' + window.location.hostname + ':5052');
+    tts_socket = new WebSocket(TTS_SOURCE_WEBSOCK);
 	tts_socket.binaryType = 'arraybuffer'
 
     tts_socket.onopen = () => {

@@ -10,6 +10,7 @@ import math
 from collections import deque
 from queue import Queue
 import websockets.sync.server as WS
+import websockets
 import numpy as np
 from ghostbox.util import printerr
 
@@ -131,6 +132,8 @@ class ContinuousTranscriber(object):
         self.callback = callback
         self.on_threshold = on_threshold
         self.silence_threshold = silence_threshold
+        # sampel rate is in self._samplerate. This is a tricky value, as it gets set by the client in websock mode.
+        self._set_samplerate(44100) 
         self.buffer = []
         self.running = False
         self.resume_flag = threading.Event()
@@ -149,15 +152,20 @@ class ContinuousTranscriber(object):
         while self.running:
             try:
                 packet = websocket.recv(1024)
-                if packet == 'END':
-                    self.running = False
-                    self.resume_flag.set()
+                if type(packet) == str:
+                    w = packet
+                    if w.startswith("samplerate:"):
+                        #printerr("[DEBUG] Setting " + w)
+                        self._set_samplerate(int(w.split(":")[1]))
+                    elif w == "END":
+                        self.running = False
+                        self.resume_flag.set()
                 else:
                     #self.audio_buffer += packet
                     # FIXME: using queue here means chunks might be < 1024, we could use a bytearray in this loop to buffer until we have a chunk
                     # this only happens on buffer underrun though, e.g. during high network latency. It's ok to fail transcribing in such cases, this should be handled by record_on_detect
                     self.audio_buffer.put(packet)
-            except ConnectionClosedError:
+            except websockets.exceptions.ConnectionClosed:
                 self.running = False
                 self.resume_flag.set()
 
@@ -222,7 +230,14 @@ This function will block until new input is recorded."""
         return self.pop()
 
 
-    def record_on_detect(self, file_name, silence_limit=1, silence_threshold=2500, chunk=1024, rate=44100, prev_audio=1):
+    def _set_samplerate(self, samplerate):
+        self._samplerate = samplerate
+
+    def get_samplerate(self):
+        return self._samplerate
+        
+
+    def record_on_detect(self, file_name, silence_limit=1, silence_threshold=2500, chunk=1024, prev_audio=1):
         """Records audio from the microphone or WebSocket and saves it to a file.
         Returns False on error or if stopped.
         Silence limit in seconds. The max amount of seconds where
@@ -235,6 +250,8 @@ This function will block until new input is recorded."""
         is detected, how much of previously recorded audio is
         prepended. This helps to prevent chopping the beginning
         of the phrase."""
+
+        rate = self.get_samplerate()
         # FIXME: this is necessary until I find out how to send stereo audio from javascript, otherwise we get chipmunk sound
         CHANNELS = 2 if not(self.websock) else 1
         FORMAT = pyaudio.paInt16
