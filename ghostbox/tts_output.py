@@ -97,7 +97,7 @@ class WebsockTTSOutput(TTSOutput):
             try:
                 while self.server_running.isSet():
                     msg = websocket.recv()
-                    print(msg)
+                    #print(msg)
                     if msg == "done":
                         # current sound has finished playing
                         self.go_flag.set()

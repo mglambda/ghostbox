@@ -1,5 +1,6 @@
 import requests, json, os, io, re, base64, random, sys, threading, signal, tempfile, string, uuid
-from queue import Queue
+from queue import Queue, Empty
+from typing import *
 import feedwater
 from functools import *
 from colorama import just_fix_windows_console, Fore, Back, Style
@@ -141,7 +142,13 @@ class Plumbing(object):
         self.image_watch = None
 
         # http server
-        self.http = None
+        self.http_thread = None
+        self.websock_thread = None
+        self.websock_server = None
+        self.websock_clients = []
+        self.websock_server_running = threading.Event()
+        self.websock_msg_queue = Queue()
+
         
         # formatters is to be idnexed with modes
         self.setMode(self.getOption("mode"))
@@ -1136,19 +1143,23 @@ returns - A string ready to be sent to the backend, including the full conversat
     def _initializeHTTP(self):
         """Spawns a simple web server on its own thread.
         This will only serve the html/ folder included in ghostbox, along with the js files. This includes a minimal UI, and capabilities for streaming TTS audio and transcribing from user microphone input.
-        Note: By default, this method will override audio and tts websock addresses. Use --no-http_override to supress this behaviour."""
+        Note: By default, this method will override terminal, audio and tts websock addresses. Use --no-http_override to supress this behaviour."""
         import http.server
         import socketserver
         host, port = self.getOption("http_host"), self.getOption("http_port")
 
-        #take care of audio and tts
+        #take care of terminal, audio and tts
         if self.getOption("http_override"):
             config = {"audio_websock_host": host,
                       "audio_websock_port": port+1,
                       "audio_websock": True,
                       "tts_websock_host": host,
                       "tts_websock_port": port+2,
-                      "tts_websock": True}
+                      "tts_websock": True,
+                      "websock_host": host,
+                      "websock_port": port+100,
+                      "websock":True}
+                      
             for opt, value in config.items():
                 self.setOption(opt, value)
                 
@@ -1158,10 +1169,63 @@ returns - A string ready to be sent to the backend, including the full conversat
                 printerr(f"Starting HTTP server. Visit http://{host}:{port} for the web interface.")
                 httpd.serve_forever()
         
-        http_thread = threading.Thread(target=httpLoop)
-        http_thread.daemon = True
-        http_thread.start()
+        self.http_thread = threading.Thread(target=httpLoop)
+        self.http_thread.daemon = True
+        self.http_thread.start()
 
+
+    def initializeWebsock(self):
+        """Starts a simple websocket server that sends and receives messages, behaving like a terminal client."""
+        self.websock_server_running.set() 
+        self.websock_thread = threading.Thread(target=self._runWebsockServer, daemon=True)
+        self.websock_thread.start()
+
+        self.websock_regpl_thread = threading.Thread(target=regpl, args=[self, self._websockPopMsg], daemon=True)
+        self.websock_regpl_thread.start()
+
+    def stopWebsock(self):
+        self.websock_running.clear()
+        self.websock_clients = []
+        
+
+    def _websockPopMsg(self) -> str:
+        """Pops a message of the internal websocket queue and returns it.
+        This function blocks until a message is found on the queue."""
+        while self.websock_server_running.isSet():
+            try:
+                return self.websock_msg_queue.get(timeout=1)
+            except Empty:
+                # timeout was hit
+                # future me: don't remove this: get will super block all OS signals so we have to occasionally loop around or program will be unresponsive
+                continue
+            except:
+                print("Exception caught while blocking. Shutting down gracefully. Below is the full exception.")
+                printerr(traceback.format_exc())
+                self.stopWebsock()
+                                                 
+    def _runWebsockServer(self):
+        import websockets
+        import websockets.sync.server as WS
+
+        def handler(websocket):
+            remote_address = websocket.remote_address
+            #printerr("[WEBSOCK] Got connection from " + str(remote_address))
+            self.websock_clients.append(websocket)
+            try:
+                while self.websock_server_running.isSet():
+                    msg = websocket.recv()
+                    if type(msg) == str:
+                        self.websock_msg_queue.put(msg)
+            except websockets.exceptions.ConnectionClosed:
+                pass
+            finally:
+                self.websock_clients.remove(websocket)
+                
+        self.websock_server_running.set() 
+        self.websock_server = WS.serve(handler, self.getOption("websock_host"), self.getOption("websock_port"))
+        printerr("WebSocket server running on ws://" + self.getOption("websock_host") + ":" + str(self.getOption("websock_port")))
+        self.websock_server.serve_forever()
+        
 def main():
     just_fix_windows_console()
     parser = makeArgParser(backends.default_params)
@@ -1192,7 +1256,10 @@ def main():
     if prog.getOption("http"):
         prog._initializeHTTP()
         del prog.options["http"]
-    
+
+    if prog.getOption("websock"):
+        prog.initializeWebsock()
+        del prog.options["websock"]
     
     if prog.getOption("tts"):
         prog.tts_flag = True
@@ -1201,11 +1268,15 @@ def main():
         prog.startAudioTranscription()
     del prog.options["audio"]
 
+    
     if prog.getOption("image_watch"):
         prog.startImageWatch()
         del prog.options["image_watch"]
-
         
+    regpl(prog)
+        
+def regpl(prog: Plumbing, input_function: Callable[[], str] = input) -> None:
+    """Read user input, evaluate, generate LLM response, print loop."""
     skip = False        
     while prog.running:
         last_state = prog.backup()
@@ -1222,7 +1293,7 @@ def main():
 
             # input actually prints to stderr, which we don't want, so we have an extra print step
             print(prog.showCLIPrompt(), end="", flush=True)
-            w = input()
+            w = input_function()
 
             # check for multiline
             # this works different wether we have multiline mode enabled, or are doing ad-hoc multilines
