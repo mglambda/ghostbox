@@ -142,7 +142,10 @@ class Plumbing(object):
         self.image_watch = None
 
         # http server
+        self.http_server = None
         self.http_thread = None
+
+        # websock server
         self.websock_thread = None
         self.websock_server = None
         self.websock_clients = []
@@ -544,7 +547,7 @@ class Plumbing(object):
         if (name == "tts_voice" or name == "tts_volume" or name == "tts_tortoise_quality") and self.getOption("tts"):
             # we don't want to restart tts on /restart
             if differs:
-                printerr("Restarting TTS.")
+                #printerr("Restarting TTS.")
                 self.tts_flag = True #restart TTS
         elif name == "no-tts":
             self.setOption("tts", not(value))
@@ -557,6 +560,8 @@ class Plumbing(object):
                 self.setOption("tts_output_method", TTSOutputMethod.websock.name)
             else:
                 self.setOption("tts_output_method", TTSOutputMethod.default.name)
+            if differs:
+                self.tts_flag = True #restart TTS
         elif name == "max_context_length":
             self._dirtyContextLlama = False
         elif name =="prompt_format":
@@ -578,6 +583,26 @@ class Plumbing(object):
             self.options[name] += value
         elif name == "chat_ai":
             self.session.setVar(name, value)
+        elif name == "http" and differs:
+            if value:
+                self._initializeHTTP()
+            else:
+                self._stopHTTP()                
+        elif name == "websock" and differs:
+            if value:
+                self.initializeWebsock()
+            else:
+                self.stopWebsock()                
+        elif name == "image_watch" and differs:
+            if value:
+                prog.startImageWatch()
+            else:
+                prog.stopImageWatch()
+        elif name == "audio" and differs:
+            if value:
+                self.startAudioTranscription()
+            else:
+                self.stopAudioTranscription()
         return ""
 
     def _ctPauseHandler(self, sig, frame):
@@ -741,6 +766,7 @@ class Plumbing(object):
         signal.signal(signal.SIGINT, self._ctPauseHandler)
 
     def stopImageWatch(self):
+        printerr("Stopping watching of images.")
         if self.image_watch:
             self.image_watch.stop()
         
@@ -1143,6 +1169,9 @@ returns - A string ready to be sent to the backend, including the full conversat
         for (k, v) in options.items():
             self.setOption(k, v)
 
+    def _stopHTTP(self):
+        self.http_server.close()
+            
     def _initializeHTTP(self):
         """Spawns a simple web server on its own thread.
         This will only serve the html/ folder included in ghostbox, along with the js files. This includes a minimal UI, and capabilities for streaming TTS audio and transcribing from user microphone input.
@@ -1170,6 +1199,7 @@ returns - A string ready to be sent to the backend, including the full conversat
         def httpLoop():
             with socketserver.TCPServer((host, port), handler) as httpd:
                 printerr(f"Starting HTTP server. Visit http://{host}:{port} for the web interface.")
+                self.http_server = httpd
                 httpd.serve_forever()
         
         self.http_thread = threading.Thread(target=httpLoop)
@@ -1179,6 +1209,7 @@ returns - A string ready to be sent to the backend, including the full conversat
 
     def initializeWebsock(self):
         """Starts a simple websocket server that sends and receives messages, behaving like a terminal client."""
+        printerr("Initializing websocket server.")
         self.websock_server_running.set() 
         self.websock_thread = threading.Thread(target=self._runWebsockServer, daemon=True)
         self.websock_thread.start()
@@ -1187,6 +1218,7 @@ returns - A string ready to be sent to the backend, including the full conversat
         self.websock_regpl_thread.start()
 
     def stopWebsock(self):
+        printerr("Stopping websocket server.") 
         self.websock_running.clear()
         self.websock_clients = []
 
@@ -1269,21 +1301,21 @@ def main():
         prog.tts_flag = True
        
     if prog.getOption("audio"):
-        prog.startAudioTranscription()
-    del prog.options["audio"]
+        del prog.options["audio"]
+        prog.setOption("audio", True)
 
-    
     if prog.getOption("image_watch"):
-        prog.startImageWatch()
         del prog.options["image_watch"]
-
-    if prog.getOption("http"):
-        prog._initializeHTTP()
+        prog.setOption("image_watch", True)
 
     if prog.getOption("websock"):
-        prog.initializeWebsock()
+        del prog.options["websock"]
+        prog.setOption("websock", True)
 
-
+    # importantt to set this last as http overrides other options and we don't want to start services twice
+    if prog.getOption("http"):
+        del prog.options["http"]
+        prog.setOption("http", True)
         
     regpl(prog)
         
