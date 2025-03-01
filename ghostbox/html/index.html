@@ -3,55 +3,242 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Microphone Recording</title>
+    <title>👻</title>
     <style>
         .message {
-            font-family: 'Monaco', 'Lucida Console', 'Ubuntu Mono', 'Fira Code', monospace;			
+            font-family: 'Monaco', 'Lucida Console', 'Ubuntu Mono', 'Fira Code', monospace;
             opacity: 0;
             transition: opacity 1s ease-in-out;
         }
-		
+
         .message.show {
             opacity: 1;
         }
 
         .user-message {
-            /*font-weight: bold;*/
-		margin-left: 5%;
+            margin-left: 5%;
         }
-		
+
         #messages {
             white-space: pre-wrap; /* Allow wrapping within the div element */
             word-wrap: break-word; /* Break long words */
             overflow-y: scroll; /* Enable vertical scrolling */
             height: 80%;
-		width: 95%;
-        }		
+            width: 95%;
+        }
     </style>
 </head>
 <body>
   <nav>
-	<span><h3>Microphone</h3>
-    <button id="startBtn">Start Recording</button>
-    <button id="stopBtn" disabled>Stop Recording</button>
-	</span>
-<span>
-  <h3>Text-To-Speech</h3>
-  <button id="unmuteTTSBtn">Unmute TTS</button>
-	</span>
-	</nav>
-    <script src="media.js"></script>
-    <script src="tts.js"></script>
-
-	<hr>
-	<br>
-	
+    <span>
+      <h3>Microphone</h3>
+      <button id="startBtn">Start Recording</button>
+      <button id="stopBtn" disabled>Stop Recording</button>
+    </span>
+    <span>
+      <h3>Text-To-Speech</h3>
+      <button id="unmuteTTSBtn">Unmute TTS</button>
+    </span>
+    <span>
+      <h3>Style</h3>
+      <select id="stylesheetSelector">
+        <option value="sakura-dark-solarized.css">Sakura Dark Solarized</option>
+        <option value="a11yana.css">A11yana</option>
+        <option value="ads-gazette.css">ADS Gazette</option>
+        <option value="ads-medium.css">ADS Medium</option>
+        <option value="ads-notebook.css">ADS Notebook</option>
+        <option value="ads-tufte.css">ADS Tufte</option>
+        <option value="almond.css">Almond</option>
+        <option value="attri-bright-light-green.css">Attri Bright Light Green</option>
+        <option value="attri-dark-fairy-pink.css">Attri Dark Fairy Pink</option>
+        <option value="attri-dark-forest-green.css">Attri Dark Forest Green</option>
+        <option value="attri-light-fairy-pink.css">Attri Light Fairy Pink</option>
+        <option value="attri-midnight-green.css">Attri Midnight Green</option>
+        <option value="awsm-bigstone.css">AWSM Bigstone</option>
+        <option value="awsm-black.css">AWSM Black</option>
+        <option value="awsm-default.css">AWSM Default</option>
+        <option value="awsm-gondola.css">AWSM Gondola</option>
+        <option value="awsm-mischka.css">AWSM Mischka</option>
+        <option value="awsm-pastelpink.css">AWSM Pastel Pink</option>
+        <option value="awsm-pearllusta.css">AWSM Pearl Lusta</option>
+        <option value="awsm-tasman.css">AWSM Tasman</option>
+        <option value="awsm-white.css">AWSM White</option>
+        <option value="axist.css">Axist</option>
+        <option value="bahunya.css">Bahunya</option>
+        <option value="bamboo.css">Bamboo</option>
+        <option value="bare.css">Bare</option>
+        <option value="base.css">Base</option>
+        <option value="basic.css">Basic</option>
+        <option value="bolt.css">Bolt</option>
+        <option value="bonsai.css">Bonsai</option>
+        <option value="boot-cerulean.css">Boot Cerulean</option>
+        <option value="boot-cosmo.css">Boot Cosmo</option>
+        <option value="boot-cyborg.css">Boot Cyborg</option>
+        <option value="boot-darkly.css">Boot Darkly</option>
+        <option value="boot-flatly.css">Boot Flatly</option>
+        <option value="boot-journal.css">Boot Journal</option>
+        <option value="boot-lumen.css">Boot Lumen</option>
+        <option value="boot-paper.css">Boot Paper</option>
+        <option value="boot-readable.css">Boot Readable</option>
+        <option value="boot-sandstone.css">Boot Sandstone</option>
+        <option value="boot-slate.css">Boot Slate</option>
+        <option value="boot-spacelab.css">Boot Spacelab</option>
+        <option value="boot-superhero.css">Boot Superhero</option>
+        <option value="boot-yeti.css">Boot Yeti</option>
+        <option value="brutalist.css">Brutalist</option>
+        <option value="bullframe.css">Bullframe</option>
+        <option value="caiuss.css">Caiuss</option>
+        <option value="caramel.css">Caramel</option>
+        <option value="cardinal.css">Cardinal</option>
+        <option value="centigram.css">Centigram</option>
+        <option value="centurion.css">Centurion</option>
+        <option value="chota.css">Chota</option>
+        <option value="cirrus.css">Cirrus</option>
+        <option value="classless.css">Classless</option>
+        <option value="clmaterial.css">CL Material</option>
+        <option value="codify.css">Codify</option>
+        <option value="comet.css">Comet</option>
+        <option value="concise.css">Concise</option>
+        <option value="concrete.css">Concrete</option>
+        <option value="cutestrap.css">Cute Strap</option>
+        <option value="flat-ui.css">Flat UI</option>
+        <option value="fluidity.css">Fluidity</option>
+        <option value="furtive.css">Furtive</option>
+        <option value="gd.css">GD</option>
+        <option value="generic.css">Generic</option>
+        <option value="github-markdown.css">GitHub Markdown</option>
+        <option value="gutenberg.css">Gutenberg</option>
+        <option value="hack.css">Hack</option>
+        <option value="hello.css">Hello</option>
+        <option value="hiq.css">HiQ</option>
+        <option value="holiday.css">Holiday</option>
+        <option value="html-starterkit.css">HTML Starter Kit</option>
+        <option value="hyp.css">Hyp</option>
+        <option value="kathamo.css">Kathamo</option>
+        <option value="koochak.css">Koochak</option>
+        <option value="kraken.css">Kraken</option>
+        <option value="kube.css">Kube</option>
+        <option value="latex.css">LaTeX</option>
+        <option value="lemon.css">Lemon</option>
+        <option value="lissom.css">Lissom</option>
+        <option value="lit.css">Lit</option>
+        <option value="lotus.css">Lotus</option>
+        <option value="magick.css">Magick</option>
+        <option value="markdown.css">Markdown</option>
+        <option value="marx.css">Marx</option>
+        <option value="material.css">Material</option>
+        <option value="materialize.css">Materialize</option>
+        <option value="md-air.css">MD Air</option>
+        <option value="md-modest.css">MD Modest</option>
+        <option value="md-retro.css">MD Retro</option>
+        <option value="md-splendor.css">MD Splendor</option>
+        <option value="mercury.css">Mercury</option>
+        <option value="milligram.css">Milligram</option>
+        <option value="min.css">Min</option>
+        <option value="mini.css">Mini</option>
+        <option value="minimal.css">Minimal</option>
+        <option value="minimal-stylesheet.css">Minimal Stylesheet</option>
+        <option value="missing-style.css">Missing Style</option>
+        <option value="mobi.css">Mobi</option>
+        <option value="motherplate.css">Motherplate</option>
+        <option value="mu.css">Mu</option>
+        <option value="mui.css">MUI</option>
+        <option value="mvp.css">MVP</option>
+        <option value="neat.css">Neat</option>
+        <option value="new.css">New</option>
+        <option value="no-class.css">No Class</option>
+        <option value="normalize.css">Normalize</option>
+        <option value="oh-my-css.css">Oh My CSS</option>
+        <option value="ok.css">OK</option>
+        <option value="pandoc-scholar.css">Pandoc Scholar</option>
+        <option value="paper.css">Paper</option>
+        <option value="papier.css">Papier</option>
+        <option value="pavilion.css">Pavilion</option>
+        <option value="picnic.css">Picnic</option>
+        <option value="pico.css">Pico</option>
+        <option value="preface.css">Preface</option>
+        <option value="primer.css">Primer</option>
+        <option value="propeller.css">Propeller</option>
+        <option value="pure.css">Pure</option>
+        <option value="roble.css">Roble</option>
+        <option value="sakura.css">Sakura</option>
+        <option value="sakura-dark.css">Sakura Dark</option>
+        <option value="sakura-earthly.css">Sakura Earthly</option>
+        <option value="sakura-ink.css">Sakura Ink</option>
+        <option value="sakura-pink.css">Sakura Pink</option>
+        <option value="sakura-radical.css">Sakura Radical</option>
+        <option value="sakura-vader.css">Sakura Vader</option>
+        <option value="sanitize.css">Sanitize</option>
+        <option value="scooter.css">Scooter</option>
+        <option value="semantic-ui.css">Semantic UI</option>
+        <option value="shoelace.css">Shoelace</option>
+        <option value="siimple.css">Siimple</option>
+        <option value="simple.css">Simple</option>
+        <option value="skeleton.css">Skeleton</option>
+        <option value="skeleton-framework.css">Skeleton Framework</option>
+        <option value="skeleton-plus.css">Skeleton Plus</option>
+        <option value="snack.css">Snack</option>
+        <option value="spcss.css">SPCSS</option>
+        <option value="spectre.css">Spectre</option>
+        <option value="style.css">Style</option>
+        <option value="stylize.css">Stylize</option>
+        <option value="superstylin.css">Superstylin</option>
+        <option value="tacit.css">Tacit</option>
+        <option value="tent.css">Tent</option>
+        <option value="terminal.css">Terminal</option>
+        <option value="thao.css">Thao</option>
+        <option value="tui.css">TUI</option>
+        <option value="vanilla.css">Vanilla</option>
+        <option value="vital.css">Vital</option>
+        <option value="w3c-chocolate.css">W3C Chocolate</option>
+        <option value="w3c-midnight.css">W3C Midnight</option>
+        <option value="w3c-modernist.css">W3C Modernist</option>
+        <option value="w3c-oldstyle.css">W3C Oldstyle</option>
+        <option value="w3c-steely.css">W3C Steely</option>
+        <option value="w3c-swiss.css">W3C Swiss</option>
+        <option value="w3c-traditional.css">W3C Traditional</option>
+        <option value="w3c-ultramarine.css">W3C Ultramarine</option>
+        <option value="water.css">Water</option>
+        <option value="wing.css">Wing</option>
+        <option value="writ.css">Writ</option>
+        <option value="yamb.css">Yamb</option>
+        <option value="yorha.css">Yorha</option>
+      </select>
+    </span>
+  </nav>
+  <script src="media.js"></script>
+  <script src="tts.js"></script>
+  <hr>
+  <br>
+  <main>
     <div id="messages"></div>
+  </main>
+  <br>
+  <hr>
+  <textarea id="commandInput" placeholder="Type your command here..."></textarea>
+  <script src="terminal.js"></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', (event) => {
+      const stylesheetSelector = document.getElementById('stylesheetSelector');
+      const defaultStylesheet = 'styles/sakura-dark-solarized.css';
 
-	<br>
-	<hr>
-    <textarea id="commandInput" placeholder="Type your command here..."></textarea>
-    <script src="terminal.js"></script>
+      // Apply the default stylesheet
+      applyStylesheet(defaultStylesheet);
+
+      // Add event listener for stylesheet selection
+      stylesheetSelector.addEventListener('change', (event) => {
+        const selectedStylesheet = 'styles/' + event.target.value;
+        applyStylesheet(selectedStylesheet);
+      });
+
+      function applyStylesheet(stylesheet) {
+        const link = document.createElement('link');
+        link.rel = 'stylesheet';
+        link.href = stylesheet;
+        document.head.appendChild(link);
+      }
+    });
+  </script>
 </body>
 </html>
 
