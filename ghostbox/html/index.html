@@ -40,7 +40,7 @@
       <button id="unmuteTTSBtn">Unmute TTS</button>
     </span>
     <span>
-      <h3>Style</h3>
+      <h3>Stylesheet</h3>
       <select id="stylesheetSelector">
         <option value="sakura-dark-solarized.css">Sakura Dark Solarized</option>
         <option value="a11yana.css">A11yana</option>
@@ -222,16 +222,29 @@
       const stylesheetSelector = document.getElementById('stylesheetSelector');
       const defaultStylesheet = 'styles/sakura-dark-solarized.css';
 
-      // Apply the default stylesheet
-      applyStylesheet(defaultStylesheet);
+      // Load the saved stylesheet from local storage
+      const savedStylesheet = localStorage.getItem('selectedStylesheet');
+      const stylesheetToApply = savedStylesheet || defaultStylesheet;
+
+      // Apply the selected stylesheet
+      applyStylesheet(stylesheetToApply);
 
       // Add event listener for stylesheet selection
       stylesheetSelector.addEventListener('change', (event) => {
         const selectedStylesheet = 'styles/' + event.target.value;
         applyStylesheet(selectedStylesheet);
+        // Save the selected stylesheet to local storage
+        localStorage.setItem('selectedStylesheet', selectedStylesheet);
       });
 
       function applyStylesheet(stylesheet) {
+        // Remove any existing stylesheet links
+        const existingLink = document.querySelector('link[rel="stylesheet"][href^="styles/"]');
+        if (existingLink) {
+          document.head.removeChild(existingLink);
+        }
+
+        // Create and append the new stylesheet link
         const link = document.createElement('link');
         link.rel = 'stylesheet';
         link.href = stylesheet;
@@ -241,5 +254,3 @@
   </script>
 </body>
 </html>
-
-
