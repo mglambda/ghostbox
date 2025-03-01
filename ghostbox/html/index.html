@@ -4,16 +4,54 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Microphone Recording</title>
+    <style>
+        .message {
+            font-family: 'Monaco', 'Lucida Console', 'Ubuntu Mono', 'Fira Code', monospace;			
+            opacity: 0;
+            transition: opacity 1s ease-in-out;
+        }
+		
+        .message.show {
+            opacity: 1;
+        }
+
+        .user-message {
+            /*font-weight: bold;*/
+		margin-left: 5%;
+        }
+		
+        #messages {
+            white-space: pre-wrap; /* Allow wrapping within the div element */
+            word-wrap: break-word; /* Break long words */
+            overflow-y: scroll; /* Enable vertical scrolling */
+            height: 80%;
+		width: 95%;
+        }		
+    </style>
 </head>
 <body>
-    <h1>Microphone Recording</h1>
+  <nav>
+	<span><h3>Microphone</h3>
     <button id="startBtn">Start Recording</button>
     <button id="stopBtn" disabled>Stop Recording</button>
+	</span>
+<span>
+  <h3>Text-To-Speech</h3>
+  <button id="unmuteTTSBtn">Unmute TTS</button>
+	</span>
+	</nav>
     <script src="media.js"></script>
-
-    <h1>TTS WebSocket Audio</h1>
-    <button id="unmuteTTSBtn">Unmute TTS</button>
     <script src="tts.js"></script>
+
+	<hr>
+	<br>
+	
+    <div id="messages"></div>
+
+	<br>
+	<hr>
+    <textarea id="commandInput" placeholder="Type your command here..."></textarea>
+    <script src="terminal.js"></script>
 </body>
 </html>
 

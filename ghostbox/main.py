@@ -832,11 +832,14 @@ class Plumbing(object):
         self.tts.write_line(w)
         return w
 
-    def print(self, w, end="\n", flush=False, color="", style="", tts=True, interrupt=None):
+    def print(self, w, end="\n", flush=False, color="", style="", tts=True, interrupt=None, websock=True):
         # either prints, speaks, or both, depending on settings
         if w == "":
             return
 
+        if self.getOption("websock"):
+            self.websockSend(w)
+            
         if self.getOption("quiet"):
             return 
         
@@ -1186,7 +1189,16 @@ returns - A string ready to be sent to the backend, including the full conversat
     def stopWebsock(self):
         self.websock_running.clear()
         self.websock_clients = []
-        
+
+    def websockSend(self, msg: str) -> None:
+        from websockets import ConnectionClosedError
+        for i in range(len(self.websock_clients)):
+            client = self.websock_clients[i]
+            try:
+                client.send(msg)
+            except ConnectionClosedError:                
+                printerr("error: Unable to send message to " + str(client.remote_address) + ": Connection closed.")
+                del self.websock_clients[i]
 
     def _websockPopMsg(self) -> str:
         """Pops a message of the internal websocket queue and returns it.
@@ -1252,15 +1264,7 @@ def main():
         # FIXME: this shouldn't be deleted so that it stays persistent when user does /start or /restart, but it's also a useless option. implement a emchanism for hidden options?
     #del prog.options["hide"]
 
-
-    if prog.getOption("http"):
-        prog._initializeHTTP()
-        del prog.options["http"]
-
-    if prog.getOption("websock"):
-        prog.initializeWebsock()
-        del prog.options["websock"]
-    
+   
     if prog.getOption("tts"):
         prog.tts_flag = True
        
@@ -1272,6 +1276,14 @@ def main():
     if prog.getOption("image_watch"):
         prog.startImageWatch()
         del prog.options["image_watch"]
+
+    if prog.getOption("http"):
+        prog._initializeHTTP()
+
+    if prog.getOption("websock"):
+        prog.initializeWebsock()
+
+
         
     regpl(prog)
         
