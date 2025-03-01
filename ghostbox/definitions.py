@@ -18,7 +18,7 @@ PromptFormatTemplateSpecialValue = Enum("PromptFormatTemplateSpecialValue", "aut
 
 
 ArgumentType = Enum("ArgumentType", "Porcelain Plumbing")
-ArgumentGroup = Enum("ArgumentGroup", "Hyperparameter Terminal Characters TTS Audio Images Backend LlamaCPP OpenAI")
+ArgumentGroup = Enum("ArgumentGroup", "General Generation Interface Characters Templates TTS Audio Images Tools Backend Hyperparameters LlamaCPP OpenAI")
 
 class ArgumentTag(BaseModel):
     """Metadata associated with a command line argument."""
