@@ -18,6 +18,7 @@ class TaggedArgumentParser():
             # find the longest arg, strip leading hyphens, replace remaining hyphens with _
             arg = sorted(args, key = lambda w: len(w), reverse=True)[0].strip("-").replace("-", "_")
             self.tags[arg] = kwargs["tag"]
+            self.tags[arg].name = arg
             # and if there is no help then let it blow up
             self.tags[arg].help = kwargs["help"]
             del kwargs["tag"]
@@ -93,7 +94,7 @@ def makeTaggedParser(default_params) -> TaggedArgumentParser:
                         tag=mktag(type=AT.Plumbing, group=AG.Interface, motd=True))
     parser.add_argument("--text_ai_style", type=str, default="bright", help="Style for the generated text, as long as --color is enabled. Most ANSI terminal styles are supported.",
                         tag=mktag(type=AT.Plumbing, group=AG.Interface))
-    parser.add_argument("--dynamic_file_vars", action=argparse.BooleanOptionalAction, default=True, help="Dynamic file vars are strings of the form {[FILE1]}. If FILE1 is found, the entire expression is replaced with the contents of FILE1. This is dynmic in the sense that the contents of FILE1 are loaded each time the replacement is encountered, which is different from the normal file vars with {{FILENAME}}, which are loaded once during character initialization. Replacement happens in user inputs only. In particular, dynamic file vars are ignored in system messages or saved chats. If you want the LLM to get file contents, use tools. disabling this means no replacement happens. This can be a security vulnerability, so it is disabled by default on the API.",
+    parser.add_argument("--dynamic_file_vars", action=argparse.BooleanOptionalAction, default=True, help="Dynamic file vars are strings of the form {[FILE1]}. If FILE1 is found, the entire expression is replaced with the contents of FILE1. This is dynamic in the sense that the contents of FILE1 are loaded each time the replacement is encountered, which is different from the normal file vars with {{FILENAME}}, which are loaded once during character initialization. Replacement happens in user inputs only. In particular, dynamic file vars are ignored in system messages or saved chats. If you want the LLM to get file contents, use tools. disabling this means no replacement happens. This can be a security vulnerability, so it is disabled by default on the API.",
                         tag=mktag(type=AT.Plumbing, group=AG.Templates, motd=True))
     parser.add_argument("--warn_trailing_space", action=argparse.BooleanOptionalAction, default=True, help="Warn if the prompt that is sent to the backend ends on a space. This can cause e.g. excessive emoticon use by the model.",
                         tag=mktag(type=AT.Plumbing, group=AG.Generation))

@@ -1,4 +1,4 @@
-import requests, json, os, io, re, base64, random, sys, threading, signal, tempfile, string, uuid
+import requests, json, os, io, re, base64, random, sys, threading, signal, tempfile, string, uuid, textwrap
 from queue import Queue, Empty
 from typing import *
 import feedwater
@@ -20,23 +20,83 @@ from ghostbox import backends
 import ghostbox
 
 
-def showHelp(prog, argv):
+def showHelpCommands(prog, argv):
     """
     List commands, their arguments, and a short description."""
     
     w = ""
+    candidate = "/" + "".join(argv).strip()
+    failure = True
     for (cmd_name, f) in cmds:
+        if candidate != "/" and cmd_name != candidate:
+            continue
+        failure = False
         if f.__doc__ is None:
             docstring = cmds_additional_docs.get(cmd_name, "")
         else:
             docstring = str(f.__doc__) 
         w += cmd_name + " " + docstring + "\n"
     printerr(w, prefix="")
+
+    if failure:
+        return "Command not found. See /help for more."
     return ""
+
+
+def showHelp(prog, argv):
+    """[TOPIC] [-v|--verbose]
+List help on various topics. Use -v to see even more information."""
+    w = ""
+    if argv == []:
+        # list topics
+        w += "[Commands]\nUse these with a preceding slash like e.g. '/retry'. Do /help COMMANDNAME for more information on an individual command.\n\n"
+        command_names = sorted([tuple[0].replace("/","") for tuple in cmds])
+        for i in range(len(command_names)):
+            command_name = command_names[i]
+            if i % 3 == 0:
+                start = "\n  "
+            else:
+                start = "\t"
+                
+            w += start + command_name
+
+        w += "\n\n[Options]\nSet these with '/set OPTIONNAME VALUE', where value is a valid python expression.\n List options and their values with /ls [OPTIONNAME].\n"
+        options = sorted(prog.tags.items(), key=lambda item: (item[1].group.name, item[1].name))
+        last_group = ""
+        for i in range(len(options)):
+            option, tag = list(options)[i]
+            if last_group != tag.group.name:
+                w += "\n\n  [" + tag.group.name + "]\n"
+                last_group = tag.group.name
+            option = wrapColorStyle(option, "", Style.BRIGHT) if tag.very_important else option
+            if i % 3 == 0:
+                w += "\n" + option
+            else:
+                w += "\t" + option
+
+        return w
+
+    topic = argv[0]
+    if topic in prog.tags:
+        tag = prog.tags[topic]
+        if tag.is_option:
+            w += topic + "\n" + "\n".join(textwrap.wrap(tag.help)) + "\n" + "\n".join(textwrap.wrap(tag.show_description())) + "\nIts current value is " + str(prog.getOption(topic)) 
+            if tag.service:
+                w += "\nSetting it to True will start the corresponding service."
+    else:
+        # it's a command
+        # FIXME: commands aren't tagged yet
+        return showHelpCommands(prog, [topic])
+    #else:
+        # not found
+        #return "Topic not found in help. Please choose one of the topics below.\n" + showHelp(prog, [])
+    return w
+
 
 # these can be typed in at the CLI prompt
 cmds = [
-    ("/help", showHelp),
+    ("/help", showHelp),    
+    ("/helpcommands", showHelpCommands),
     ("/start", newSession),
     ("/switch", switch),
     ("/quit", exitProgram),

@@ -22,6 +22,7 @@ ArgumentGroup = Enum("ArgumentGroup", "General Generation Interface Characters T
 
 class ArgumentTag(BaseModel):
     """Metadata associated with a command line argument."""
+    name: str = ""
     type: ArgumentType
     group: ArgumentGroup
 
@@ -34,6 +35,20 @@ class ArgumentTag(BaseModel):
     # for inclusion in the message of the day/tip
     motd: bool = False
 
+    # basically, if its a command or option
+    is_option: bool = True
+
+    def show_type(self) -> str:
+        if self.is_option:
+            return "It is a " + self.type.name.lower() + " option in the " + self.group.name.lower() + " group."
+        return "It is a " + self.type.name.lower() + " command in the " + self.group.name.lower() + " group."
+    
+    def show_description(self) -> str:
+        w = ""
+        w += self.show_type()
+        w += "\nYou can set it with `/set " + self.name + " VALUE` or provide it as a command line parameter with `--" + self.name + "`"
+        return w
+        
     # same help that is printed in terminal on --help
     help: str = ""
     
