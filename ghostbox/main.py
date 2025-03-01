@@ -97,10 +97,11 @@ mode_formatters = {
 }
 
 class Plumbing(object):
-    def __init__(self, options={}, initial_cli_prompt=""):
+    def __init__(self, options={}, initial_cli_prompt="", tags={}):
         self._frozen = False
         self._freeze_queue = Queue()        
-        self.options = options        
+        self.options = options
+        self.tags = tags
         self.backend = None
         self.initializeBackend(self.getOption("backend"), self.getOption("endpoint"))
         self.session = Session(chat_user=options.get("chat_user", ""))
@@ -899,6 +900,38 @@ class Plumbing(object):
         w = self.multiline_buffer
         self.multiline_buffer = ""
         return w
+
+    def expandDynamicFileVars(self, w):
+        """Expands strings of the form `{[FILEPATH]}` by replacing them with the contents of FILE1 if it is found and readable."""
+        if not(self.getOption("dynamic_file_vars")):
+            return w
+        
+        pattern = r'\{\[(.*?)\]\}'
+        matches = re.findall(pattern, w)
+
+        for match in matches:
+            var = "{[" + match + "]}"
+            # users will probably mess around with this so we wanna be real careful
+            common_error_msg = "error: Unable to expand '" + var + "'. "                                         
+            try:
+                content = open(match, "r").read()
+                w = w.replace(var, content)
+            except FileNotFoundError:
+                printerr(common_error_msg + "File not found.")
+            except PermissionError:
+                printerr(common_error_msg + "Operation not permitted.")
+            except IsADirectoryError:
+                printerr(common_error_msg + "'" + match + "' is a directory.")
+            except UnicodeDecodeError:
+                printerr(common_error_msg + "Unable to decode the file.")
+            except IOError:
+                printerr(common_error_msg + "Bad news: IO error.")
+            except OSError:
+                printerr(common_error_msg + "Operating system has signaled an error.")
+            except:
+                printerr(common_error_msg + "An unknown exception has occurred. Here's the full traceback.")
+                printerr(traceback.format_exc())
+        return w        
     
     def modifyInput(prog, w):
         """Takes user input (w), returns pair of (modified user input, and a hint to give to the ai."""
@@ -912,6 +945,8 @@ class Plumbing(object):
         if prog.continue_with != "":# user input has been replaced with something else, e.g. a transcription
             w = prog.popContinueString()
 
+        # dynamic vars must come before other vars for security reasons
+        w = prog.expandDynamicFileVars(w)
         w = prog.session.expandVars(w)
         (w, ai_hint) = prog.adjustForChat(w)
         
@@ -1272,9 +1307,10 @@ returns - A string ready to be sent to the backend, including the full conversat
         
 def main():
     just_fix_windows_console()
-    parser = makeArgParser(backends.default_params)
+    tagged_parser = makeTaggedParser(backends.default_params)
+    parser = tagged_parser.get_parser()
     args = parser.parse_args()
-    prog = Plumbing(options=args.__dict__, initial_cli_prompt=args.cli_prompt)
+    prog = Plumbing(options=args.__dict__, initial_cli_prompt=args.cli_prompt, tags=tagged_parser.get_tags())
     # the following is setup, though it is subtly different from Plumbing.init, so beware
     
     if userConfigFile():    

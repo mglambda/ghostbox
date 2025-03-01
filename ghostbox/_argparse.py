@@ -3,11 +3,42 @@ from ghostbox.util import *
 from ghostbox import backends
 from ghostbox.definitions import *
 
+class TaggedArgumentParser():
+    """Creates an argument parser along with a set of tags for each argument.
+    Arguments to the constructor are passed on to argparse.ArgumentParser.__init__ .
+    You can then use add_arguments just like with argparse, except that there is an additional keyword argument 'tags', which is a dictionary that will be associated with that command line argument."""
 
-def makeArgParser(default_params):
-    # default_params are only the hyperparameters (temp, etc.), not command line parameters
-    parser = argparse.ArgumentParser(description="ghostbox - LLM Command Line Interface", formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument("-I", '--include', action="append", default=[userCharDir(), "chars/"], help="Include paths that will be searched for character folders named with the /start command or the --character_folder command line argument.")
+    def __init__(self, **kwargs):
+        self.parser = argparse.ArgumentParser(**kwargs)
+        self.tags = {}
+        
+    def add_argument(self, *args, **kwargs):
+        if "tag" in kwargs:
+            # this is a bit tricky, argparse does a lot to find the arg name, but this might do
+            # find the longest arg, strip leading hyphens, replace remaining hyphens with _
+            arg = sorted(args, key = lambda w: len(w), reverse=True)[0].strip("-").replace("-", "_")
+            self.tags[arg] = kwargs["tag"]
+            # and if there is no help then let it blow up
+            self.tags[arg].help = kwargs["help"]
+            del kwargs["tag"]
+            
+        self.parser.add_argument(*args, **kwargs)
+
+    def get_parser(self):
+        return self.parser
+
+    def get_tags(self):
+        return self.tags
+        
+        
+def makeTaggedParser(default_params) -> TaggedArgumentParser:
+    parser = TaggedArgumentParser(description="LLM Command Line Interface", formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    # we'll be typing these a lot so buckle up
+    mktag = ArgumentTag
+    AT = ArgumentType
+    AG = ArgumentGroup
+    parser.add_argument("-I", '--include', action="append", default=[userCharDir(), "chars/"], help="Include paths that will be searched for character folders named with the /start command or the --character_folder command line argument.",
+                        tag=mktag(type=AT.Porcelain, group=AG.Characters))
     parser.add_argument('--template_include', action="append", default=[userTemplateDir(), "templates/"], help="Include paths that will be searched for prompt templates. You can specify a template to use with the -T option.")
     parser.add_argument("-T", '--prompt_format', type=str, default="guess", help="Prompt format template to use. The default is 'guess', which means ghostbox will try to determine the format through various heuristics. Often, this will result in 'chat-ml'.")
     #parser.add_argument('--stop', action="append", default=[], help="Forbidden strings that will stop the LLM backend generation.")
@@ -34,7 +65,8 @@ def makeArgParser(default_params):
     parser.add_argument("--multiline_delimiter", type=str, default="\\", help="String that signifies the end of user input. This is only relevant for when --multiline is enabled. By default this is a backslash, inverting the normal behaviour of backslashes allowing to enter a newline ad-hoc while in multiline mode. This option is intended to be used by scripts to change the delimiter to something less common.")
     parser.add_argument("--color", action=argparse.BooleanOptionalAction, default=True, help="Enable colored output.")
     parser.add_argument("--text_ai_color", type=str, default="none", help="Color for the generated text, as long as --color is enabled. Most ANSI terminal colors are supported.")
-    parser.add_argument("--text_ai_style", type=str, default="bright", help="Style for the generated text, as long as --color is enabled. Most ANSI terminal styles are supported.")    
+    parser.add_argument("--text_ai_style", type=str, default="bright", help="Style for the generated text, as long as --color is enabled. Most ANSI terminal styles are supported.")
+    parser.add_argument("--dynamic_file_vars", action=argparse.BooleanOptionalAction, default=True, help="Dynamic file vars are strings of the form {[FILE1]}. If FILE1 is found, the entire expression is replaced with the contents of FILE1. This is dynmic in the sense that the contents of FILE1 are loaded each time the replacement is encountered, which is different from the normal file vars with {{FILENAME}}, which are loaded once during character initialization. Replacement happens in user inputs only. In particular, dynamic file vars are ignored in system messages or saved chats. If you want the LLM to get file contents, use tools. disabling this means no replacement happens. This can be a security vulnerability, so it is disabled by default on the API.")
     parser.add_argument("--warn_trailing_space", action=argparse.BooleanOptionalAction, default=True, help="Warn if the prompt that is sent to the backend ends on a space. This can cause e.g. excessive emoticon use by the model.")
     parser.add_argument("--warn_audio_activation_phrase", action=argparse.BooleanOptionalAction, default=True, help="Warn if audio is being transcribed, but no activation phrase is found. Normally this only will warn once. Set to -1 if you want to be warned every time.")
     parser.add_argument("--warn_hint", action=argparse.BooleanOptionalAction, default=True, help="Warn if you have a hint set.")
@@ -95,10 +127,9 @@ def makeArgParser(default_params):
 
     for (param, value) in default_params.items():
         parser.add_argument("--" + param, type=type(value), default=value, help="Passed on to koboldcpp. Change during runtime with /set " + param + ".")
-        
     return parser
 
 
 def makeDefaultOptions():
-    parser = makeArgParser(backends.default_params)
+    parser = makeTaggedParser(backends.default_params).get_parser()
     return parser.parse_args(args="")    
