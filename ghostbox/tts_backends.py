@@ -258,9 +258,9 @@ class KokoroBackend(TTSBackend):
         # but it can end up reserving too much vram.
         # I'm not certain of this but I also think that it does a better job the more material it has.
         # so we compromise
-        if len(text) > 100:
+        if len(text) > 300:
             return super().split_into_sentences(text)
-        return [text]
+        return [text.strip()]
 
     def configure(self, **kwargs) -> None:
         """Set parameters specific to a TTS model."""

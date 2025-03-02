@@ -1,4 +1,4 @@
-import traceback, threading, wave
+import traceback, threading, wave, time
 from abc import ABC, abstractmethod
 from functools import *
 from typing import *
@@ -25,7 +25,8 @@ class TTSOutput(ABC):
 
     @abstractmethod
     def shutdown(self) -> None:
-        """Shuts down the output module, allowing for any necessary cleanup. Calling any of the methods after this is undefined behaviour."""
+        """Gracefully shut down output module, finishing playback of all enqueued files.
+                Calling any of the methods after this one is undefined behaviour."""
         pass
 
 class DefaultTTSOutput(TTSOutput):
@@ -41,7 +42,7 @@ class DefaultTTSOutput(TTSOutput):
         self.pyaudio = pyaudio.PyAudio()
 
         def play_worker():
-            while True:
+            while self.running or not(self._queue.empty()):
                 # don't remove the loop or timeout or else thread will not be terminated through signals
                 try:
                     filename = self._queue.get(timeout=1)
@@ -51,30 +52,27 @@ class DefaultTTSOutput(TTSOutput):
                 # _play will block until stop is called or playback finishes
                 self._play(filename)
 
-        self.worker = threading.Thread(target=play_worker, daemon=True)
+        self.running = True
+        self.worker = threading.Thread(target=play_worker)
         self.worker.start()
 
     def enqueue(self, filename, volume: float= 1.0) -> None:
         self.volume = volume
-        print(filename)
-        print(f"exists (from enqueue): {os.path.isfile(filename)}")
+
         self._queue.put(filename)
         
     def _play(self, filename: str, volume: float= 1.0) -> None:
         import pyaudio
 
-
-        print(filename)
-        print(f"exists (from _play): {os.path.isfile(filename)}")        
         wf = wave.open(filename, 'rb')
+        chunk = 1024        
         p = self.pyaudio
         stream = p.open(format=p.get_format_from_width(wf.getsampwidth()),
                         channels=wf.getnchannels(),
                         rate=wf.getframerate(),
-                        output=True)
+                        output=True,
+                        frames_per_buffer=chunk)
 
-        # Read data in chunks
-        chunk = 2048
 
         # Play the audio data
         self.stop_flag.clear()
@@ -92,7 +90,8 @@ class DefaultTTSOutput(TTSOutput):
         self._queue.queue.clear() # yes
 
     def shutdown(self) -> None:
-        self.stop()
+        """Gracefully shut down output module, finishing playback of all enqueued files."""
+        self.running = False
         super().shutdown()
         
 class WebsockTTSOutput(TTSOutput):
@@ -146,14 +145,7 @@ class WebsockTTSOutput(TTSOutput):
         self.server_running.clear()
         printerr("Halting websocket server.")
         
-
-
-    def enqueue(self, filename: str, volume: float) -> None:
-        #FIXME: not implemented yet
-        pass
-        
-
-    def play(self, filename: str, volume: float = 1.0) -> None:
+    def enqueue(self, filename: str, volume: float = 1.0) -> None:
         from websockets import ConnectionClosedError
         printerr("[WEBSOCK] Playing with " + str(len(self.clients)) + " clients.")
 

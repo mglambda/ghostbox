@@ -42,7 +42,10 @@ class TTSState(object):
         f.close()
         self.temp_wav_files.append(f)
         return f
-        
+
+    def silence_filename(self) -> str:
+        return self._silence_filename
+    
     def cleanup(self):
         for tf in self.temp_wav_files:
             os.remove(tf.name)

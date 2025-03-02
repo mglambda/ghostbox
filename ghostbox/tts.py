@@ -48,6 +48,8 @@ def initOutputMethod(method: str, args) -> TTSOutput:
 prog = TTSState(args)
 output_module = initOutputMethod(prog.args.output_method, prog.args)
 tts = initTTS(prog.args.model, config=vars(prog.args))
+# we have to put something on the message queue that signals EOF but isn't actually EOF
+eof_token = "  <EOF>  "
 
 # list voices if requested
 if args.voices:
@@ -102,15 +104,12 @@ def input_loop():
             for chunk in ws:
                 msg_queue.put(chunk)
         except EOFError as e:
-            #prog.handleMixins()
-            time.sleep(3)
-            done.set()
+            printerr("EOF")
+            msg_queue.put(eof_token)
             break
         except:
             print("Exception caught while blocking. Shutting down gracefully. Below is the full exception.")
             print(traceback.format_exc())                    
-            #prog.handleMixins()
-            #print("EOF encountered. Closing up.")
             time.sleep(3)
             done.set()
             break
@@ -138,6 +137,9 @@ while True:
             # so we have to sporadically use a timeout and loop around. btw all of this is undocumented.
             # Thanks, Guido!
             rawmsg = msg_queue.get(timeout=1)
+            if rawmsg == eof_token:
+                done.set()
+                continue
     except Empty:
         # timeout was hit
         continue
@@ -157,8 +159,6 @@ while True:
     output_file = prog.temp_wav_file()
     try:
         tts.tts_to_file(text=msg, speaker_file=prog.getVoiceSampleFile(), file_path=output_file.name)
-        print(output_file.name)
-        print(f"exists: {os.path.isfile(output_file.name)}")
     except ZeroDivisionError:
         print("Caught zero division error. Ignoring.")
         # this happens when the tts is asked to process whitespace and produces a wav file in 0 seconds :) nothing to worry about
@@ -168,21 +168,23 @@ while True:
         prog.retry(msg)
         continue # we retry the msg that was too long
         
-        
-    #prog.accumulateSound(output_file.name)
-    #prog.addPause()
     if prog.args.quiet:
         continue
 
-    print(output_file.name)
-    print(f"exists: {os.path.isfile(output_file.name)}")
+    # this filecopy is horrible but it is necessary because
+    # even with ful program synchronization, the filesystem might not play ball
+    # in any case without this, the wavefile created on this thread wouldn't show up on the other one
     newfilename = tempfile.mkstemp(suffix=".wav")[1]
     shutil.copy(output_file.name, newfilename)
+
+    # queue and play
     output_module.enqueue(newfilename, volume=prog.args.volume)
-    time.sleep(60)
+    # this short pause makes everything a little smoother
+    output_module.enqueue(prog.silence_filename())
+    
 
     
-prog.cleanup()
+# this will let all enqueued files finish playing
 output_module.shutdown()
-
+prog.cleanup()
 
