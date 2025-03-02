@@ -69,6 +69,7 @@ This immplementation remains here as a reference implementation."""
         self.tts = TTS("tts_models/multilingual/multi-dataset/xtts_v2").to(device)        
 
     def tts_to_file(self, text: str, file_path: str, language:str = "en", speaker_file:str = "") -> None:
+        printerr("`" + text + "`")        
         self.tts.tts_to_file(text=text, speaker_wav=speaker_file, language=language, file_path=file_path)
         
     def split_into_sentences(self, text:str) -> List[str]:
@@ -140,7 +141,12 @@ class ZonosBackend(TTSBackend):
         import torch
         import torchaudio
         from zonos.conditioning import make_cond_dict
-
+        
+        if text == "":
+            return
+        
+        printerr("`" + text + "`")
+        
         # we want to support the 'en' code because xtts uses it
         if language == 'en':
             language = "en-us"
@@ -155,12 +161,12 @@ class ZonosBackend(TTSBackend):
         codes = self._model.generate(conditioning)
         wavs = self._model.autoencoder.decode(codes).cpu()
         torchaudio.save(file_path, wavs[0], self._model.autoencoder.sampling_rate)
-        
+        return waves
         
     def split_into_sentences(self, text:str) -> List[str]:
         ws = super().split_into_sentences(text)
         # debug
-        print(str(ws))
+        #print(str(ws))
         return ws
     
 
@@ -229,6 +235,7 @@ class KokoroBackend(TTSBackend):
         if text == "":
             return
         
+        printerr("`" + text + "`")        
         if language == "en":
             language = "en-us"
 
@@ -248,7 +255,12 @@ class KokoroBackend(TTSBackend):
     def split_into_sentences(self, text:str) -> List[str]:
         """Returns a list of sentences, where a 'sentence' is any string the TTS backend wants to process as a chunk.
         The default implementation splits on common punctuation marks."""
-        # kokoro doesn't really need this
+        # kokoro can deal with long sentences without degrading output.
+        # but it can end up reserving too much vram.
+        # I'm not certain of this but I also think that it does a better job the more material it has.
+        # so we compromise
+        if len(text) > 100:
+            return super().split_into_sentences(text)
         return [text]
 
     def configure(self, **kwargs) -> None:

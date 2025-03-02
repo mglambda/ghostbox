@@ -11,7 +11,8 @@ class TTSState(object):
             self._default_samplerate = "24000"
         else:
             self._default_samplerate = "44100"
-            
+            # FIXME: accumulation temporarily disabled
+            args.filepath = ""
         if args.filepath != "":
             # user wants to keep acc file
             self._keep_acc = True
@@ -26,13 +27,26 @@ class TTSState(object):
         self.tmpfile.close()
         self.mixins = [] # list of (musicfilename, timestampe)
         self.retry_queue = Queue()
-        
+        self.temp_wav_files = []
         
         self.tagFunctions = {
             "sound" : self._soundTag,
             "mixin" : self._mixinTag}
 
+    def temp_wav_file(self):
+        f = tempfile.NamedTemporaryFile(suffix=".wav", delete=False)
+        # without fsync the file isn't guaranteed to be available to other threads
+        # even if you .close() it
+        # python is so great it just works /s
+        os.fsync(f)
+        f.close()
+        self.temp_wav_files.append(f)
+        return f
+        
     def cleanup(self):
+        for tf in self.temp_wav_files:
+            os.remove(tf.name)
+        
         os.remove(self.tmpfile.name)
         if not(self._keep_acc):
             os.remove(self.accfile.name)

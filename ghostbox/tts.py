@@ -1,11 +1,11 @@
 #!/usr/bin/env python
-import argparse, traceback, sys, tempfile, ast
+import argparse, traceback, sys, tempfile, ast, shutil
 from ghostbox.definitions import TTSOutputMethod, TTSModel
 
 
 program_name = sys.argv[0]
 parser = argparse.ArgumentParser(description= program_name + " - TTS program to consume text from stdin and speak it out/ save it as wav file.")
-parser.add_argument("-f", '--filepath', type=str, default="", help="Filename to save accumulated spoken lines in. Output is in wav format.")
+#parser.add_argument("-f", '--filepath', type=str, default="", help="Filename to save accumulated spoken lines in. Output is in wav format.")
 parser.add_argument("--voices", action=argparse.BooleanOptionalAction, default=False, help="List all available voices for chosen model, then exit the program.")
 parser.add_argument("-q", "--quiet", action=argparse.BooleanOptionalAction, default=False, help="Do not play any audio.")
 parser.add_argument("-l", "--language", type=str, default="en", help="Language for the TTS output. Not all TTS models support all language, and many don't need this option.")
@@ -62,14 +62,6 @@ if config_options != []:
     for w in config_options:
         printerr(w)
 
-
-if args.filepath == "":
-    output_file = tempfile.NamedTemporaryFile(suffix=".wav")
-else:
-    output_file = open(args.filepath, "w")
-
-output_file.close()    
-
 from queue import Queue, Empty
 msg_queue = Queue()
 done = threading.Event()
@@ -106,19 +98,18 @@ def input_loop():
                     continue
 
             # main event -> speak input msg w
-            #snd_stop_flag.clear()
             ws = tts.split_into_sentences(w)
             for chunk in ws:
                 msg_queue.put(chunk)
         except EOFError as e:
-            prog.handleMixins()
+            #prog.handleMixins()
             time.sleep(3)
             done.set()
             break
         except:
             print("Exception caught while blocking. Shutting down gracefully. Below is the full exception.")
             print(traceback.format_exc())                    
-            prog.handleMixins()
+            #prog.handleMixins()
             #print("EOF encountered. Closing up.")
             time.sleep(3)
             done.set()
@@ -153,7 +144,7 @@ while True:
     except: #EOFError as e:
         print("Exception caught while blocking. Shutting down gracefully. Below is the full exception.")
         print(traceback.format_exc())        
-        prog.handleMixins()
+        #prog.handleMixins()
         #print("EOF encountered. Closing up.")
         time.sleep(3)
         os._exit(1)
@@ -163,8 +154,11 @@ while True:
     if cont:
         continue
 
+    output_file = prog.temp_wav_file()
     try:
         tts.tts_to_file(text=msg, speaker_file=prog.getVoiceSampleFile(), file_path=output_file.name)
+        print(output_file.name)
+        print(f"exists: {os.path.isfile(output_file.name)}")
     except ZeroDivisionError:
         print("Caught zero division error. Ignoring.")
         # this happens when the tts is asked to process whitespace and produces a wav file in 0 seconds :) nothing to worry about
@@ -175,15 +169,19 @@ while True:
         continue # we retry the msg that was too long
         
         
-    prog.accumulateSound(output_file.name)
-    prog.addPause()
+    #prog.accumulateSound(output_file.name)
+    #prog.addPause()
     if prog.args.quiet:
         continue
-    
-    output_module.play(output_file.name, volume=prog.args.volume)
+
+    print(output_file.name)
+    print(f"exists: {os.path.isfile(output_file.name)}")
+    newfilename = tempfile.mkstemp(suffix=".wav")[1]
+    shutil.copy(output_file.name, newfilename)
+    output_module.enqueue(newfilename, volume=prog.args.volume)
 
     
 prog.cleanup()
 output_module.shutdown()
-os.remove(output_file.name)
+
 

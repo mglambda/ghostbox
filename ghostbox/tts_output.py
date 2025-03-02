@@ -2,6 +2,7 @@ import traceback, threading, wave
 from abc import ABC, abstractmethod
 from functools import *
 from typing import *
+from queue import Queue, Empty
 from ghostbox.util import *
 from ghostbox.definitions import *
 
@@ -13,7 +14,9 @@ class TTSOutput(ABC):
         pass
 
     @abstractmethod
-    def play(self, filename: str, volume: float=1.0) -> None:
+    def enqueue(self, filename: str, volume: float=1.0) -> None:
+        """Enqeueu a wave file for playback. Start playback immediately if nothing is playing.
+        This function is non-blocking."""
         pass
 
     def stop(self) -> None:
@@ -24,7 +27,7 @@ class TTSOutput(ABC):
     def shutdown(self) -> None:
         """Shuts down the output module, allowing for any necessary cleanup. Calling any of the methods after this is undefined behaviour."""
         pass
-    
+
 class DefaultTTSOutput(TTSOutput):
     """Local TTS sound output using pyaudio."""
 
@@ -34,11 +37,35 @@ class DefaultTTSOutput(TTSOutput):
         import pyaudio
         printerr("Using pyaudio for local playback.")
         self.stop_flag = threading.Event()
-        self.pyaudio = pyaudio.PyAudio()        
+        self._queue = Queue()
+        self.pyaudio = pyaudio.PyAudio()
 
-    def play(self, filename: str, volume: float= 1.0) -> None:
-        import pyaudio
+        def play_worker():
+            while True:
+                # don't remove the loop or timeout or else thread will not be terminated through signals
+                try:
+                    filename = self._queue.get(timeout=1)
+                except Empty:
+                    continue
+                    
+                # _play will block until stop is called or playback finishes
+                self._play(filename)
+
+        self.worker = threading.Thread(target=play_worker, daemon=True)
+        self.worker.start()
+
+    def enqueue(self, filename, volume: float= 1.0) -> None:
+        self.volume = volume
+        print(filename)
+        print(f"exists (from enqueue): {os.path.isfile(filename)}")
+        self._queue.put(filename)
         
+    def _play(self, filename: str, volume: float= 1.0) -> None:
+        import pyaudio
+
+
+        print(filename)
+        print(f"exists (from _play): {os.path.isfile(filename)}")        
         wf = wave.open(filename, 'rb')
         p = self.pyaudio
         stream = p.open(format=p.get_format_from_width(wf.getsampwidth()),
@@ -47,25 +74,25 @@ class DefaultTTSOutput(TTSOutput):
                         output=True)
 
         # Read data in chunks
-        chunk = 1024
-        data = wf.readframes(chunk)
+        chunk = 2048
+
         # Play the audio data
         self.stop_flag.clear()
-        while data:
+        while             data := wf.readframes(chunk):
             if self.stop_flag.isSet():
                 break
             stream.write(data)
-            data = wf.readframes(chunk)
 
-        # Close the stream and PyAudio object
         stream.stop_stream()
         stream.close()
 
     def stop(self) -> None:
         """Instantly interrupts and stops all playback."""
         self.stop_flag.set()
+        self._queue.queue.clear() # yes
 
     def shutdown(self) -> None:
+        self.stop()
         super().shutdown()
         
 class WebsockTTSOutput(TTSOutput):
@@ -121,6 +148,11 @@ class WebsockTTSOutput(TTSOutput):
         
 
 
+    def enqueue(self, filename: str, volume: float) -> None:
+        #FIXME: not implemented yet
+        pass
+        
+
     def play(self, filename: str, volume: float = 1.0) -> None:
         from websockets import ConnectionClosedError
         printerr("[WEBSOCK] Playing with " + str(len(self.clients)) + " clients.")
@@ -154,3 +186,5 @@ class WebsockTTSOutput(TTSOutput):
     def shutdown(self) -> None:
         self.stop_server()
         super().shutdown()
+
+
