@@ -49,7 +49,10 @@ prog = TTSState(args)
 output_module = initOutputMethod(prog.args.output_method, prog.args)
 tts = initTTS(prog.args.model, config=vars(prog.args))
 # we have to put something on the message queue that signals EOF but isn't actually EOF
+# the tokens are only for the msg_queue, and can on principle never be a user request, since we strip leading and trailing whitespace
 eof_token = "  <EOF>  "
+silence_token = "  <silence>  "
+# thisis different from e.g. <clear>, which is currently the only special string that might actullay be user input. oh well
 
 # list voices if requested
 if args.voices:
@@ -83,6 +86,8 @@ def input_loop():
                     msg_queue.queue.clear()
                 prog.clearRetries()
                 continue
+            elif w.strip() == "":
+                msg_queue.put(silence_token)
             elif w.startswith("/"):
                 vs = w[1:].split(" ")
                 option = vs[0]
@@ -140,6 +145,10 @@ while True:
             if rawmsg == eof_token:
                 done.set()
                 continue
+            elif rawmsg == silence_token:
+                if not(prog.args.quiet):
+                    output_module.enqueue(prog.silence_filename())
+                continue
     except Empty:
         # timeout was hit
         continue
@@ -179,8 +188,7 @@ while True:
 
     # queue and play
     output_module.enqueue(newfilename, volume=prog.args.volume)
-    # this short pause makes everything a little smoother
-    output_module.enqueue(prog.silence_filename())
+
     
 
     
