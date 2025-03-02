@@ -179,6 +179,7 @@ while True:
     newfilename = tempfile.mkstemp(suffix=".wav")[1]
     shutil.copy(output_file.name, newfilename)
     output_module.enqueue(newfilename, volume=prog.args.volume)
+    time.sleep(60)
 
     
 prog.cleanup()

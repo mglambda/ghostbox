@@ -161,7 +161,6 @@ class ZonosBackend(TTSBackend):
         codes = self._model.generate(conditioning)
         wavs = self._model.autoencoder.decode(codes).cpu()
         torchaudio.save(file_path, wavs[0], self._model.autoencoder.sampling_rate)
-        return waves
         
     def split_into_sentences(self, text:str) -> List[str]:
         ws = super().split_into_sentences(text)
