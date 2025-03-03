@@ -16,7 +16,7 @@ Ghostbox was made to be blind-accessible, and is fully compatible with any scree
  - Grammars to arbitrarily restrict token output 
  - TTS (text-to-speech) with various backends, including Zonos, Kokoro and Amazon Polli, using ghostbox-tts.
  - Token streaming
- - Model hyperparameter control (temperature, top p, etc.), including with config-files
+ - Model Sampling parameter control (temperature, top p, etc.), including with config-files
  - small web ui with --http on localhost:5050
  - Simple design. By default, ghostbox let's you just send raw text to your LLM, and returns the generated output. This is great if you want to learn about proper prompting, which was part of my motivation for making this.
 

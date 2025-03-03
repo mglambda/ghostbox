@@ -6,50 +6,70 @@ from ghostbox.util import *
 from ghostbox.definitions import *
 from ghostbox.streaming import *
 
-# Server request parameters
-# defined here for convenience, and as reference. These parameters should be handled by the generate method as payload.
-# note that these are based on the parameters for the llama.cpp server. Since ghostbox was developed with llama.cpp as its main backend, these serve as the default and
-#  reference. Other backends need to translate these to their respective parameters if necessary.
-default_params = {
-    "repeat_penalty": 1.1,
-    "repeat_last_n" : 64,
-    "penalize_nl" : True,
-    "presence_penalty" : 0.0,
-    "frequency_penalty" : 0.0,
-#    "penalty_prompt" : "", # they want this to be 'null'??
-    "mirostat" : 0, # 0=disabled, 1= mirostat, 2=mirostat 2.0
-    "mirostat_tau" : 5.0,
-    "temperature": 0.7,
-    "top_p": 0.92,
-    "top_k": 0,
-    "min_p" : 0.05,
-    "typical_p": 1.0,
-    "tfs_z": 1,
+# this list is based on the llamacpp server. IMO most other backends are subsets of this.
+_sampling_parameter_dict = [
+    {"name": "temperature", "description": "Adjust the randomness of the generated text.", "default_value": 0.8},
+    {"name": "dynatemp_range", "description": "Dynamic temperature range. The final temperature will be in the range of `[temperature - dynatemp_range; temperature + dynatemp_range]`", "default_value": 0.0},
+    {"name": "dynatemp_exponent", "description": "Dynamic temperature exponent.", "default_value": 1.0},
+    {"name": "top_k", "description": "Limit the next token selection to the K most probable tokens.", "default_value": 40},
+    {"name": "top_p", "description": "Limit the next token selection to a subset of tokens with a cumulative probability above a threshold P.", "default_value": 0.95},
+    {"name": "min_p", "description": "The minimum probability for a token to be considered, relative to the probability of the most likely token.", "default_value": 0.05},
+# we rename this one     
+#    {"name": "n_predict", "description": "Set the maximum number of tokens to predict when generating text. **Note:** May exceed the set limit slightly if the last token is a partial multibyte character. When 0, no tokens will be generated but the prompt is evaluated into the cache.", "default_value": -1},
+{"name": "max_length", "description": "Set the maximum number of tokens to predict when generating text. **Note:** May exceed the set limit slightly if the last token is a partial multibyte character. When 0, no tokens will be generated but the prompt is evaluated into the cache.", "default_value": -1},    
+    {"name": "n_indent", "description": "Specify the minimum line indentation for the generated text in number of whitespace characters. Useful for code completion tasks.", "default_value": 0},
+    {"name": "n_keep", "description": "Specify the number of tokens from the prompt to retain when the context size is exceeded and tokens need to be discarded. The number excludes the BOS token.", "default_value": 0},
+#    {"name": "stream", "description": "Allows receiving each predicted token in real-time instead of waiting for the completion to finish (uses a different response format). To enable this, set to `true`.", "default_value": False},
+    {"name": "stop", "description": "Specify a JSON array of stopping strings. These words will not be included in the completion, so make sure to add them to the prompt for the next iteration.", "default_value": []},
+    {"name": "typical_p", "description": "Enable locally typical sampling with parameter p.", "default_value": 1.0},
+    {"name": "repeat_penalty", "description": "Control the repetition of token sequences in the generated text.", "default_value": 1.1},
+    {"name": "repeat_last_n", "description": "Last n tokens to consider for penalizing repetition.", "default_value": 64},
+    {"name": "presence_penalty", "description": "Repeat alpha presence penalty.", "default_value": 0.0},
+    {"name": "frequency_penalty", "description": "Repeat alpha frequency penalty.", "default_value": 0.0},
+    {"name": "dry_multiplier", "description": "Set the DRY (Don't Repeat Yourself) repetition penalty multiplier.", "default_value": 0.0},
+    {"name": "dry_base", "description": "Set the DRY repetition penalty base value.", "default_value": 1.75},
+    {"name": "dry_allowed_length", "description": "Tokens that extend repetition beyond this receive exponentially increasing penalty: multiplier * base ^ (length of repeating sequence before token - allowed length).", "default_value": 2},
+    {"name": "dry_penalty_last_n", "description": "How many tokens to scan for repetitions.", "default_value": -1},
+    {"name": "dry_sequence_breakers", "description": "Specify an array of sequence breakers for DRY sampling. Only a JSON array of strings is accepted.", "default_value": ['\n', ':', '"', '*']},
+    {"name": "xtc_probability", "description": "Set the chance for token removal via XTC sampler.", "default_value": 0.0},
+    {"name": "xtc_threshold", "description": "Set a minimum probability threshold for tokens to be removed via XTC sampler.", "default_value": 0.1},
+    {"name": "mirostat", "description": "Enable Mirostat sampling, controlling perplexity during text generation.", "default_value": 0},
+    {"name": "mirostat_tau", "description": "Set the Mirostat target entropy, parameter tau.", "default_value": 5.0},
+    {"name": "mirostat_eta", "description": "Set the Mirostat learning rate, parameter eta.", "default_value": 0.1},
+    {"name": "grammar", "description": "Set grammar for grammar-based sampling.", "default_value": None},
+    {"name": "json_schema", "description": "Set a JSON schema for grammar-based sampling (e.g. `{\"items\": {\"type\": \"string\"}, \"minItems\": 10, \"maxItems\": 100}` of a list of strings, or `{}` for any JSON). See [tests](../../tests/test-json-schema-to-grammar.cpp) for supported features.", "default_value": None},
+    {"name": "seed", "description": "Set the random number generator (RNG) seed.", "default_value": -1},
+    {"name": "ignore_eos", "description": "Ignore end of stream token and continue generating.", "default_value": False},
+    {"name": "logit_bias", "description": "Modify the likelihood of a token appearing in the generated text completion.", "default_value": []},
+    {"name": "n_probs", "description": "If greater than 0, the response also contains the probabilities of top N tokens for each generated token given the sampling settings.", "default_value": 0},
+    {"name": "min_keep", "description": "If greater than 0, force samplers to return N possible tokens at minimum.", "default_value": 0},
+    {"name": "t_max_predict_ms", "description": "Set a time limit in milliseconds for the prediction (a.k.a. text-generation) phase.", "default_value": 0},
+    {"name": "image_data", "description": "An array of objects to hold base64-encoded image `data` and its `id`s to be reference in `prompt`.", "default_value": []},
+    {"name": "id_slot", "description": "Assign the completion task to an specific slot. If is -1 the task will be assigned to a Idle slot.", "default_value": -1},
+    {"name": "cache_prompt", "description": "Re-use KV cache from a previous request if possible.", "default_value": True},
+    {"name": "return_tokens", "description": "Return the raw generated token ids in the `tokens` field.", "default_value": False},
+    {"name": "samplers", "description": "The order the samplers should be applied in.", "default_value": ["dry", "top_k", "typ_p", "top_p", "min_p", "xtc", "temperature"]},
+    {"name": "timings_per_token", "description": "Include prompt processing and text generation speed information in each response.", "default_value": False},
+    {"name": "post_sampling_probs", "description": "Returns the probabilities of top `n_probs` tokens after applying sampling chain.", "default_value": None},
+    {"name": "response_fields", "description": "A list of response fields, for example: `\"response_fields\": [\"content\", \"generation_settings/n_predict\"]`.", "default_value": None},
+    {"name": "lora", "description": "A list of LoRA adapters to be applied to this specific request.", "default_value": []},
+]
 
-    # this one is an issue, koboldcpp has this    
-    # see also https://github.com/ggerganov/llama.cpp/discussions/3914    
-    #"sampler_order": [6, 0, 1, 3, 4, 2, 5],    
-    "n_keep" : 0,
-    "stop" : [],
-    "tfz" : 1.0,
-    "seed" : -1,
-    "ignore_eos" : False,
-    "logit_bias" : [],
-    "n_probs" : 0,
-    "slot_id" : -1, # this is very llama specific
+## Construct the dictionary of Pydantic objects
+sampling_parameters = {hp["name"]: SamplingParameterSpec(**hp) for hp in _sampling_parameter_dict}
+# this is for fast copy and send to backend
+default_params = {hp.name: hp.default_value for hp in sampling_parameters.values()}
 
-    # sort of content-y parameters
-    #"system_prompt" : "", # this seems to crash llama    
-    "prompt" : "",
-    #"stream" : False, #temporarily commented because it conflicts with argparse definition
-    "grammar" : "",
-    "image_data" : [],
-    "n_predict" : 0,
-    #"n_ctx" : 0, # this one seems to have no effect on llama
-    # update: I think n_ctx has been renamed to max_tokens - they aren't documenting this.
-    #  Anyhow, max_tokens would match the OAI API.
-    "cache_prompt" : True
-}
+# some reference lists for convenience
+supported_parameters = {p:sampling_parameters[p] for p in "temperature frequency_penalty presence_penalty max_length repeat_penalty top_p stop".split(" ")}
+sometimes_parameters = {p:sampling_parameters[p] for p in "xtc_probability dry_multiplier min_p mirostat mirostat_tau mirostat_eta".split(" ")}
+sampling_parameter_tags = {p.name : ArgumentTag(name=p.name,type=ArgumentType.Plumbing, group=ArgumentGroup.SamplingParameters, is_option=True, default_value=p.default_value,help=p.description) for p in sampling_parameters.values()}
+# some special ones
+for p in supported_parameters.keys():
+    sampling_parameter_tags[p].very_important = True
+
+sampling_parameter_tags["temperature"].type = ArgumentType.Porcelain
+sampling_parameter_tags["top_p"].type = ArgumentType.Porcelain
 
 class Timings(BaseModel):
     """Performance statistics for LLM backends.
@@ -145,6 +165,13 @@ class AIBackend(ABC):
         Otherwise, if called without the json parameter, timings for the last request are returned.
         The method may return none if there hasn't been a request yet to determine timings for and no json is provided."""
         pass
+
+    @abstractmethod
+
+    def sampling_parameters(self) -> Dict[str, SamplingParameterSpec]:
+        """Returns a dictionary of sampling_parameters that are supported by the model.
+        The dictionary has the parameter names as keys. If a sampling_parameter is present in the dict, it is expected to be supported by the various generation methods."""
+        pass
     
 class LlamaCPPBackend(AIBackend):
     """Bindings for the formidable Llama.cpp based llama-server program."""
@@ -168,8 +195,9 @@ class LlamaCPPBackend(AIBackend):
     
     def generate(self, payload):
         super().generate(payload)
-        # dict is llama format by default, so we don't need to do anything here
-        return requests.post(self.endpoint + "/completion", json=payload)
+        # adjust slightly for our renames
+        llama_paylod = payload | {"n_predict":payload["max_length"]}
+        return requests.post(self.endpoint + "/completion", json=llama_payload)
 
     def handleGenerateResult(self, result):
         if result.status_code != 200:
@@ -188,7 +216,8 @@ class LlamaCPPBackend(AIBackend):
 
     def generateStreaming(self, payload, callback=lambda w: print(w)):
         self.stream_done.clear()
-        r = streamPrompt(self._makeLlamaCallback(callback), self.stream_done, self.endpoint + "/completion", payload)
+        llama_paylod = payload | {"n_predict":payload["max_length"]}        
+        r = streamPrompt(self._makeLlamaCallback(callback), self.stream_done, self.endpoint + "/completion", llama_payload)
         if r.status_code != 200:
             self.last_error = "streaming HTTP request with status code " + str(r.status_code)
             self.stream_done.set()
@@ -229,12 +258,11 @@ class LlamaCPPBackend(AIBackend):
                 cached_n=json["tokens_cached"],
                 original_timings=time
                 )
-                
-                
-                
-                
-                
-    
+
+    def sampling_parameters(self) -> Dict[str, SamplingParameterSpec]:
+        # llamacpp params are the default
+        return sampling_parameters
+        
 class OpenAILegacyBackend(AIBackend):
     """Backend for the official OpenAI API. The legacy version routes to /v1/completions, instead of the regular /v1/chat/completion."""
     
@@ -263,7 +291,7 @@ class OpenAILegacyBackend(AIBackend):
         data = {
             "model": payload.get("model", "text-davinci-003"),
             "prompt": payload["prompt"],
-            "max_tokens": payload.get("n_predict", 150),
+            "max_tokens": payload.get("max_length", 150),
             "temperature": payload.get("temperature", 0.7),
             "top_p": payload.get("top_p", 1.0),
             "frequency_penalty": payload.get("frequency_penalty", 0.0),
@@ -290,7 +318,7 @@ class OpenAILegacyBackend(AIBackend):
         data = {
             "model": payload.get("model", "text-davinci-003"),
             "prompt": payload["prompt"],
-            "max_tokens": payload.get("n_predict", 150),
+            "max_tokens": payload.get("max_length", 150),
             "temperature": payload.get("temperature", 0.7),
             "top_p": payload.get("top_p", 1.0),
             "frequency_penalty": payload.get("frequency_penalty", 0.0),
@@ -338,7 +366,14 @@ class OpenAILegacyBackend(AIBackend):
     def timings(self) -> Optional[Timings]:
         # FIXME: not implemented yet
         return None
-    
+
+    def sampling_parameters(self) -> Dict[str, SamplingParameterSpec]:
+        # restricted set
+        # i just can't be bothered to test this
+        supported = supported_parameters.keys()
+        return {hp.name:hp for hp in sampling_parameters.values()
+                if hp.name in supported}
+        
 class OpenAIBackend(AIBackend):
     """Backend for the official OpenAI API. This is used for the company of Altman et al, but also serves as a general purpose API suported by various backends, including llama.cpp, llama-box, and many others."""
     
@@ -346,6 +381,7 @@ class OpenAIBackend(AIBackend):
         super().__init__(endpoint)
         self.api_key = api_key
         self._lastResult = None
+        self._memoized_params = None
 
     def getLastError(self):
         return super().getLastError()
@@ -367,7 +403,7 @@ class OpenAIBackend(AIBackend):
         data = {
             "model": payload.get("model", "text-davinci-003"),
             "prompt": payload["prompt"],
-            "max_tokens": payload.get("n_predict", 150), # FIXME: this is changed in the API for o1 and up
+            "max_tokens": payload.get("max_length", 150), # FIXME: this is changed in the API for o1 and up
             "temperature": payload.get("temperature", 0.7),
             "top_p": payload.get("top_p", 1.0),
             "frequency_penalty": payload.get("frequency_penalty", 0.0),
@@ -396,7 +432,7 @@ class OpenAIBackend(AIBackend):
         }
         data = {
             "model": payload.get("model", "gpt-3"),
-            "max_tokens": payload.get("n_predict", 150),
+            "max_tokens": payload.get("max_length", 150),
             "temperature": payload.get("temperature", 0.7),
             "top_p": payload.get("top_p", 1.0),
             "frequency_penalty": payload.get("frequency_penalty", 0.0),
@@ -500,4 +536,22 @@ class OpenAIBackend(AIBackend):
                 cached_n=None,
                 original_timings=time
                 )
+
+    def sampling_parameters(self) -> Dict[str, SamplingParameterSpec]:
+        # I don't like doing this everytime
+        if self._memoized_params is not None:
+            return self._memoized_params
+        
+        # this is tricky because it really depends on the actual backend.
+        # the openai class really is not specific enough for this
+        supported = supported_parameters.keys()
+        sometimes = sometimes_parameters.keys()
+        d = {hp.name:hp for hp in sampling_parameters.values()
+                if hp.name in supported}
+        for param in sometimes:
+            sp = sampling_parameters[param]
+            d[param] = SamplingParameterSpec(name=sp.name, default_value=sp.default_value, description=sp.description + "\nNote: May not be supported in this backend. For full support, try out llama.cpp https://github.com/ggml-org/llama.cpp") 
+
+            self._memoized_params = d
+            return d
         

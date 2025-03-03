@@ -18,7 +18,7 @@ PromptFormatTemplateSpecialValue = Enum("PromptFormatTemplateSpecialValue", "aut
 
 
 ArgumentType = Enum("ArgumentType", "Porcelain Plumbing")
-ArgumentGroup = Enum("ArgumentGroup", "General Generation Interface Characters Templates TTS Audio Images Tools Backend Hyperparameters LlamaCPP OpenAI")
+ArgumentGroup = Enum("ArgumentGroup", "General Generation Interface Characters Templates TTS Audio Images Tools Backend SamplingParameters LlamaCPP OpenAI")
 
 class ArgumentTag(BaseModel):
     """Metadata associated with a command line argument."""
@@ -37,7 +37,13 @@ class ArgumentTag(BaseModel):
 
     # basically, if its a command or option
     is_option: bool = True
+    default_value: Optional[Any] = None
+    
+    # same help that is printed in terminal on --help
+    help: str = ""
 
+
+    
     def show_type(self) -> str:
         if self.is_option:
             return "It is a " + self.type.name.lower() + " option in the " + self.group.name.lower() + " group."
@@ -49,9 +55,15 @@ class ArgumentTag(BaseModel):
         w += "\nYou can set it with `/set " + self.name + " VALUE` or provide it as a command line parameter with `--" + self.name + "`"
         return w
         
-    # same help that is printed in terminal on --help
-    help: str = ""
     
+class SamplingParameterSpec(BaseModel):
+    """Sampling parameters can be provided to backends to influence a model's inference behaviour.
+    Most commonly this is temperature, presence penalty etc. However, here we take sampling parameter in the broadest sense, including samplers, CFG and control vectors.
+    Note that this class provides only the specification of a sampling_parameter. This is for documentation and to keep track of which backend supports which parameters."""
+
+    name: str
+    description: str
+    default_value: Any
     
 api_default_options = {
     "color" : False,

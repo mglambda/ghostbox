@@ -98,6 +98,8 @@ def makeTaggedParser(default_params) -> TaggedArgumentParser:
                         tag=mktag(type=AT.Plumbing, group=AG.Templates, motd=True))
     parser.add_argument("--warn_trailing_space", action=argparse.BooleanOptionalAction, default=True, help="Warn if the prompt that is sent to the backend ends on a space. This can cause e.g. excessive emoticon use by the model.",
                         tag=mktag(type=AT.Plumbing, group=AG.Generation))
+    parser.add_argument("--warn_unsupported_sampling_parameter", action=argparse.BooleanOptionalAction, default=True, help="Warn if you have set an option that is usually considered a sampling parameter, but happens to be not supported by the chose nbackend.",
+                        tag=mktag(type=AT.Plumbing, group=AG.SamplingParameters))
     parser.add_argument("--warn_audio_activation_phrase", action=argparse.BooleanOptionalAction, default=True, help="Warn if audio is being transcribed, but no activation phrase is found. Normally this only will warn once. Set to -1 if you want to be warned every time.",
                         tag=mktag(type=AT.Plumbing, group=AG.Audio))
     parser.add_argument("--warn_hint", action=argparse.BooleanOptionalAction, default=True, help="Warn if you have a hint set.",
@@ -210,13 +212,14 @@ def makeTaggedParser(default_params) -> TaggedArgumentParser:
                         tag=mktag(type=AT.Porcelain, group=AG.Interface, motd=True))
 
 
-    for (param, value) in default_params.items():
+    # don't show all possible parameters on command line, but do show some
+    params = backends.supported_parameters | backends.sometimes_parameters
+    for name, param in params.items():
         # we need to avoid some redefinitions
-        if param in "stop".split(" "):
+        if name in "stop max_length".split(" "):
             continue
-        
-        parser.add_argument("--" + param, type=type(value), default=value, help="Passed on to the backend. Change with /set " + param + ".",
-                            tag=mktag(type=AT.Plumbing, group=AG.Hyperparameters))
+        parser.add_argument("--" + param.name, type=type(param.default_value), default=param.default_value, help=param.description,
+                            tag=mktag(type=AT.Plumbing, group=AG.SamplingParameters))
     return parser
 
 

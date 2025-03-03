@@ -62,7 +62,8 @@ List help on various topics. Use -v to see even more information."""
             w += start + command_name
 
         w += "\n\n[Options]\nSet these with '/set OPTIONNAME VALUE', where value is a valid python expression.\n List options and their values with /ls [OPTIONNAME].\n"
-        options = sorted(prog.tags.items(), key=lambda item: (item[1].group.name, item[1].name))
+        tags = prog.getTags()
+        options = sorted(tags.items(), key=lambda item: (item[1].group.name, item[1].name))
         last_group = ""
         for i in range(len(options)):
             option, tag = list(options)[i]
@@ -78,10 +79,12 @@ List help on various topics. Use -v to see even more information."""
         return w
 
     topic = argv[0]
-    if topic in prog.tags:
-        tag = prog.tags[topic]
+    if topic in prog.getTags():
+        tag = prog.getTags()[topic]
         if tag.is_option:
-            w += topic + "\n" + "\n".join(textwrap.wrap(tag.help)) + "\n" + "\n".join(textwrap.wrap(tag.show_description())) + "\nIts current value is " + str(prog.getOption(topic)) 
+            w += topic + "\n" + "\n".join(textwrap.wrap(tag.help)) + "\n" + "\n".join(textwrap.wrap(tag.show_description())) + "\nIts current value is " + str(prog.getOption(topic)) + "."
+            if tag.default_value is not None:
+                w += " Its default value is " + str(tag.default_value)
             if tag.service:
                 w += "\nSetting it to True will start the corresponding service."
     else:
@@ -225,6 +228,9 @@ class Plumbing(object):
         self.running = True
 
 
+    def getTags(self):
+        return self.tags | {param.name : param for param in backends.sampling_parameter_tags.values() if param.name in self.getBackend().sampling_parameters().keys()}
+        
     def initializeBackend(self, backend, endpoint):
         api_key = self.getOption("openai_api_key")        
         if backend == LLMBackend.llamacpp.name:
@@ -249,21 +255,22 @@ class Plumbing(object):
         return self.backend
     
     def makeGeneratePayload(self, text):
-        # FIXME: make backends export static method that returns default params
-        d = backends.default_params.copy()
-        for key in d.keys():
-            if key in self.options:
-                d[key] = self.getOption(key)
+        d = {}
+
+        # gather set sampling parameters and warn user for unsupported ones
+        all_params = backends.sampling_parameters.keys()
+        supported_params = self.getBackend().sampling_parameters().keys()
+        for param in all_params:
+            if param in self.options:
+                if param not in supported_params:
+                    if self.getOption("warn_unsupported_sampling_parameter"):
+                        printerr("warning: Sampling parameter '" + param + "' is not supported by the " + str(self.getBackend().getName()) + " backend.")
+                    else:
+                        continue
+                else:
+                    d[param] = self.GetOption[param]
         
         d["prompt"] = text
-        # this one is temporarily disabled because of argparse so we have to do it here
-        d["stream"] = self.getOption("stream")
-
-        # these 2 have unintuitive names so we explicitly mention them here
-        #d["n_ctx"] = self.getOption("max_context_length"), # this is sort of undocumented in llama.cpp server
-        #d["max_tokens"] = self.getOption("max_context_length") # was changed recently in llama-server, now also complies with OAI aAPI
-        d["n_predict"] = self.getOption("max_length")
-        
         if self.getOption("backend") == LLMBackend.generic.name or self.getOption("backend") == LLMBackend.openai.name:
             # openai chat/completion needs the system prompt and story
             d["system"] = self.session.getSystem()
