@@ -105,13 +105,34 @@ class WebsockTTSOutput(TTSOutput):
         self.go_flag = threading.Event()
         self.go_flag.set()
         self.server_running = threading.Event()
+        self._queue = Queue()
         self.host = host
         self.port = port
+        
+        # start websock server
         self.server_thread = threading.Thread(target=self._run_server)
         self.server_thread.daemon = True
         self.server_thread.start()
         printerr("WebSocket TTS output initialized.")
 
+
+        def play_worker():
+            while self.server_running.isSet() or not(self._queue.empty()):
+                # don't remove the loop or timeout or else thread will not be terminated through signals
+                try:
+                    filename = self._queue.get(timeout=1)
+                except Empty:
+                    continue
+             
+                # _play will block until stop is called or playback finishes
+                self._play(filename)
+
+
+        # start queue worker
+        self.worker_thread = threading.Thread(target=play_worker)
+        # deliberately not a daemon so we deal with EOF properly
+        self.worker_thread.start()
+        
     def _run_server(self):
         import websockets
         import websockets.sync.server as WS
@@ -144,8 +165,14 @@ class WebsockTTSOutput(TTSOutput):
     def stop_server(self) -> None:
         self.server_running.clear()
         printerr("Halting websocket server.")
-        
-    def enqueue(self, filename: str, volume: float = 1.0) -> None:
+
+
+    def enqueue(self, filename: str, volume: float= 1.0) -> None:
+        """Send a wave file   over the network, or enqueue it to be sent if busy.
+        This method is non-blocking."""
+        self._queue.put(filename)
+    def _play(self, filename: str, volume: float = 1.0) -> None:
+        """Sends a wave file ofer the network to all connected sockets."""
         from websockets import ConnectionClosedError
         printerr("[WEBSOCK] Playing with " + str(len(self.clients)) + " clients.")
 
@@ -169,6 +196,8 @@ class WebsockTTSOutput(TTSOutput):
             time.sleep(0.1)
 
     def stop(self) -> None:
+        """Instantly stop playback and clears the queue."""
+        self._queue.queue.clear()        
         self.stop_flag.set()
         self.go_flag.clear()
         for client in self.clients:
@@ -176,7 +205,11 @@ class WebsockTTSOutput(TTSOutput):
         printerr("[WEBSOCK] TTS output stopped.")        
 
     def shutdown(self) -> None:
-        self.stop_server()
+        """Shuts down the output module gracefully, waiting for playback/sending of all enqueue files to be finished."""
+        while not(self._queue.empty()):
+            time.sleep(0.1)
+        self.stop()
+        self._stop_server()
         super().shutdown()
 
 
