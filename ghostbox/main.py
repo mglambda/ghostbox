@@ -621,7 +621,7 @@ class Plumbing(object):
                 self.setOption("tts_output_method", TTSOutputMethod.websock.name)
             else:
                 self.setOption("tts_output_method", TTSOutputMethod.default.name)
-            if differs:
+            if differs and self.getOption("tts"):
                 self.tts_flag = True #restart TTS
         elif name == "max_context_length":
             self._dirtyContextLlama = False
@@ -827,8 +827,8 @@ class Plumbing(object):
         signal.signal(signal.SIGINT, self._ctPauseHandler)
 
     def stopImageWatch(self):
-        printerr("Stopping watching of images.")
         if self.image_watch:
+            printerr("Stopping watching of images.")            
             self.image_watch.stop()
         
     def stopAudioTranscription(self):
@@ -1270,7 +1270,7 @@ returns - A string ready to be sent to the backend, including the full conversat
     def _initializeHTTP(self):
         """Spawns a simple web server on its own thread.
         This will only serve the html/ folder included in ghostbox, along with the js files. This includes a minimal UI, and capabilities for streaming TTS audio and transcribing from user microphone input.
-        Note: By default, this method will override terminal, audio and tts websock addresses. Use --no-http_override to supress this behaviour."""
+        Note: By default, this method will override terminal, audio and tts websock addresses. Use --no-http_override to suppress this behaviour."""
         import http.server
         import socketserver
         host, port = self.getOption("http_host"), self.getOption("http_port")
