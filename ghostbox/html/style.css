@@ -61,7 +61,6 @@ we leave this to the <code> tag
     font-size: 0.8em;
 }
 .message {
-    font-family: 'Monaco', 'Lucida Console', 'Ubuntu Mono', 'Fira Code', monospace;
     opacity: 0;
     transition: opacity 1s ease-in-out;
 }
@@ -70,9 +69,21 @@ we leave this to the <code> tag
     opacity: 1;
 }
 
+
 .user-message {
     margin-left: 5%;
 }
+
+.console-message {
+    opacity: 0;
+    transition: opacity 1s ease-in-out;    
+}
+
+.console-message.show {
+    opacity: 1;
+}
+
+
 
 #messages {
     white-space: pre-line; /* Allow wrapping within the div element */

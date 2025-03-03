@@ -84,7 +84,13 @@ function initTerminalSocket() {
 
     terminalSocket.onmessage = (event) => {
         const message = event.data;
-        addMessageToPage(message);
+        const stderrToken = "[|STDER|]:";
+        const l = stderrToken.length;
+        if (message.startsWith(stderrToken)) {
+            addMessageToConsoleLog(message.substring(l));
+        } else {
+            addMessageToPage(message);
+        }
     };
 
     terminalSocket.onerror = (error) => {
@@ -106,6 +112,22 @@ function addMessageToPage(message) {
     messagesDiv.appendChild(messageElement);
     messageElement.classList.add('show');
     messagesDiv.scrollTop = messagesDiv.scrollHeight; // Scroll to the bottom
+}
+
+function addMessageToConsoleLog(message) {
+    const consoleDiv = document.getElementById('consoleLog');
+    const messageElement = document.createElement('span');
+    messageElement.className = 'console-message';
+
+    // Replace newlines with <br> tags
+    // and replace ansi codes with corresponding html tags
+    const formattedMessage = ansiToHTML(message.replace(/\n/g, '<br>'));
+
+    // Set the inner HTML to handle the <br> tags
+    messageElement.innerHTML = formattedMessage;
+    consoleDiv.appendChild(messageElement);
+    messageElement.classList.add('show');
+    consoleDiv.scrollTop = consoleDiv.scrollHeight; // Scroll to the bottom
 }
 
 

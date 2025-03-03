@@ -32,7 +32,11 @@ def stringToStyle(w):
 def wrapColorStyle(w, color, style):
     return style + color + w + Fore.RESET + Style.RESET_ALL
 
+printerr_callback = None
+
+# this can be used to modify printerr behaviour. It can be a function that accepts one argument -> the to be printed string
 def printerr(w, prefix=getErrorPrefix(), color=Fore.GREEN):
+    
     if w == "":
         return
 
@@ -44,8 +48,11 @@ def printerr(w, prefix=getErrorPrefix(), color=Fore.GREEN):
     
     # prepend all lines with prefix
     ws = w.split("\n")
-    w = ("\n" + prefix).join(ws)
-    print(color + prefix + w + Fore.RESET, file=sys.stderr)
+    new_w = ("\n" + prefix).join(ws)
+    formatted_w = color + prefix + new_w + Fore.RESET
+    print(formatted_w, file=sys.stderr)
+    if printerr_callback is not None:
+        printerr_callback(color + w + Fore.RESET)
     
 
 def getArgument(argname, argv):

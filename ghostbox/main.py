@@ -10,6 +10,7 @@ from ghostbox.commands import *
 from ghostbox.autoimage import *
 from ghostbox.output_formatter import *
 from ghostbox.util import *
+from ghostbox import util
 from ghostbox import agency
 from ghostbox._argparse import *
 from ghostbox import streaming
@@ -158,6 +159,11 @@ mode_formatters = {
 
 class Plumbing(object):
     def __init__(self, options={}, initial_cli_prompt="", tags={}):
+        self._printerr_buffer = []
+        self._initial_printerr_callback = lambda w: self._printerr_buffer.append(w)
+        util.printerr_callback = self._initial_printerr_callback
+        # this is for the websock clients
+        self.stderr_token = "[|STDER|]:"
         self._frozen = False
         self._freeze_queue = Queue()        
         self.options = options
@@ -1312,11 +1318,17 @@ returns - A string ready to be sent to the backend, including the full conversat
         self.websock_regpl_thread = threading.Thread(target=regpl, args=[self, self._websockPopMsg], daemon=True)
         self.websock_regpl_thread.start()
 
+        #handle printerr
+        # FIXME: currently, we are not buffering while we send to a websock server, oh well
+        util.printerr_callback = lambda w: self.websockSend(self.stderr_token + w)
+       
+
     def stopWebsock(self):
         printerr("Stopping websocket server.") 
         self.websock_running.clear()
         self.websock_clients = []
-
+        self._printerr_buffer = ["Resetting stderr buffer."]        
+        util.printerr_callback = self._initial_printerr_callback
     def websockSend(self, msg: str) -> None:
         from websockets import ConnectionClosedError
         for i in range(len(self.websock_clients)):
@@ -1349,6 +1361,14 @@ returns - A string ready to be sent to the backend, including the full conversat
         def handler(websocket):
             remote_address = websocket.remote_address
             #printerr("[WEBSOCK] Got connection from " + str(remote_address))
+            # update the new client with console log
+            for msg in self._printerr_buffer:
+                try:
+                    websocket.send(self.stderr_token + msg)
+                except ConnectionClosedError:
+                    printerr("error: Connection with " + str(remote_address) + " closed during initial history update.")
+                    return
+
             self.websock_clients.append(websocket)
             try:
                 while self.websock_server_running.isSet():
