@@ -10,7 +10,7 @@
     <div class="container">
       <div class="main-content">
         <main>
-          <h1>Chat</h1>
+          <h1>Chat History</h1>
           <div id="messages"></div>
         </main>
         <hr>
@@ -20,19 +20,21 @@
       <div class="sidebar">
         <div class="nav-content"
           <nav>
-            <h3>Microphone</h3>
+            <h5>Microphone</h5>
             <button tabindex="10" id="startBtn">Start Recording</button>
             <button tabindex="11" id="stopBtn" disabled>Stop Recording</button>
-            <h3>Text-To-Speech</h3>
+            <h5>Text-To-Speech</h5>
             <button tabindex="20" id="unmuteTTSBtn">Unmute TTS</button>
-            <h3>UI Style</h3>
+            <h5>UI Style</h5>
             <select tabindex="30" id="stylesheetSelector">
             </select>
           </nav>
           </div>
         <div class="console-content">
-          <h2>Console Log</h2>
+          <h4>Console Log</h4>
+          <code>
           <div id="consoleLog"></div>
+          </code>
         </div>
       </div>
     </div>
