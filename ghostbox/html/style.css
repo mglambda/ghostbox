@@ -70,9 +70,9 @@ body, html {
 }
 
 #messages {
-    white-space: pre-wrap; /* Allow wrapping within the div element */
-    word-wrap: break-word; /* Break long words */
-    overflow-y: scroll; /* Enable vertical scrolling */
+    white-space: pre-line; /* Allow wrapping within the div element */
+    word-wrap: normal; /* Break long words */
+    overflow-y: auto; /* Enable vertical scrolling */
     height: 80%;
     width: 100%;
 }
