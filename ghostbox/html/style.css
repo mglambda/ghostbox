@@ -1,0 +1,90 @@
+
+body, html {
+    margin: 0;
+    padding: 0;
+    height: 100%;
+    display: flex;
+}
+
+
+/* contains main chat, nav elements, and console */
+.container {
+    display: flex;
+    position: relative;            
+    height: 100vh;
+    width: 100vw;
+    margin: 0;
+    padding: 0;            
+}
+
+/* contains ai chat and textarea input, as opposed to <main>, which only has messages etc. */
+.main-content {
+    width: 80%;
+    height: 100%;
+    overflow-y: auto;
+    position: relative;
+}
+
+
+/* contains nav and console */
+.sidebar {
+    display: flex;
+    flex-direction: column;
+    position: relative;
+    width: 20%;
+    height: 100%;
+    margin: 0px;
+    padding: 0px;
+}
+
+.nav-content {
+    width: 100%;
+    height: 25%;
+    overflow-y: auto;
+    padding: 10px;
+    box-sizing: border-box;
+}
+
+.console-content {
+    font-family: 'Monaco', 'Lucida Console', 'Ubuntu Mono', 'Fira Code', monospace;
+    font-size: 0.75m;
+    width: 100%;
+    height: 75%;
+    overflow-y: auto;
+    padding: 10px;
+    box-sizing: border-box;
+}
+
+.message {
+    font-family: 'Monaco', 'Lucida Console', 'Ubuntu Mono', 'Fira Code', monospace;
+    opacity: 0;
+    transition: opacity 1s ease-in-out;
+}
+
+.message.show {
+    opacity: 1;
+}
+
+.user-message {
+    margin-left: 5%;
+}
+
+#messages {
+    white-space: pre-wrap; /* Allow wrapping within the div element */
+    word-wrap: break-word; /* Break long words */
+    overflow-y: scroll; /* Enable vertical scrolling */
+    height: 80%;
+    width: 100%;
+}
+
+#commandInput {
+    width: 75%;
+    height: 10%;
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    box-sizing: border-box;
+    padding: 10px;
+}
+

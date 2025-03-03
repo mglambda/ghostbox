@@ -60,15 +60,25 @@ document.addEventListener('DOMContentLoaded', (event) => {
 
     const commandInput = document.getElementById('commandInput');
 
+    function sendCommand(command) {
+        if (command.trim() !== '') {
+            addUserMessageToPage(command);
+            terminalSocket.send(command);                
+        }
+    }
+        
+    document.getElementById('submit_input_button').addEventListener('click', () => {
+        const command = commandInput.value;
+        sendCommand(command);
+        commandInput.value = '';                        
+    });
+                                                                    
     commandInput.addEventListener('keydown', (event) => {
         if (event.ctrlKey && event.key === 'Enter') {
             event.preventDefault();
             const command = commandInput.value;
-            if (command.trim() !== '') {
-                addUserMessageToPage(command);
-                terminalSocket.send(command);
-                commandInput.value = '';
-            }
+            sendCommand(command);
+            commandInput.value = '';                
         }
     });
 });

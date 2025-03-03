@@ -60,12 +60,12 @@ function init_tts_socket () {
 }
 
 document.addEventListener('DOMContentLoaded', (event) => {
-    // Connect to the WebSocket server
-    init_tts_socket();
-
     // Add event listener for the 'Unmute TTS' button
     document.getElementById('unmuteTTSBtn').addEventListener('click', () => {
         if (isMuted) {
+    // Connect to the WebSocket server
+    init_tts_socket();
+
             // Create an AudioContext
             const tts_AudioContext = window.AudioContext || window.webkitAudioContext;
             tts_audioContext = new AudioContext();
