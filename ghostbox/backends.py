@@ -1,6 +1,7 @@
 import time, requests, threading
 from abc import ABC, abstractmethod
 from functools import *
+from pydantic import BaseModel
 from ghostbox.util import *
 from ghostbox.definitions import *
 from ghostbox.streaming import *
@@ -49,6 +50,29 @@ default_params = {
     #  Anyhow, max_tokens would match the OAI API.
     "cache_prompt" : True
 }
+
+class Timings(BaseModel):
+    """Performance statistics for LLM backends.
+Most backends give timing statistics, though the format and particular stats vary. This class unifies the interface and boils it down to only the stats we care about."""
+
+
+    prompt_n: int
+    predicted_n: int
+    cached_n: Optional[int] = None
+    truncated: bool
+    prompt_ms: float
+    predicted_ms: float
+    predicted_per_second: float
+    predicted_per_token_ms: float
+
+    original_timings: Optional[Dict[str, Any]] = {}
+
+    def total_n(self) -> int:
+        return self.prompt_n + self.predicted_n
+
+    def total_ms(self) -> float:
+        return self.prompt_ms + self.predicted_ms
+    
 
 class AIBackend(ABC):
     """Abstract interface to a backend server, like llama.cpp or openai etc. Use the Program.make*Payload methods to make corresponding payloads. All backends must handle those dictionaries, but not all backends may support all features."""
@@ -113,7 +137,14 @@ class AIBackend(ABC):
     def health(self):
         """Returns a string indicating the status of the backend."""
         pass
-    
+
+    @abstractmethod
+    def timings(self, json=None) -> Optional[Timings]:
+        """Returns performance statistics for this backend.
+        The method can take a json parameter, which may be a return value of the getLastJSON method. In this case, timings for that result are returned.
+        Otherwise, if called without the json parameter, timings for the last request are returned.
+        The method may return none if there hasn't been a request yet to determine timings for and no json is provided."""
+        pass
     
 class LlamaCPPBackend(AIBackend):
     """Bindings for the formidable Llama.cpp based llama-server program."""
@@ -182,7 +213,28 @@ class LlamaCPPBackend(AIBackend):
             return "error " + str(r.status_code)
         return r.json()["status"]
 
-
+    def timings(self, json=None) -> Optional[Timings]:
+        if json is None:
+            if (json := self._lastResult) is None:
+                return None
+            time = json["timings"]
+            return Timings(
+                prompt_n= time["prompt_n"],
+                predicted_n = time["predicted_n"],
+                prompt_ms=time["prompt_ms"],
+                predicted_ms=time["predicted_ms"],
+                predicted_per_token_ms=time["predicted_per_token_ms"],
+                predicted_per_second=time["predicted_per_second"],
+                truncated=json["truncated"],
+                cached_n=json["tokens_cached"],
+                original_timings=time
+                )
+                
+                
+                
+                
+                
+    
 class OpenAILegacyBackend(AIBackend):
     """Backend for the official OpenAI API. The legacy version routes to /v1/completions, instead of the regular /v1/chat/completion."""
     
@@ -283,8 +335,10 @@ class OpenAILegacyBackend(AIBackend):
         # OpenAI API does not have a direct health check endpoint
         return "OpenAI API is assumed to be healthy."
     
+    def timings(self) -> Optional[Timings]:
+        # FIXME: not implemented yet
+        return None
     
-
 class OpenAIBackend(AIBackend):
     """Backend for the official OpenAI API. This is used for the company of Altman et al, but also serves as a general purpose API suported by various backends, including llama.cpp, llama-box, and many others."""
     
@@ -347,13 +401,16 @@ class OpenAIBackend(AIBackend):
             "top_p": payload.get("top_p", 1.0),
             "frequency_penalty": payload.get("frequency_penalty", 0.0),
             "presence_penalty": payload.get("presence_penalty", 0.0),
-            "stream": True
+            "stream": True,
+            "stream_options": {"include_usage": True}
         }
 
         # the /V1/chat/completions endpoint expects structured data of user/assistant pairs        
         data |= self._dataFromPayload(payload)
         def openaiCallback(d):
-            maybeChunk = d["choices"][0]["delta"].get("content", None)
+            self._lastResult = d            
+            choice = d["choices"][0]
+            maybeChunk = choice["delta"].get("content", None)
             if maybeChunk is not None:
                 callback(maybeChunk)
             
@@ -426,4 +483,21 @@ class OpenAIBackend(AIBackend):
         # OpenAI API does not have a direct health check endpoint
         return "OpenAI API is assumed to be healthy."
 
-    
+    def timings(self, json=None) -> Optional[Timings]:
+        if json is None:
+            if (json := self._lastResult) is None:
+                return None
+            time = json["timings"]
+            return Timings(
+                prompt_n= time["prompt_n"],
+                predicted_n = time["predicted_n"],
+                prompt_ms=time["prompt_ms"],
+                predicted_ms=time["predicted_ms"],
+                predicted_per_token_ms=time["predicted_per_token_ms"],
+                predicted_per_second=time["predicted_per_second"],
+                # unfortunately openai don't reveal these FIXME: might be able to figure out truncated
+                truncated=False,
+                cached_n=None,
+                original_timings=time
+                )
+        

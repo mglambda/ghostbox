@@ -479,36 +479,29 @@ def debuglast(prog, argv):
 def showTime(prog, argv):
     """
 Show some performance stats for the last request."""
-    r = prog.lastResult
+    r = prog.getBackend().timings()
     if not(r):
         return "No time statistics. Either no request has been sent yet, or the backend doesn't support timing."
-
-    if prog.getOption("backend") != "llamacpp":
-        return "Timings are not implemented yet for this backend."
     
     w = ""
     # timings: {'predicted_ms': 4115.883, 'predicted_n': 300, 'predicted_per_second': 72.88836927580303, 'predicted_per_token_ms': 13.71961, 'prompt_ms': 25.703, 'prompt_n': 0, 'prompt_per_second': 0.0, 'prompt_per_token_ms': None}    
-    dt = r["timings"]    
     #caching etc
-    w += "generated: " + str(dt["predicted_n"]) 
-    w += ", evaluated: " + str(r["tokens_evaluated"])
-    w += ", cached: " + str(r["tokens_cached"]) + "\n"
-    w += "context: " + str(r["tokens_evaluated"] + dt["predicted_n"]) + " / " +  str(prog.getOption("max_context_length")) + ", exceeded: " + str(r["truncated"])
+    w += "generated: " + str(r.predicted_n) 
+    w += ", evaluated: " + str(r.prompt_n)
+    w += ", cached: " + (str(r.cached_n) if r.cached_n is not None else "unknown") + "\n"
+    w += "context: " + str(r.total_n()) + " / " +  str(prog.getOption("max_context_length")) + ", exceeded: " + str(r.truncated)
     if prog._smartShifted:
         w += "(smart shifted)\n"
     else:
         w += "\n"
-        
 
-
-    
     factor = 1/1000
     unit = "s"
     prep = lambda u: str(round(u*factor, 2)) 
-    w += prep(dt["prompt_ms"]) + unit + " spent evaluating prompt.\n"
-    w += prep(dt["predicted_ms"]) + unit + " spent generating.\n"
-    w += prep(dt["predicted_ms"] + dt["prompt_ms"]) + unit + " total processing time.\n"  
-    w += str(round(dt["predicted_per_second"], 2)) + "T/s, " + prep(dt["predicted_per_token_ms"]) + unit + "/T"
+    w += prep(r.prompt_ms) + unit + " spent evaluating prompt.\n"
+    w += prep(r.predicted_ms) + unit + " spent generating.\n"
+    w += prep(r.total_ms()) + unit + " total processing time.\n"  
+    w += str(round(r.predicted_per_second, 2)) + "T/s, " + prep(r.predicted_per_token_ms) + unit + "/T"
     return w
 
 def showStatus(prog, argv):

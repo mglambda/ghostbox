@@ -31,7 +31,8 @@ def process_sse_streaming_events(callback, done_flag, r):
             w = event.decode()
             if w == "data: [DONE]":
                 # openai do this
-                break
+                #break
+                pass
             elif w.startswith("data: "):
                 d = json.loads(w[6:])            
                 callback(d)

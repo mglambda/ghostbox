@@ -264,7 +264,7 @@ class Plumbing(object):
         #d["max_tokens"] = self.getOption("max_context_length") # was changed recently in llama-server, now also complies with OAI aAPI
         d["n_predict"] = self.getOption("max_length")
         
-        if self.getOption("backend") == LLMBackend.generic.name or self.getOption["backend"] == LLMBackend.openai.name:
+        if self.getOption("backend") == LLMBackend.generic.name or self.getOption("backend") == LLMBackend.openai.name:
             # openai chat/completion needs the system prompt and story
             d["system"] = self.session.getSystem()
             d["story"] = copy.deepcopy(self.session.stories.get().getData())
@@ -552,7 +552,6 @@ class Plumbing(object):
             return ""
         return self._formatToolResults(results)
 
-
     def _formatToolResults(self, results):
         """Based on a list of dictionaries, returns a string that represents the tool outputs to an LLM."""
         # FIXME: currently only intended for command-r
@@ -662,9 +661,9 @@ class Plumbing(object):
                 self.stopWebsock()                
         elif name == "image_watch" and differs:
             if value:
-                prog.startImageWatch()
+                self.startImageWatch()
             else:
-                prog.stopImageWatch()
+                self.stopImageWatch()
         elif name == "audio" and differs:
             if value:
                 self.startAudioTranscription()
