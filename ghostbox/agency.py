@@ -1,41 +1,153 @@
-
 # allows for use of tools with tools.py in char directory.
 
 import os, importlib, inspect, docstring_parser, json, re, traceback
+from pydantic import BaseModel
 from ghostbox.util import *
+from typing import *
 
 
 
 
+# # example of tool dict
+# "tools": [
+#     {
+#     "type":"function",
+#     "function":{
+#         "name":"python",
+#         "description":"Runs code in an ipython interpreter and returns the result of the execution after 60 seconds.",
+#         "parameters":{
+#         "type":"object",
+#         "properties":{
+#             "code":{
+#             "type":"string",
+#             "description":"The code to run in the ipython interpreter."
+#             }
+#         },
+#         "required":["code"]
+#         }
+#     }
+#     }
+# ],
 
-# Here's an example what a function/tool dictionary might look like. Taken from cohere's command-r documentation.
-# This should work with other models except command-r btw, it's just that I think this is a reasonable json schema.
-#    tools = [{
-#        "name": "query_daily_sales_report",
-#        "description": "Connects to a database to retrieve overall sales volumes and sales information for a given day.",
-#        "parameter_definitions": {
-#            "day": {
-#                "description": "Retrieves sales data for this day, formatted as YYYY-MM-DD.",
-#                "type": "str",
-#                "required": True
-#            }
-#        }
-#    },
-#    {
-#        "name": "query_product_catalog",
-#        "description": "Connects to a a product catalog with information about all the products being sold, including categories, prices, and stock levels.",
-#        "parameter_definitions": {
-#            "category": {
-#                "description": "Retrieves product information data for all products in this category.",
-#                "type": "str",
-#                "required": True
-#            }
-#        }
-#    }
-# ]
+class Property(BaseModel):
+    description: str
+    type: str
+
+class Parameters(BaseModel):
+    type: str = "object"
+    properties: Dict[str, Property]
+    required: List[str] = []
+    
+class Function(BaseModel):
+    name: str
+    description: str
+    # this wants jsonschema object
+    parameters: Parameters
+
+class Tool(BaseModel):
+    type: str = "function"
+    function: Function
+
+
+def type_to_json_schema(type_):
+    type_map = {
+        int: {"type": "integer"},
+        float: {"type": "number"},
+        str: {"type": "string"},
+        bool: {"type": "boolean"},
+        list: {"type": "array", "items": {}},  # You might need to specify the item type
+        dict: {"type": "object"},
+        type(None): {"type": "null"}
+    }
+    if type_ in type_map:
+        return type_map[type_]
+    elif hasattr(type_, "__origin__"):
+        if type_.__origin__ is list:
+            return {"type": "array", "items": type_to_json_schema(type_.__args__[0])}
+        elif type_.__origin__ is dict:
+            return {"type": "object", "additionalProperties": type_to_json_schema(type_.__args__[1])}
+        elif type_.__origin__ is Optional:
+            return {"oneOf": [type_to_json_schema(type_.__args__[0]), {"type": "null"}]}
+    return {}
+
+
+def makeTools(filepath, display_name="tmp_python_module") -> Tuple[List[Tool], Any]:
+    """Reads a python file and returns a pair with all the top level functions parsed as tools, and the corresponding module for the file."""
+    if not(os.path.isfile(filepath)):
+        printerr("warning: Failed to generate tool dictionary for '" + filepath + "' file not found.")
+        return ({}, None)
+
+
+    tools = []
+    spec = importlib.util.spec_from_file_location(display_name, filepath)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    for name, value in vars(module).items():
+        if name.startswith("_") or not callable(value):
+            continue
+        doc = inspect.getdoc(value)
+        if doc is None:
+            printerr("error: Missing docstring in function '" + name + "' in file '" + filepath + "'. Aborting tool generation.")
+            return ({}, None)
+        fulldoc = docstring_parser.parse(doc)
+        if fulldoc.description is None:
+            printerr("warning: Missing description in function '" + name + "' in file '" + filepath + "'. Please make sure you adhere to standard python documentation syntax.")
+            description = doc
+        else:
+            description = fulldoc.description
+
+
+        sig = inspect.signature(value)
+        paramdocs = {p.arg_name : {"type" : p.type_name, "description" : p.description, "optional" : p.is_optional} for p in fulldoc.params}
+        properties = {}
+        required_params = []
+        for (param_name, param) in sig.parameters.items():
+            if param.annotation == inspect._empty:
+                printerr("warning: Missing type annotations for function '" + name + "' and parameter '" + param_name + "' in '" + filepath + "'. This will significantly degrade AI tool use performance.")
+                # default to str
+                param_type = "str"
+            else:
+                param_type = param.annotation.__name__
+
+            # defaults
+            param_description = ""
+            param_required = True
+            if param_name not in paramdocs:
+                printerr("warning: Missing documentation for parameter '" + param_name + "' in function '" + name + "' in '" + filepath + "'. This will significantly degrade AI tool use performance.")
+            else:
+                p = paramdocs[param_name]
+                if p["description"] is None:
+                    printerr("warning: Missing description for parameter '" + param_name + "' in function '" + name + "' in '" + filepath + "'. This will significantly degrade AI tool use performance.")
+                else:
+                    param_description = p["description"]
+
+                #if p["type"] != param_type:
+                    #printerr("warning: Erroneous type documentation for parameter '" + param_name + "' in function '" + name + "' in '" + filepath + "'. Stated type does not match function annotation. This will significantly degrade AI tool use performance.")
+
+                if p["optional"] is not None:
+                    param_required = not(p["optional"])
+
+            # finally set the payload
+            if param_required:
+                required_params.append(param_name)
+            properties[param_name] = Property(type=type_to_json_schema(param_type).get("type", "string"),
+                                              description=param_description)
+
+
+        parameters = Parameters(required=required_params,
+                                properties=properties)
+        new_function = Function(name=name,
+                                    description=description,
+                                    parameters=parameters)
+        tools.append(Tool(function=new_function))
+
+    return (tools, module)
+
 
 def makeToolDicts(filepath, display_name="tmp_python_module"):
-    """Returns a pair of (tool_dict, module)."""
+    """Returns a pair of (tool_dict, module).
+    This function is deprecated. Use makeTools instead."""
+    printerr("warning: makeToolDicts is deprecated. Use makeTools instead. (agency.py)")
     if not(os.path.isfile(filepath)):
         printerr("warning: Failed to generate tool dictionary for '" + filepath + "' file not found.")
         return ({}, None)

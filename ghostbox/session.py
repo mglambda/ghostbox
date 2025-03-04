@@ -11,7 +11,7 @@ class Session(object):
         self.dir = dir
         self.fileVars = {"chat_user" : chat_user, "chat_ai" : chat_ai, "system_msg" : "" }
         self.stories = StoryFolder()
-        self.tools = {}
+        self.tools = []
         self.tools_file = ""
         self.tools_module = None
         if self.dir is not None:
@@ -81,7 +81,7 @@ class Session(object):
                 #printerr("Found " + filename)
             elif filename == "tools.py":
                 self.tool_file = filepath                
-                (self.tools, self.tools_module) = makeToolDicts(filepath, display_name=os.path.basename(self.dir) + "_tools")
+                (self.tools, self.tools_module) = makeTools(filepath, display_name=os.path.basename(self.dir) + "_tools")
 
 
 

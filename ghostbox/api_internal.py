@@ -51,9 +51,9 @@ def start_session(plumbing, filepath, keep=False) -> str:
         
         if plumbing.getOption("verbose"):
             w += "Dumping tool dictionary. Run with --no-verbose to disable this."
-            w += json.dumps(plumbing.session.tools, indent=4) + "\n"
+            w += json.dumps([tool.model_dump() for tool in plumbing.session.tools], indent=4) + "\n"
         else:
-            w += "AI tools: " + ", ".join([t["name"] for t in plumbing.session.tools]) + "\n"
+            w += "AI tools: " + ", ".join([t.function.name for t in plumbing.session.tools]) + "\n"
 
 
     # hide if option is set

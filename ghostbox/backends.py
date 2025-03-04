@@ -578,7 +578,8 @@ class OpenAIBackend(AIBackend):
             "temperature": payload.get("temperature", 0.7),
             "top_p": payload.get("top_p", 1.0),
             "frequency_penalty": payload.get("frequency_penalty", 0.0),
-            "presence_penalty": payload.get("presence_penalty", 0.0)
+            "presence_penalty": payload.get("presence_penalty", 0.0),
+            "tools": payload.get("tools", [])
         }
 
         # the /V1/chat/completions endpoint expects structured data of user/assistant pairs        
@@ -608,6 +609,7 @@ class OpenAIBackend(AIBackend):
             "top_p": payload.get("top_p", 1.0),
             "frequency_penalty": payload.get("frequency_penalty", 0.0),
             "presence_penalty": payload.get("presence_penalty", 0.0),
+            "tools" : payload.get("tools", []),
             "stream": True,
             "stream_options": {"include_usage": True}
         }

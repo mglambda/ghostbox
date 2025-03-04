@@ -281,6 +281,10 @@ class Plumbing(object):
                     d[param] = self.getOption(param)
         
         d["prompt"] = text
+        # just throw toools in for backends that can use them, unless user disabled
+        if self.getOption("use_tools"):
+            d["tools"] = [tool.model_dump() for tool in self.session.tools]
+        
         if self.getOption("backend") == LLMBackend.generic.name or self.getOption("backend") == LLMBackend.openai.name:
             # openai chat/completion needs the system prompt and story
             d["system"] = self.session.getSystem()
@@ -540,7 +544,9 @@ class Plumbing(object):
         self.session.stories.get().addSystemText(w)
         
     def applyTools(self, w):
-        """Takes an input string w that is an AI generated response. If w contains tool requests, w is parsed for a structured tool request and the tools will be called. Returns a formatted string with tool results in json format and special tokens applied. Empty string if no tools were used or requ3ested."""
+        """Takes an input string w that is an AI generated response. If w contains tool requests, w is parsed for a structured tool request and the tools will be called. Returns a formatted string with tool results in json format and special tokens applied. Empty string if no tools were used or requ3ested.
+        This function is now deprecated since we moved on to llama.cpp and openai tool calling."""
+        printerr("warning: Using applyTools is deprecated. (main.py)")
         if not(self.getOption("use_tools")):
             return ""
         
@@ -1070,8 +1076,8 @@ class Plumbing(object):
     def showSystem(self):
         # vars contains system_msg and others that may or may not be replaced in the template
         vars = self.session.getVars().copy()
-        if self.getOption("tools_instructions") and "system_msg" in vars:
-            vars["system_msg"] += self.showTools()
+        #if self.getOption("tools_instructions") and "system_msg" in vars:
+            #vars["system_msg"] += self.showTools()
         return self.getTemplate().header(**vars)
 
     def showStory(self, story_folder=None, append_hint=True):
