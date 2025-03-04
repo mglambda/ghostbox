@@ -117,12 +117,12 @@ sampling_parameters = {
     ),
     "xtc_probability": SamplingParameterSpec(
         name="xtc_probability",
-        description="Set the chance for token removal via XTC sampler.",
+        description="Set the chance for token removal via XTC sampler.\nXTC means 'exclude top choices'. This sampler, when it triggers, removes all but one tokens above a given probability threshold. Recommended for creative tasks, as language tends to become less stereotypical, but can make a model less effective at structured output or intelligence-based tasks.\nSee original xtc PR by its inventor https://github.com/oobabooga/text-generation-webui/pull/6335",
         default_value=0.5
     ),
     "xtc_threshold": SamplingParameterSpec(
         name="xtc_threshold",
-        description="Set a minimum probability threshold for tokens to be removed via XTC sampler.",
+        description="Set a minimum probability threshold for tokens to be removed via XTC sampler.\nXTC means 'exclude top choices'. This sampler, when it triggers, removes all but one tokens above a given probability threshold. Recommended for creative tasks, as language tends to become less stereotypical, but can make a model less effective at structured output or intelligence-based tasks.\nSee original xtc PR by its inventor https://github.com/oobabooga/text-generation-webui/pull/6335",
         default_value=0.1
     ),
     "mirostat": SamplingParameterSpec(
