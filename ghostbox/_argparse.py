@@ -222,8 +222,14 @@ def makeTaggedParser(default_params) -> TaggedArgumentParser:
         # we need to avoid some redefinitions
         if name in "stop max_length".split(" "):
             continue
+        # others require special treatment
+        if name == "samplers":
+            parser.add_argument("-S", "--" + param.name, nargs="*", default=param.default_value, help=param.description,
+                                tag=mktag(type=AT.Plumbing, group=AG.SamplingParameters, very_important=True, motd=True, is_option=True))
+            continue
+            
         parser.add_argument("--" + param.name, type=type(param.default_value), default=param.default_value, help=param.description,
-                            tag=mktag(type=AT.Plumbing, group=AG.SamplingParameters))
+                            tag=mktag(type=AT.Plumbing, group=AG.SamplingParameters, is_option=True))
     return parser
 
 
