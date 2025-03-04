@@ -47,11 +47,16 @@ class TTSBackend(ABC):
         """Returns a list of all voices supported by the model.
         This may be empty or inexhaustive for some models, e.g. if files need to be provided for cloning."""
         pass
-   
+
+
+    @abstractmethod
+    def get_config(self) -> Dict[str, Any]:
+        pass
 def dump_config(backend: TTSBackend) -> List[str]:
     if "config" not in backend.__dict__:
         return []
     return ["    " + key + "\t" + str(value) for key, value in backend.config.items()]
+
 
     
         
@@ -80,6 +85,9 @@ This immplementation remains here as a reference implementation."""
 
     def get_voices(self) -> List[str]:
         return []
+
+    def get_config(self):
+        return {}
     
 class ZonosBackend(TTSBackend):
     """Bindings for the zonos v0.1 model. See https://github.com/Zyphra/Zonos"""
@@ -186,6 +194,10 @@ class ZonosBackend(TTSBackend):
 
     def get_voices(self) -> List[str]:
         return []
+
+
+    def get_config(self):
+        return self.config
     
 class KokoroBackend(TTSBackend):
     """Bindings for the indomitable kokoro tts https://github.com/hexgrad/kokoro ."""
@@ -266,6 +278,9 @@ class KokoroBackend(TTSBackend):
         """Set parameters specific to a TTS model."""
         pass
 
+    def get_config(self):
+        return {}
+    
     def get_voices(self) -> List[str]:
         return self._model.get_voices()
     

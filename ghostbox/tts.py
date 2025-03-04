@@ -95,7 +95,7 @@ def input_loop():
                     for u in dump_config(tts):
                         printerr(u)
                     continue
-                elif option in tts.config:
+                elif option in tts.get_config().keys():
                     try:
                         value = ast.literal_eval(" ".join(vs[1:]))
                     except:
