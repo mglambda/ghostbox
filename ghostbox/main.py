@@ -188,6 +188,9 @@ class Plumbing(object):
         self._lastPrompt = ""
         self._dirtyContextLlama = False
         self._stop_generation = threading.Event()
+        # indicates generation work being done, really only used to print the goddamn cli prompt
+        self._busy = threading.Event()
+        self._triggered = False
         self._smartShifted = False
         self._systemTokenCount = None
         self.continue_with = ""
@@ -226,6 +229,7 @@ class Plumbing(object):
         # formatters is to be idnexed with modes
         self.setMode(self.getOption("mode"))
         self.running = True
+        self._startCLIPrinter()        
 
 
     def getTags(self):
@@ -706,17 +710,17 @@ class Plumbing(object):
         self.addUserText(modified_w, image_id=image_id)
         image_watch_hint = self.getOption("image_watch_hint")
         self.addAIText(self.communicate(self.buildPrompt(hint + image_watch_hint)))
-        print(self.showCLIPrompt(), end="")
+        #print(self.showCLIPrompt(), end="")
 
     def _print_generation_callback(self, result_str):
         """Pass this as callback to self.interact for a nice simple console printout of generations."""
         if result_str == "":
             return
                 
-        self.print("\n\r" + (" " * len(self.showCLIPrompt())) + "\r", end="", tts=False)
+        #self.print("\n\r" + (" " * len(self.showCLIPrompt())) + "\r", end="", tts=False)
         if not(self.getOption("stream")):
             self.print(self.getAIFormatter(with_color=self.getOption("color")).format(result_str), end="")
-        self.print(self.showCLIPrompt(), end="", tts=False)
+        #self.print(self.showCLIPrompt(), end="", tts=False)
         return
 
 
@@ -1196,6 +1200,7 @@ returns - A string ready to be sent to the backend, including the full conversat
         def loop_interact(w):
             self._stop_generation.clear()
             communicating = True
+            self._busy.set()
             (modified_w, hint) = self.modifyInput(w)
             self.addUserText(modified_w)            
             while communicating:
@@ -1219,6 +1224,7 @@ returns - A string ready to be sent to the backend, including the full conversat
                 if user_generation_callback is not None:
                     user_generation_callback(output)
                 generation_callback(output)
+                self._busy.clear()
             self.unfreeze()                
             # end communicating loop
             self._lastInteraction = time_ms()
@@ -1396,6 +1402,42 @@ returns - A string ready to be sent to the backend, including the full conversat
         self.websock_server = WS.serve(handler, self.getOption("websock_host"), self.getOption("websock_port"))
         printerr("WebSocket server running on ws://" + self.getOption("websock_host") + ":" + str(self.getOption("websock_port")))
         self.websock_server.serve_forever()
+
+
+    def _startCLIPrinter(self) -> None:
+        """Checks wether we are busy. If we are busy and then aren't, we print the CLI prompt."""
+        # we don't want to use the self.print, nor printerr for this as both of them have side effects
+        # this really is just for terminal users
+        print_cli = lambda prefix: print(prefix + self.showCLIPrompt(), file=sys.stderr, end="", flush=True)
+        
+        def cli_printer():
+            while self.running:
+                self._busy.wait()
+                while self._busy.isSet():
+                    # don't blow up potato cpu
+                    # user can wait for their coveted cli for 10ms
+                    time.sleep(0.1)
+                    continue
+                # bingo
+                if self._triggered:
+                    # this means someone wrote a command etc so user pressed enter and we don't need a newline
+                    print_cli(prefix="")
+                    self._triggered = False
+                else:
+                    # AI generated a bunch of text. there may or may not be a newline. llama actually has this in the result json but
+                    # come on who picks up their socks this much we just print one
+                    print_cli(prefix="\n")
+                    
+                
+
+        self._cli_printer_thread = threading.Thread(target=cli_printer, daemon=True)
+        self._cli_printer_thread.start()
+
+    def triggerCLI(self):
+        self._triggered = True
+        # off to the races lulz
+        self._busy.set()
+        self._busy.clear()
         
 def main():
     just_fix_windows_console()
@@ -1455,7 +1497,8 @@ def main():
         
 def regpl(prog: Plumbing, input_function: Callable[[], str] = input) -> None:
     """Read user input, evaluate, generate LLM response, print loop."""
-    skip = False        
+    skip = False
+    prog.triggerCLI()
     while prog.running:
         last_state = prog.backup()
         try:
@@ -1469,8 +1512,8 @@ def regpl(prog: Plumbing, input_function: Callable[[], str] = input) -> None:
                 prog.initial_print_flag = False
                 print("\n\n" + prog.formatStory(), end="")
 
-            # input actually prints to stderr, which we don't want, so we have an extra print step
-            print(prog.showCLIPrompt(), end="", flush=True)
+
+
             w = input_function()
 
             # check for multiline
@@ -1497,6 +1540,7 @@ def regpl(prog: Plumbing, input_function: Callable[[], str] = input) -> None:
                 # w = "/cont"
                 # to the below because /cont wasn't used much and continue doesn't work very well with OAI API which is getting more prevalent
                 prog.stopAll()
+                prog.triggerCLIPrompt()
                 continue
 
             # expand session vars, so we can do e.g. /tokenize {{system_msg}}
@@ -1505,8 +1549,10 @@ def regpl(prog: Plumbing, input_function: Callable[[], str] = input) -> None:
             for (cmd, f) in cmds:
                 #FIXME: the startswith is dicey because it now makes the order of cmds defined above relevant, i.e. longer commands must be specified before shorter ones. 
                 if w.startswith(cmd):
+                    # execute a / command
                     v = f(prog, w.split(" ")[1:])
                     printerr(v)
+                    prog.triggerCLI()
                     if not(prog.isContinue()):
                         # skip means we don't send a prompt this iteration, which we don't want to do when user issues a command, except for the /continue command
                         skip = True
