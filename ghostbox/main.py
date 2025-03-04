@@ -263,6 +263,17 @@ class Plumbing(object):
        
     def getBackend(self):
         return self.backend
+
+    def justUsedTools(self) -> bool:
+        # FIXME: not sure if this is the place to do it/right way to do it
+        # if the last message in the history has role 'tools', it means
+        # we just send results, so we don't use tools for this interaction
+        try:
+            return self.session.stories.get().getData()[-1]["role"] == "tool"
+        except:
+            print("debug")
+        return False
+        
     
     def makeGeneratePayload(self, text):
         d = {}
@@ -283,7 +294,11 @@ class Plumbing(object):
         d["prompt"] = text
         # just throw toools in for backends that can use them, unless user disabled
         if self.getOption("use_tools"):
-            d["tools"] = [tool.model_dump() for tool in self.session.tools]
+            if not(self.justUsedTools()):
+                d["tools"] = [tool.model_dump() for tool in self.session.tools]
+                # FIXME: necessary currently with llamacpp
+                if "grammar" in d:
+                    del d["grammar"]
         
         if self.getOption("backend") == LLMBackend.generic.name or self.getOption("backend") == LLMBackend.openai.name:
             # openai chat/completion needs the system prompt and story
@@ -543,37 +558,55 @@ class Plumbing(object):
         # FIXME: we're currently rawdogging system msgs. is this correct?
         self.session.stories.get().addSystemText(w)
         
-    def applyTools(self, w):
-        """Takes an input string w that is an AI generated response. If w contains tool requests, w is parsed for a structured tool request and the tools will be called. Returns a formatted string with tool results in json format and special tokens applied. Empty string if no tools were used or requ3ested.
-        This function is now deprecated since we moved on to llama.cpp and openai tool calling."""
-        printerr("warning: Using applyTools is deprecated. (main.py)")
-        if not(self.getOption("use_tools")):
-            return ""
+    def applyTools(self, w:str="", json={}) -> Tuple[List[Dict[str, Any]], Dict[str, Any]]:
+        """Takes an AI generated string w and optionally the json result from an OpenAI API compatible tool request. Tries to detect a tool request in both. If detected, will apply the tools and then return their results as structured data, as well as the fully parsed original tool call.
+        Ideally the JSON result makes tool use obvious through the field
+        json["choices"][0]["finish_reason"] == "tool_calls"
+        However, not all models will do this consistently and those who can may fail at higher temperatures.
+        So as a fallback we check the raw w for json data that corresponds to tools use.
+        :param w: Unstructured AI generation string that may contain a tool request.
+        :param json: Structured json that was returned by the AI that may contain a tool request.
+        :return: A pair of tool results, and the original tool requesting message, both as json dicts. If no tool request was detected, both are empty dicts."""
+        import json as j
+        nothing = ([], {})
         
-        # FIXME: implement some form of checking e.g. tools requested match the tools defined for ai
-        (tools_requested, w_clean) = agency.tryParseToolUse(w,
-                                                            start_string=self.getOption("tools_magic_begin"),
-                                                            end_string=self.getOption("tools_magic_end"),
-                                                            magic_word=self.getOption("tools_magic_word"))
-        if tools_requested == []:
-            # no parse, either because none were requested or they were malformatted.
-            return ""
+        if not(self.getOption("use_tools")):
+            return nothing
 
-        # AI wants tools. this is obviously unstable and may have bogus formatting / wrong types. For now we just let it run and dump the dict if something explodes
-        results = []
         try:
-            for tool_dict in tools_requested:
-                tool = tool_dict["tool_name"]
-                params = tool_dict["parameters"]
-                maybeResult = self.session.callTool(tool, params)
-                results.append(agency.makeToolResult(tool, params, maybeResult))                    
+            if json["choices"][0]["finish_reason"] != "tool_calls":
+                return nothing
+            tool_request = json["choices"][0]["message"]
+            tool_calls = tool_request["tool_calls"]
+        except:
+            tool_calls = []
+            printerr(traceback.format_exc())
+        # FIXME: add heuristic for scanning w for possible tool request
+        # ...
+        # here, we know it was a tool request and we have tool_calls
+        if tool_calls == []:
+            # either none requested or something went wrong. anyhow.
+            return nothing
+
+        tool_results = []
+        try:
+            for tool_call in tool_calls:
+                tool = tool_call["function"]
+                try:
+                    params = j.loads(tool["arguments"])
+                except:
+                    if self.getOption("verbose"):
+                        printerr("warning: Couldn't pass tool arguments as json: " + tool["arguments"])
+                        continue
+                maybeResult = self.session.callTool(tool["name"], params)
+                tool_results.append(agency.makeToolResult(tool["name"], maybeResult, tool_call["id"]))                    
         except:
             printerr("warning: Caught the following exception while applying tools.")
             printerr(traceback.format_exc())
 
-        if results == []:
-            return ""
-        return self._formatToolResults(results)
+        if tool_results == []:
+            return nothing
+        return tool_results, tool_request
 
     def _formatToolResults(self, results):
         """Based on a list of dictionaries, returns a string that represents the tool outputs to an LLM."""
@@ -1172,7 +1205,8 @@ returns - A string ready to be sent to the backend, including the full conversat
             if prompt_text.endswith(" "):
                 printerr("warning: Prompt ends with a trailing space. This messes with tokenization, and can cause the model to start its responses with emoticons. If this is what you want, you can turn off this warning by setting 'warn_trailing_space' to False.")
 
-        if self.getOption("stream"):
+        # FIXME: this is only necessary until llamacpp implements streaming tool calls                
+        if self.getOption("stream") and not("tools" in payload.keys()):
             # FIXME: this is the last hacky bit about formatting
             if self.getOption("chat_show_ai_prompt") and self.getMode().startswith("chat"):
                 self.print(self.session.getVar("chat_ai") + ": ", end="", flush=True, interrupt=False)
@@ -1212,14 +1246,15 @@ returns - A string ready to be sent to the backend, including the full conversat
             while communicating:
                 # this only runs more than once if there is auto-activation, e.g. with tool use
                 generated_w = self.communicate(self.buildPrompt(hint), stream_callback=stream_callback)
-                tool_w = self.applyTools(generated_w)
+                tool_results, tool_call = self.applyTools(generated_w, json=self.lastResult)
                 output = ""
-                if tool_w != "":
-                    self.addSystemText(tool_w)
+                if tool_results != []:
+                    # need to add both the calls and result to the history
+                    self.session.stories.get().addRawJSONs([tool_call] + tool_results)
                     communicating = self.getOption("tools_reflection") # unnecessary but here to emphasize that this is the path where we loop
                     (w, hint) = ("", "")
                     if self.getOption("verbose"):
-                        output = tool_w
+                        output = json.dumps(tool_results)
                 else:
                     if self.getMode() != "chat":
                         output = self.addAIText(generated_w)
@@ -1280,8 +1315,6 @@ returns - A string ready to be sent to the backend, including the full conversat
 
     def setLastJSON(self, json_result):
         self.lastResult = json_result
-        if self.getOption("backend") == LLMBackend.llamacpp.name:
-            pass
 
     def backup(self):
         """Returns a data structure that can be restored to return to a previous state of the program."""

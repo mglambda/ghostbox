@@ -90,7 +90,7 @@ class Session(object):
             self.stories.get().addAssistantText(init_msg)
 
     def callTool(self, name, params):
-        if name not in list(map(lambda d: d["name"], self.tools)):
+        if name not in [tool.function.name for tool in self.tools]:
             return
 
 

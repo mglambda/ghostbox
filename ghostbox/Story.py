@@ -1,3 +1,4 @@
+from typing import *
 
 class Story(object):
     """A story is a thin wrapper around a list of story-items. A story-item is a simple python dictionary with 'role' and 'content' fields defined, though it may contain others as well."""
@@ -13,6 +14,10 @@ class Story(object):
     def addAssistantText(self, w, **kwargs):
         self.data.append({ "role" : "assistant", "content" : w} | kwargs)
 
+    def addRawJSONs(self, json_list: List[Dict[str, Any]]) -> None:
+        # FIXME: once we redo this with pydantic this will be validated
+        self.data.extend(json_list)
+        
     def addSystemText(self, w, **kwargs):
         self.data.append({ "role" : "system", "content" : w} | kwargs)
         

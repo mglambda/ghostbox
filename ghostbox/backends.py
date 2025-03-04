@@ -571,17 +571,8 @@ class OpenAIBackend(AIBackend):
             'Authorization': f'Bearer {self.api_key}',
             'Content-Type': 'application/json'
         }
-        data = {
-            "model": payload.get("model", "text-davinci-003"),
-            "prompt": payload["prompt"],
-            "max_tokens": payload.get("max_length", 150), # FIXME: this is changed in the API for o1 and up
-            "temperature": payload.get("temperature", 0.7),
-            "top_p": payload.get("top_p", 1.0),
-            "frequency_penalty": payload.get("frequency_penalty", 0.0),
-            "presence_penalty": payload.get("presence_penalty", 0.0),
-            "tools": payload.get("tools", [])
-        }
-
+        data = payload | {"max_tokens": payload["max_length"],
+                          "stream": False}
         # the /V1/chat/completions endpoint expects structured data of user/assistant pairs        
         data |= self._dataFromPayload(payload)
         response = requests.post(self.endpoint + "/v1/chat/completions", headers=headers, json=data)
@@ -602,17 +593,9 @@ class OpenAIBackend(AIBackend):
             'Authorization': f'Bearer {self.api_key}',
             'Content-Type': 'application/json'
         }
-        data = {
-            "model": payload.get("model", "gpt-3"),
-            "max_tokens": payload.get("max_length", 150),
-            "temperature": payload.get("temperature", 0.7),
-            "top_p": payload.get("top_p", 1.0),
-            "frequency_penalty": payload.get("frequency_penalty", 0.0),
-            "presence_penalty": payload.get("presence_penalty", 0.0),
-            "tools" : payload.get("tools", []),
-            "stream": True,
-            "stream_options": {"include_usage": True}
-        }
+        
+        data = payload | {"stream": True, "stream_options": {"include_usage": True}}
+
 
         # the /V1/chat/completions endpoint expects structured data of user/assistant pairs        
         data |= self._dataFromPayload(payload)

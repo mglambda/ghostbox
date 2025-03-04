@@ -249,12 +249,13 @@ def getPositionalArguments(func):
 def getOptionalArguments(func):
     return [param.name for (k, param) in inspect.signature(func).parameters.items() if param.default != inspect._empty]
 
-def makeToolResult(tool_name, params, result):
+def makeToolResult(tool_name, result, tool_call_id):
     """Packages a tool call result in a dictionary."""
     return {
+        "role":"tool",
         "tool_name" : tool_name,
-        "parameters" : params,
-        "output" : result}
+        "tool_call_id": tool_call_id,
+        "content" : result if type(result) == str else str(result)}
             
 
 
