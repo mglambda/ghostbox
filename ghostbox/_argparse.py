@@ -48,6 +48,8 @@ def makeTaggedParser(default_params) -> TaggedArgumentParser:
                         tag=mktag(type=AT.Porcelain, group=AG.Generation, motd=True))
     parser.add_argument("-c", '--character_folder', type=str, default="", help="character folder to load at startup. The folder may contain templates, as well as arbitrary text files that may be injected in the templates. See the examples for more. Path is attempted to be resolved relative to the include paths, if any are provided.",
                         tag=mktag(type=AT.Porcelain, group=AG.Characters, very_important=True, motd=True))
+    parser.add_argument("-p", '--prompt', type=str, default=None, help="If provided, process the prompt and exit.",
+                        tag=mktag(type=AT.Porcelain, group=AG.Generation))    
     parser.add_argument("--endpoint", type=str, default="http://localhost:8080", help="Address of backend http endpoint. This is a URL that is dependent on the backend you use, though the default of localhost:8080 works for most, including Llama.cpp and Kobold.cpp. If you want to connect to an online provider that is not part of the explicitly supported backends, this is where you would supply their API address.",
                         tag=mktag(type=AT.Porcelain, group=AG.Backend))
     parser.add_argument("--backend", type=str, default=LLMBackend.generic.name, help="Backend to use. The default is `generic`, which conforms to the OpenAI REST API, and is supported by most LLM providers. Choosing a more specific backend may provide additional functionality. Other possible values are " + ", ".join([e.name for e in LLMBackend]) + ".",
@@ -62,6 +64,8 @@ def makeTaggedParser(default_params) -> TaggedArgumentParser:
                         tag=mktag(type=AT.Porcelain, group=AG.General, very_important=True))
     parser.add_argument("-M", "--mode", type=str, default="default", help="Mode of operation. Changes various things behind-the-scenes. Values are currently 'default', or 'chat'.",
                         tag=mktag(type=AT.Plumbing, group=AG.Templates))
+    parser.add_argument("--force_params", action=argparse.BooleanOptionalAction, type=bool, default=False, help="Force sending of sample parameters, even when they are seemingly not supported by the backend (use to debug or with generic",
+                        tag=mktag(type=AT.Plumbing, group=AG.Backend))    
     parser.add_argument("-m", "--model", type=str, help="LLM to use for requests. This only works if the backend supports choosing models.",
                         tag=mktag(type=AT.Porcelain, group=AG.Backend, very_important=True))
     parser.add_argument("-g", "--grammar_file", type=str, default="", help="Grammar file used to restrict generation output. Grammar format is GBNF.",

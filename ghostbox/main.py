@@ -250,6 +250,12 @@ class Plumbing(object):
         else:
             # Handle other backends...
             pass
+
+        # fill in the default sampler parameters that were not shown in the command line arguments, but are still supported
+        for param in self.backend.sampling_parameters().values():
+            if param.name not in self.options.keys():
+                self.setOption(param.name, param.default_value)
+        
        
     def getBackend(self):
         return self.backend
@@ -262,13 +268,13 @@ class Plumbing(object):
         supported_params = self.getBackend().sampling_parameters().keys()
         for param in all_params:
             if param in self.options:
-                if param not in supported_params:
+                if param not in supported_params and not(self.getOption("force_params")):
                     if self.getOption("warn_unsupported_sampling_parameter"):
-                        printerr("warning: Sampling parameter '" + param + "' is not supported by the " + str(self.getBackend().getName()) + " backend.")
+                        printerr("warning: Sampling parameter '" + param + "' is not supported by the " + str(self.getBackend().getName()) + " backend. Set force_params to true to send it anyway.")
                     else:
                         continue
                 else:
-                    d[param] = self.GetOption[param]
+                    d[param] = self.getOption(param)
         
         d["prompt"] = text
         if self.getOption("backend") == LLMBackend.generic.name or self.getOption("backend") == LLMBackend.openai.name:
@@ -1438,8 +1444,14 @@ def main():
     if prog.getOption("http"):
         del prog.options["http"]
         prog.setOption("http", True)
-        
-    regpl(prog)
+
+    if (prompt := prog.getOption("prompt")) is not None:
+        def input_once():
+            prog.running = False
+            return prompt
+        regpl(prog, input_function=input_once)
+    else:
+        regpl(prog)
         
 def regpl(prog: Plumbing, input_function: Callable[[], str] = input) -> None:
     """Read user input, evaluate, generate LLM response, print loop."""
