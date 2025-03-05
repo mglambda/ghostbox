@@ -195,6 +195,7 @@ def makeToolResult(tool_name, result, tool_call_id):
 
 
 def makeToolSystemMsg(tools):
+    """Deprecated"""
     w = ""
     w += "    ## Available Tools\nHere is a list of tools that you have available to you:\n\n"
     w += json.dumps(tools, indent= 4)
@@ -203,6 +204,7 @@ def makeToolSystemMsg(tools):
 
 
 def makeToolInstructionMsg():
+    """Deprecated"""
     #FIXME: this is currently designed only for command-r, other llms will use different special tokens, for which we have to extend the templating, probably iwth tool_begin and tool_end 
     w = """<|START_OF_TURN_TOKEN|><|SYSTEM_TOKEN|>
 Write 'Action:' followed by a json-formatted list of actions that you want to perform in order to produce a good response to the user's last input. You can use any of the supplied tools any number of times, but you should aim to execute the minimum number of necessary actions for the input. You should use the `directly-answer` tool if calling the other tools is unnecessary. The list of actions you want to call should be formatted as a list of json objects, for example:  

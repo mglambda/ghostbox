@@ -48,7 +48,12 @@ def start_session(plumbing, filepath, keep=False) -> str:
         if (callback := plumbing.getOption("tools_inject_dependency_function")):
             if plumbing.session.tools_module             is not None:
                 callback(plumbing.session.tools_module            )
-        
+
+        if plumbing.getOption("tools_inject_ghostbox"):
+            if plumbing.session.tools_module             is not None:
+                plumbing.session.tools_module._ghostbox_plumbing = plumbing
+
+            
         if plumbing.getOption("verbose"):
             w += "Dumping tool dictionary. Run with --no-verbose to disable this."
             w += json.dumps([tool.model_dump() for tool in plumbing.session.tools], indent=4) + "\n"

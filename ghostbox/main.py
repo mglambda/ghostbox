@@ -209,7 +209,8 @@ class Plumbing(object):
             # whisper stuff. We do this with a special init function because it's lazy
         self.whisper = self._newTranscriber()
         self.ct = None
-        self._defaultSIGINTHandler = signal.getsignal(signal.SIGINT)        
+        self._defaultSIGINTHandler = signal.getsignal(signal.SIGINT)
+        self._transcription_suspended = False
 
         #imagewatching
         self.image_watch = None
@@ -763,22 +764,36 @@ class Plumbing(object):
         return
 
 
+    def suspendTranscription(self):
+        """Renders transcription unresponsive until an activation phrase is heard or unsuspendTranscription is called."""
+        self._transcription_suspended = True
+        self.verbose("Suspending audio interaction.")
+
+    def unsuspendTranscription(self):
+        """Resumes interacting by audio after a suspension."""
+        self._transcription_suspended = False
+        self.verbose("Resuming audio interaction.")
+        
     def modifyTranscription(self, w):
         """Checks wether an incoming user transcription by the whisper model contains activation phrases or is within timing etc. Returns the modified transcription, or the empty string if activation didn't trigger."""
+
         # want to match fuzzy, so strip of all punctuation etc.
         # FIXME: no need to do this here, again and again
         phrase = self.getOption("audio_activation_phrase").translate(str.maketrans('','',string.punctuation)).strip().lower()
         if not(phrase):
-            return w
+            # user doesn't require phrase. proceed. unless we are suspended
+            if not(self._transcription_suspended):
+                return w
 
-        # ok we have an activation phrase, but are we within the grace period where none is required?
+        # ok we require an activation phrase, but are we within the grace period where none is required?
         if (t := self.getOption("audio_activation_period_ms")) > 0:
-            if (time_ms() - self._lastInteraction) <= t:
+            # grace period doesn't matter if we have been suspended.
+            if (time_ms() - self._lastInteraction) <= t and not(self._transcription_suspended):
                 # FIXME: returning here means there might be a phrase in the input even when phrase_keep is false. Maybe it doesn't matter?
                 return w
 
-                
-        # now strip the transcription
+        # now we need an activation phrase or it ain't happenin
+        # strip the transcription
         test = w.translate(str.maketrans('', '', string.punctuation)).strip().lower()
         try:
             n = test.index(phrase)
@@ -786,6 +801,9 @@ class Plumbing(object):
             # no biggie, phrase wasn't found. we're done here
             return ""
 
+
+        # ok it was found
+        self.unsuspendTranscription()
         if self.getOption("audio_activation_phrase_keep"):
             return w
         # FIXME: this is 100% not correct, but it may be good enough
@@ -837,11 +855,6 @@ class Plumbing(object):
         f =lambda w: self.print(self.getAIColorFormatter().format(w), end="", flush=True, interrupt=False)
             
         self.stream_queue.append(token)
-        if self.getOption("use_tools"):
-            if ("".join(self.stream_queue)).strip().startswith(self.getOption("tools_magic_word")):
-                self.print("\r" + (" " * len(self.getOption("tools_magic_word"))), end="", flush=True)
-                return
-        
         method = self.getOption("stream_flush")
         if method == "token":
             f(token)
@@ -984,7 +997,15 @@ class Plumbing(object):
         """Prints to stderr but only in verbose mode."""
         if self.getOption("verbose"):
             printerr(w)
-    
+
+    def console(self, w):
+        """Print something to stderr. This exists to be used in tools.py via dependency injection."""
+        printerr(w)
+
+    def console_me(self, w):
+        """Prints w to stderr, prepended by the AI name. This exists because it is a very common pattern to be used in tools.py"""
+        printerr(self.getOption("chat_ai") + w)
+        
     def print(self, w, end="\n", flush=False, color="", style="", tts=True, interrupt=None, websock=True):
         # either prints, speaks, or both, depending on settings
         if w == "":
@@ -1076,15 +1097,14 @@ class Plumbing(object):
         w = prog.session.expandVars(w)
         (w, ai_hint) = prog.adjustForChat(w)
         
-        tool_hint = agency.makeToolInstructionMsg() if prog.getOption("use_tools") else ""
-
+        #tool_hint = agency.makeToolInstructionMsg() if prog.getOption("use_tools") else ""
         
         # user may also provide a hint. unclear how to best append it, we put it at the end
         user_hint = prog.session.expandVars(prog.getOption("hint"))
         if user_hint and prog.getOption("warn_hint"):
             printerr("warning: Hint is set. Try /raw to see what you're sending. Use /set hint '' to disable the hint, or /set warn_hint False to suppress this message.")
             
-        return (w, ai_hint + tool_hint + user_hint)
+        return (w, ai_hint + user_hint)
 
     def getSystemTokenCount(self):
         """Returns the number of tokens in system msg. The value is cached per session. Note that this adds +1 for the BOS token."""
@@ -1099,23 +1119,11 @@ class Plumbing(object):
     def getRawTemplate(self):
         return RawTemplate()
 
-    def showTools(self):
-        if not(self.getOption("use_tools")):
-            return ""
-
-        if not(self.session.tools):
-            return ""
-
-        # FIXME: probably adjust for different templates. Also may want to do this in Session maybe?
-        return agency.makeToolSystemMsg(self.session.tools)
-
-
-    
     def showSystem(self):
         # vars contains system_msg and others that may or may not be replaced in the template
         vars = self.session.getVars().copy()
-        #if self.getOption("tools_instructions") and "system_msg" in vars:
-            #vars["system_msg"] += self.showTools()
+        if self.getOption("use_tools") and (tool_hint := self.getOption("tools_hint")) != "":
+            vars["system_msg"] += "\n" + tools_hint
         return self.getTemplate().header(**vars)
 
     def showStory(self, story_folder=None, append_hint=True):

@@ -202,16 +202,12 @@ def makeTaggedParser(default_params) -> TaggedArgumentParser:
                         #tag=mktag(type=AT.Plumbing, group=AG.Tools))
     parser.add_argument("-d", "--tools_forbidden", action=argparse.BooleanOptionalAction, default=["List", "Dict", "launch_nukes"] , help="Blacklist certain tools. Specify multiple times to forbid several tools. The default blacklist contains some common module imports that can pollute a tools.py namespace. You can override this in a character folders config.json if necessary.",
                         tag=mktag(type=AT.Plumbing, group=AG.Tools, very_important=True, motd=True))                        
-    parser.add_argument("--tools_instructions", action=argparse.BooleanOptionalAction, default=True, help="Automatically extend the system message with additional instructions for tool use. Try /raw if you want to see these. This only applies when use_tools is true.",
-                        tag=mktag(type=AT.Plumbing, group=AG.Tools))                        
-    parser.add_argument("--tools_magic_word", type=str, default="Action:", help="Magic string that signals that tool request data will be generated immediately following it. This is used by rege and parsing functions to detect toll calls by the LLM.",
-                        tag=mktag(type=AT.Plumbing, group=AG.Tools))                        
-    parser.add_argument("--tools_magic_begin", type=str, default="```json", help="Magic string that signals that structured tool request data will be generated between tool_magic_begin and tool_magic_end. This is used by rege and parsing functions to detect toll calls by the LLM.",
-                        tag=mktag(type=AT.Plumbing, group=AG.Tools))                        
-    parser.add_argument("--tools_magic_end", type=str, default="```", help="Magic string that signals that structured tool request data will be generated between tool_magic_begin and tool_magic_end. This is used by rege and parsing functions to detect toll calls by the LLM.",
+    parser.add_argument("--tools_hint", type=str, default="", help="Text that will be appended to the system prompt when use_tools is true.",
                         tag=mktag(type=AT.Plumbing, group=AG.Tools))                        
     parser.add_argument("--tools_inject_dependency_function", type=str, default="", help="API only. Set a callback function to be called whenever an tool-using Ai is initialized. The callback will receive one argument: The tools.py module. You can use this to inject dependency or modify the module after it is loaded.",
-                        tag=mktag(type=AT.Plumbing, group=AG.Tools, motd=True))                        
+                        tag=mktag(type=AT.Plumbing, group=AG.Tools, motd=True))
+    parser.add_argument("--tools_inject_ghostbox", action=argparse.BooleanOptionalAction, default=True, help="Inject a reference to ghostbox itself into an AI's tool module. This will make the '_ghostbox_plumbing' identifier available in the tools module and point it to the running ghostbox Plumbing instance. Disabling this will break many of the standard AI tools that ship with ghostbox.",
+                        tag=mktag(type=AT.Plumbing, group=AG.Tools))                            
     parser.add_argument("--use_tools", action=argparse.BooleanOptionalAction, default=False, help="Enable use of tools, i.e. model may call python functions. This will do nothing if tools.py isn't present in the char directory. If tools.py is found, this will be automatically enabled.",
                         tag=mktag(type=AT.Porcelain, group=AG.Tools, very_important=True, motd=True))                        
     parser.add_argument("-x", '--var_file', action="append", default=[], help="Files that will be added to the list of variables that can be expanded. E.g. -Vmemory means {$memory} will be expanded to the contents of file memory, provided expand_user_input is set. Can be used to override values set in character folders. Instead of using this, you can also just type {[FILENAME]} to have it be automatically expanded with the contents of FILENAME, provided --dynamic_file_vars is enabled.",
