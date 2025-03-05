@@ -9,7 +9,7 @@ def start_session(plumbing, filepath, keep=False) -> str:
         path = os.path.normpath(path)
         failure = False
         try:
-            s = Session(dir=path, chat_user=plumbing.getOption("chat_user"), chat_ai=plumbing.getOption("chat_ai"), additional_keys=plumbing.getOption("var_file"))
+            s = Session(dir=path, chat_user=plumbing.getOption("chat_user"), chat_ai=plumbing.getOption("chat_ai"), additional_keys=plumbing.getOption("var_file"), tools_forbidden=plumbing.getOption("tools_forbidden"))
             break
         except FileNotFoundError as e:
             # session will throw if path is not valid, we keep going through the includes

@@ -7,7 +7,7 @@ from ghostbox.agency import *
 class Session(object):
     special_files = "chat_ai config.json tools.py".split(" ") 
     
-    def __init__(self, dir=None, chat_user="", chat_ai="", additional_keys=[]):
+    def __init__(self, dir=None, chat_user="", chat_ai="", additional_keys=[], tools_forbidden=[]):
         self.dir = dir
         self.fileVars = {"chat_user" : chat_user, "chat_ai" : chat_ai, "system_msg" : "" }
         self.stories = StoryFolder()
@@ -15,7 +15,7 @@ class Session(object):
         self.tools_file = ""
         self.tools_module = None
         if self.dir is not None:
-            self._init(additional_keys)
+            self._init(additional_keys, tools_forbidden)
 
     def copy(self):
         # can't deepcopy a module
@@ -67,7 +67,7 @@ class Session(object):
     
         
     
-    def _init(self, additional_keys=[]):
+    def _init(self, additional_keys=[], tools_forbidden=[]):
         if not(os.path.isdir(self.dir)):
             raise FileNotFoundError("Could not find path " + self.dir)
 
@@ -81,7 +81,7 @@ class Session(object):
                 #printerr("Found " + filename)
             elif filename == "tools.py":
                 self.tool_file = filepath                
-                (self.tools, self.tools_module) = makeTools(filepath, display_name=os.path.basename(self.dir) + "_tools")
+                (self.tools, self.tools_module) = makeTools(filepath, display_name=os.path.basename(self.dir) + "_tools", tools_forbidden=tools_forbidden)
 
 
 
@@ -92,8 +92,6 @@ class Session(object):
     def callTool(self, name, params):
         if name not in [tool.function.name for tool in self.tools]:
             return
-
-
         try:
             f = getattr(self.tools_module, name)
         except:

@@ -273,14 +273,21 @@ class AIBackend(ABC):
         self.endpoint = endpoint
         self.stream_done = threading.Event()
         self.last_error = ""
+        self._last_request = {}
 
     @abstractmethod
     def getLastError(self):
         return self.last_error
 
     @abstractmethod
-    def getLastJSON(self):
+    def getLastJSON(self) -> Dict:
+        """Returns the last json result returned by the backend."""
         pass
+
+    @abstractmethod
+    def getLastRequest(self) -> Dict:
+        """Returns the last payload dictionary that was sent to the server."""
+        return self._last_request
     
     def waitForStream(self):
         self.stream_done.wait()
@@ -302,7 +309,7 @@ class AIBackend(ABC):
         pass
 
     @abstractmethod
-    def handleGenerateResult(self, result):
+    def handleGenerateResult(self, result) -> Optional[Dict]:
         """Takes a result from the generate method and returns the generated string."""
         pass
 
@@ -338,7 +345,6 @@ class AIBackend(ABC):
         pass
 
     @abstractmethod
-
     def sampling_parameters(self) -> Dict[str, SamplingParameterSpec]:
         """Returns a dictionary of sampling_parameters that are supported by the model.
         The dictionary has the parameter names as keys. If a sampling_parameter is present in the dict, it is expected to be supported by the various generation methods."""
@@ -357,6 +363,10 @@ class LlamaCPPBackend(AIBackend):
     def getLastJSON(self):
         return self._lastResult
 
+
+    def getLastRequest(self) -> Dict:
+        return super().getLastRequest()
+    
     def getName(self):
         #return "llama.cpp"
         return LLMBackend.llamacpp.name
@@ -368,6 +378,7 @@ class LlamaCPPBackend(AIBackend):
         super().generate(payload)
         # adjust slightly for our renames
         llama_paylod = payload | {"n_predict":payload["max_length"]}
+        self._last_request = llama_payload
         return requests.post(self.endpoint + "/completion", json=llama_payload)
 
     def handleGenerateResult(self, result):
@@ -375,8 +386,13 @@ class LlamaCPPBackend(AIBackend):
             self.last_error = "HTTP request with status code " + str(result.status_code)
             return None
         self._lastResult = result.json()
-        return result.json()['content']
-
+        
+        if (payload := result.json()['content']) is not None:
+            return payload
+        if (payload := result.json().get('tool_calls', None)) is not None:
+            return payload
+        return None
+    
     def _makeLlamaCallback(self, callback):
         def f(d):
             if d["stop"]:
@@ -387,7 +403,8 @@ class LlamaCPPBackend(AIBackend):
 
     def generateStreaming(self, payload, callback=lambda w: print(w)):
         self.stream_done.clear()
-        llama_payload = payload | {"n_predict":payload["max_length"]}        
+        llama_payload = payload | {"n_predict":payload["max_length"]}
+        self._last_request = llama_payload        
         r = streamPrompt(self._makeLlamaCallback(callback), self.stream_done, self.endpoint + "/completion", llama_payload)
         if r.status_code != 200:
             self.last_error = "streaming HTTP request with status code " + str(r.status_code)
@@ -448,6 +465,8 @@ class OpenAILegacyBackend(AIBackend):
     def getLastJSON(self):
         return self._lastResult
 
+    def getLastRequest(self) -> Dict:
+        return self._last_request
     def getName(self):
         return LLMBackend.openai.name
 
@@ -459,15 +478,9 @@ class OpenAILegacyBackend(AIBackend):
             'Authorization': f'Bearer {self.api_key}',
             'Content-Type': 'application/json'
         }
-        data = {
-            "model": payload.get("model", "text-davinci-003"),
-            "prompt": payload["prompt"],
-            "max_tokens": payload.get("max_length", 150),
-            "temperature": payload.get("temperature", 0.7),
-            "top_p": payload.get("top_p", 1.0),
-            "frequency_penalty": payload.get("frequency_penalty", 0.0),
-            "presence_penalty": payload.get("presence_penalty", 0.0)
-        }
+
+        data = payload | {"stream": False}
+        self._last_request = data        
         response = requests.post(self.endpoint + "/v1/completions", headers=headers, json=data)
         if response.status_code != 200:
             self.last_error = f"HTTP request with status code {response.status_code}: {response.text}"
@@ -477,8 +490,13 @@ class OpenAILegacyBackend(AIBackend):
 
     def handleGenerateResult(self, result):
         if not result:
-            return ""
-        return result['choices'][0]['text']
+            return None
+        
+        if (payload := result['choices'][0]["message"]["content"]) is not None:
+            return payload
+        if (payload := result['choices'][0]["message"]["tool_calls"]) is not None:
+            return payload
+        return None
 
     def generateStreaming(self, payload, callback=lambda w: print(w)):
         self.stream_done.clear()        
@@ -486,17 +504,9 @@ class OpenAILegacyBackend(AIBackend):
             'Authorization': f'Bearer {self.api_key}',
             'Content-Type': 'application/json'
         }
-        data = {
-            "model": payload.get("model", "text-davinci-003"),
-            "prompt": payload["prompt"],
-            "max_tokens": payload.get("max_length", 150),
-            "temperature": payload.get("temperature", 0.7),
-            "top_p": payload.get("top_p", 1.0),
-            "frequency_penalty": payload.get("frequency_penalty", 0.0),
-            "presence_penalty": payload.get("presence_penalty", 0.0),
-            "stream": True
-        }
-        #response = requests.post(self.endpoint + "/v1/completions", headers=headers, json=data)
+
+        data = payload | {"stream": True, "stream_options": {"include_usage": True}}        
+        self._last_request = data
         def openaiCallback(d):
             callback(d['choices'][0]['text'])
             
@@ -560,6 +570,9 @@ class OpenAIBackend(AIBackend):
     def getLastJSON(self):
         return self._lastResult
 
+    def getLastRequest(self) -> Dict:
+        return super().getLastRequest()
+
     def getName(self):
         return LLMBackend.openai.name
 
@@ -575,6 +588,7 @@ class OpenAIBackend(AIBackend):
                           "stream": False}
         # the /V1/chat/completions endpoint expects structured data of user/assistant pairs        
         data |= self._dataFromPayload(payload)
+        self._last_request = data
         response = requests.post(self.endpoint + "/v1/chat/completions", headers=headers, json=data)
         if response.status_code != 200:
             self.last_error = f"HTTP request with status code {response.status_code}: {response.text}"
@@ -584,8 +598,13 @@ class OpenAIBackend(AIBackend):
 
     def handleGenerateResult(self, result):
         if not result:
-            return ""
-        return result['choices'][0]["message"]["content"]
+            return None
+        
+        if (payload := result['choices'][0]["message"]["content"]) is not None:
+            return payload
+        if (payload := result['choices'][0]["message"]["tool_calls"]) is not None:
+            return payload
+        return None
 
     def generateStreaming(self, payload, callback=lambda w: print(w)):
         self.stream_done.clear()        
@@ -595,17 +614,17 @@ class OpenAIBackend(AIBackend):
         }
         
         data = payload | {"stream": True, "stream_options": {"include_usage": True}}
-
-
         # the /V1/chat/completions endpoint expects structured data of user/assistant pairs        
         data |= self._dataFromPayload(payload)
+        
         def openaiCallback(d):
             self._lastResult = d            
             choice = d["choices"][0]
             maybeChunk = choice["delta"].get("content", None)
             if maybeChunk is not None:
                 callback(maybeChunk)
-            
+
+        self._last_request = data
         response = streamPrompt(openaiCallback, self.stream_done, self.endpoint + "/v1/chat/completions", json=data, headers=headers)
         if response.status_code != 200:
             self.last_error = f"HTTP request with status code {response.status_code}: {response.text}"

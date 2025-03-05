@@ -71,7 +71,7 @@ def type_to_json_schema(type_):
     return {}
 
 
-def makeTools(filepath, display_name="tmp_python_module") -> Tuple[List[Tool], Any]:
+def makeTools(filepath, display_name="tmp_python_module", tools_forbidden=[]) -> Tuple[List[Tool], Any]:
     """Reads a python file and returns a pair with all the top level functions parsed as tools, and the corresponding module for the file."""
     if not(os.path.isfile(filepath)):
         printerr("warning: Failed to generate tool dictionary for '" + filepath + "' file not found.")
@@ -83,7 +83,7 @@ def makeTools(filepath, display_name="tmp_python_module") -> Tuple[List[Tool], A
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     for name, value in vars(module).items():
-        if name.startswith("_") or not callable(value):
+        if name.startswith("_") or not callable(value) or name in tools_forbidden:
             continue
         doc = inspect.getdoc(value)
         if doc is None:
@@ -139,77 +139,12 @@ def makeTools(filepath, display_name="tmp_python_module") -> Tuple[List[Tool], A
         new_function = Function(name=name,
                                     description=description,
                                     parameters=parameters)
-        tools.append(Tool(function=new_function))
+        if new_function.name not in tools_forbidden:
+            tools.append(Tool(function=new_function))
+
+
 
     return (tools, module)
-
-
-def makeToolDicts(filepath, display_name="tmp_python_module"):
-    """Returns a pair of (tool_dict, module).
-    This function is deprecated. Use makeTools instead."""
-    printerr("warning: makeToolDicts is deprecated. Use makeTools instead. (agency.py)")
-    if not(os.path.isfile(filepath)):
-        printerr("warning: Failed to generate tool dictionary for '" + filepath + "' file not found.")
-        return ({}, None)
-
-
-    tools = []
-    spec = importlib.util.spec_from_file_location(display_name, filepath)
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    for name, value in vars(module).items():
-        if name.startswith("_") or not callable(value):
-            continue
-        doc = inspect.getdoc(value)
-        if doc is None:
-            printerr("error: Missing docstring in function '" + name + "' in file '" + filepath + "'. Aborting tool generation.")
-            return ({}, None)
-        fulldoc = docstring_parser.parse(doc)
-        if fulldoc.description is None:
-            printerr("warning: Missing description in function '" + name + "' in file '" + filepath + "'. Please make sure you adhere to standard python documentation syntax.")
-            description = doc
-        else:
-            description = fulldoc.description
-
-        parameters = {}
-        sig = inspect.signature(value)
-        paramdocs = {p.arg_name : {"type" : p.type_name, "description" : p.description, "optional" : p.is_optional} for p in fulldoc.params}
-        for (param_name, param) in sig.parameters.items():
-            if param.annotation == inspect._empty:
-                printerr("warning: Missing type annotations for function '" + name + "' and parameter '" + param_name + "' in '" + filepath + "'. This will significantly degrade AI tool use performance.")
-                # default to str
-                param_type = "str"
-            else:
-                param_type = param.annotation.__name__
-
-            # defaults
-            param_description = ""
-            param_required = True
-            if param_name not in paramdocs:
-                printerr("warning: Missing documentation for parameter '" + param_name + "' in function '" + name + "' in '" + filepath + "'. This will significantly degrade AI tool use performance.")
-            else:
-                p = paramdocs[param_name]
-                if p["description"] is None:
-                    printerr("warning: Missing description for parameter '" + param_name + "' in function '" + name + "' in '" + filepath + "'. This will significantly degrade AI tool use performance.")
-                else:
-                    param_description = p["description"]
-
-                #if p["type"] != param_type:
-                    #printerr("warning: Erroneous type documentation for parameter '" + param_name + "' in function '" + name + "' in '" + filepath + "'. Stated type does not match function annotation. This will significantly degrade AI tool use performance.")
-
-                if p["optional"] is not None:
-                    param_required = not(p["optional"])
-
-            # finally set the payload
-            parameters[param_name] = {"type" : param_type,
-                                      "description" : param_description,
-                                      "required" : param_required}
-        tools.append({"name" : name,
-                      "description" : description,
-                      "parameter_definitions" : parameters})
-
-    return (tools, module)
-
 
 def tryParseToolUse(w, start_string = "```json", end_string = "```", magic_word="Action:"):
     """Process AI output to see if tool use is requested. Returns a dictionary which is {} if parse failed, and the input string with json removed on a successful parse.

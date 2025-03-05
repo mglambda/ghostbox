@@ -198,8 +198,10 @@ def makeTaggedParser(default_params) -> TaggedArgumentParser:
                         tag=mktag(type=AT.Plumbing, group=AG.Interface))
     parser.add_argument("--tools_example", action=argparse.BooleanOptionalAction, default=True, help="Automatically extend the system message with tool use examples for the AI. This only applies when use_tools is true.",
                         tag=mktag(type=AT.Plumbing, group=AG.Tools, motd=True))
-    parser.add_argument("--tools_reflection", action=argparse.BooleanOptionalAction, default=True, help="Continue generation after tools have been applied. This allows the AI to reflect on the results, e.g. summarize a file it retrieved. Only applies when use_tools is true.",
-                        tag=mktag(type=AT.Plumbing, group=AG.Tools))
+    #parser.add_argument("--tools_reflection", action=argparse.BooleanOptionalAction, default=True, help="Continue generation after tools have been applied. This allows the AI to reflect on the results, e.g. summarize a file it retrieved. Only applies when use_tools is true.",
+                        #tag=mktag(type=AT.Plumbing, group=AG.Tools))
+    parser.add_argument("-d", "--tools_forbidden", action=argparse.BooleanOptionalAction, default=["List", "Dict", "launch_nukes"] , help="Blacklist certain tools. Specify multiple times to forbid several tools. The default blacklist contains some common module imports that can pollute a tools.py namespace. You can override this in a character folders config.json if necessary.",
+                        tag=mktag(type=AT.Plumbing, group=AG.Tools, very_important=True, motd=True))                        
     parser.add_argument("--tools_instructions", action=argparse.BooleanOptionalAction, default=True, help="Automatically extend the system message with additional instructions for tool use. Try /raw if you want to see these. This only applies when use_tools is true.",
                         tag=mktag(type=AT.Plumbing, group=AG.Tools))                        
     parser.add_argument("--tools_magic_word", type=str, default="Action:", help="Magic string that signals that tool request data will be generated immediately following it. This is used by rege and parsing functions to detect toll calls by the LLM.",

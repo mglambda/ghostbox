@@ -980,6 +980,11 @@ class Plumbing(object):
         self.tts.write_line(w)
         return w
 
+    def verbose(self, w):
+        """Prints to stderr but only in verbose mode."""
+        if self.getOption("verbose"):
+            printerr(w)
+    
     def print(self, w, end="\n", flush=False, color="", style="", tts=True, interrupt=None, websock=True):
         # either prints, speaks, or both, depending on settings
         if w == "":
@@ -1223,6 +1228,7 @@ returns - A string ready to be sent to the backend, including the full conversat
 
         if not(result):
             printerr("error: Backend yielded no result. Reason: " + backend.getLastError())
+            self.verbose("Additional information (last request): \n" + json.dumps(backend.getLastRequest(), indent=4))
             return ""
         # FIXME: we're currently formatting the AI string twice. Here and in addAIText. that's not a big deal, though
         #result = result
@@ -1252,7 +1258,6 @@ returns - A string ready to be sent to the backend, including the full conversat
                 if tool_results != []:
                     # need to add both the calls and result to the history
                     self.session.stories.get().addRawJSONs([tool_call] + tool_results)
-                    communicating = self.getOption("tools_reflection") # unnecessary but here to emphasize that this is the path where we loop
                     (w, hint) = ("", "")
                     if self.getOption("verbose"):
                         output = json.dumps(tool_results)
@@ -1580,7 +1585,7 @@ def regpl(prog: Plumbing, input_function: Callable[[], str] = input) -> None:
                 # w = "/cont"
                 # to the below because /cont wasn't used much and continue doesn't work very well with OAI API which is getting more prevalent
                 prog.stopAll()
-                prog.triggerCLIPrompt()
+                prog.triggerCLI()
                 continue
 
             # expand session vars, so we can do e.g. /tokenize {{system_msg}}
