@@ -592,6 +592,9 @@ class Plumbing(object):
         tool_results = []
         try:
             for tool_call in tool_calls:
+                if self.getOption("verbose"):
+                    printerr(j.dumps(tool_call, indent=4))
+                    
                 tool = tool_call["function"]
                 try:
                     params = j.loads(tool["arguments"])

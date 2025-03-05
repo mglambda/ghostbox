@@ -196,8 +196,8 @@ def makeTaggedParser(default_params) -> TaggedArgumentParser:
                         tag=mktag(type=AT.Porcelain, group=AG.Interface))
     parser.add_argument("--expand_user_input", action=argparse.BooleanOptionalAction, default=True, help="Expand variables in user input. E.g. {$var} will be replaced with content of var. Variables are initialized from character folders (i.e. file 'memory' will be {$memory}), or can be set manually with the /varfile command or --varfile option. See also --dynamic_file_vars.",
                         tag=mktag(type=AT.Plumbing, group=AG.Interface))
-    parser.add_argument("--tools_example", action=argparse.BooleanOptionalAction, default=True, help="Automatically extend the system message with tool use examples for the AI. This only applies when use_tools is true.",
-                        tag=mktag(type=AT.Plumbing, group=AG.Tools, motd=True))
+    parser.add_argument("--tools_unprotected_shell_access", action=argparse.BooleanOptionalAction, default=False, help="Allow an AI to run shell commands, even if not logged in to their own account. The safe way of doing this is to create an account on your system with the same name as the AI, and then run this program under their account. If you don't want to do that, and you are ok with an AI deleting your files through accident or malice, set this flag to true.",
+                        tag=mktag(type=AT.Plumbing, group=AG.Tools))
     #parser.add_argument("--tools_reflection", action=argparse.BooleanOptionalAction, default=True, help="Continue generation after tools have been applied. This allows the AI to reflect on the results, e.g. summarize a file it retrieved. Only applies when use_tools is true.",
                         #tag=mktag(type=AT.Plumbing, group=AG.Tools))
     parser.add_argument("-d", "--tools_forbidden", action=argparse.BooleanOptionalAction, default=["List", "Dict", "launch_nukes"] , help="Blacklist certain tools. Specify multiple times to forbid several tools. The default blacklist contains some common module imports that can pollute a tools.py namespace. You can override this in a character folders config.json if necessary.",
