@@ -1511,10 +1511,10 @@ class Plumbing(object):
                 if user_generation_callback is not None:
                     user_generation_callback(output)
                 generation_callback(output)
-                self._busy.clear()
             self.unfreeze()
             # end communicating loop
             self._lastInteraction = time_ms()
+            self._busy.clear()            
 
         t = threading.Thread(target=loop_interact, args=[w])
         t.start()

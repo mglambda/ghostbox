@@ -226,7 +226,14 @@ sampling_parameters = {
         description='A list of LoRA adapters to be applied to this specific request. Each object in the list must contain `id` and `scale` fields. For example: `[{"id": 0, "scale": 0.5}, {"id": 1, "scale": 1.1}]`. If a LoRA adapter is not specified in the list, its scale will default to `0.0`. Please note that requests with different LoRA configurations will not be batched together, which may result in performance degradation.',
         default_value=[],
     ),
+    # new - only  got this from the git logs
+    "add_generation_prompt": SamplingParameterSpec(
+        name="add_generation_prompt",
+        description='Include the prompt used to generate in the result.',
+        default_value=True,
+    ),    
 }
+### end of big list
 
 # this is for fast copy and send to backend
 default_params = {hp.name: hp.default_value for hp in sampling_parameters.values()}
@@ -412,7 +419,13 @@ class LlamaCPPBackend(AIBackend):
             endpoint_suffix = "/completion"
             if "tools" in payload:
                 printerr("warning: Tool use with a custom prompt_format and using llama.cpp backend is currently experimental. Set your prompt_format to 'auto' or use the generic backend for a stable experience.")
-            
+
+
+        if "tools" in llama_payload:
+            # FIXME: this is because using tools seems to invalidate the cache in llamacpp. probably because they are putting tool instructions in the system prompt. this is an attempt to fix or at least mitigate that.
+            # i.e. we can just cache the inevitable streaming, non-tool generation that follows tool use.
+            # however this will still suck for multi-turn tool use
+            llama_payload |= {"cache_prompt":False}
         self._last_request = llama_payload
         return requests.post(self.endpoint + endpoint_suffix, json=llama_payload)
 
@@ -648,6 +661,12 @@ class OpenAIBackend(AIBackend):
         data = payload | {"max_tokens": payload["max_length"], "stream": False}
         # the /V1/chat/completions endpoint expects structured data of user/assistant pairs
         data |= self.dataFromPayload(payload)
+
+        if "tools" in data:
+            # see the llamacpp generate method fixme
+            # this has no effect on the official OAI api anyway
+            data |= {"cache_prompt":False}
+            
         self._last_request = data
         response = requests.post(
             self.endpoint + "/v1/chat/completions", headers=headers, json=data
