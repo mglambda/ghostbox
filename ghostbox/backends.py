@@ -435,11 +435,10 @@ class LlamaCPPBackend(AIBackend):
 
     def _makeLlamaCallback(self, callback):
         def f(d):
+            import json
             if d["stop"]:
-                self._lastResult = d
-                return
+                self._last_result = d                            
             callback(d["content"])
-
         return f
 
     def generateStreaming(self, payload, callback=lambda w: print(w)):
@@ -495,7 +494,7 @@ class LlamaCPPBackend(AIBackend):
 
     def timings(self, json=None) -> Optional[Timings]:
         if json is None:
-            if (json := self._lastResult) is None:
+            if (json := self._last_result) is None:
                 return None
             time = json["timings"]
             return Timings(
