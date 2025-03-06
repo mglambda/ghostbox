@@ -36,6 +36,13 @@ def process_sse_streaming_events(callback, done_flag, r):
             elif w.startswith("data: "):
                 d = json.loads(w[6:])            
                 callback(d)
+            else:
+                # this works usually if people aren't actually streaming, but maybe we should just crash
+                printerr("warning: Malformed data in process_sse_streaming_events. Are you actually streaming?")
+                d = json.loads(w)            
+                callback(d)                
+
+                
     done_flag.set()
 
 
