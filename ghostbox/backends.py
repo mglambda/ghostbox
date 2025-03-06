@@ -274,17 +274,17 @@ class AIBackend(ABC):
         self.stream_done = threading.Event()
         self.last_error = ""
         self._last_request = {}
+        self._last_result = {}
 
     @abstractmethod
     def getLastError(self):
         return self.last_error
 
-    @abstractmethod
-    def getLastJSON(self) -> Dict:
-        """Returns the last json result returned by the backend."""
-        pass
 
-    @abstractmethod
+    def getLastJSON(self) -> Dict:
+        """Returns the last json result sent by the backend."""
+        return self._lastresult
+
     def getLastRequest(self) -> Dict:
         """Returns the last payload dictionary that was sent to the server."""
         return self._last_request
@@ -355,20 +355,9 @@ class LlamaCPPBackend(AIBackend):
 
     def __init__(self, endpoint="http://localhost:8080"):
         super().__init__(endpoint)
-        self._lastResult = None
 
-    def getLastError(self):
-        return super().getLastError()
-        
-    def getLastJSON(self):
-        return self._lastResult
-
-
-    def getLastRequest(self) -> Dict:
-        return super().getLastRequest()
     
     def getName(self):
-        #return "llama.cpp"
         return LLMBackend.llamacpp.name
 
     def getMaxContextLength(self):
@@ -457,16 +446,7 @@ class OpenAILegacyBackend(AIBackend):
     def __init__(self, api_key, endpoint="https://api.openai.com"):
         super().__init__(endpoint)
         self.api_key = api_key
-        self._lastResult = None
 
-    def getLastError(self):
-        return super().getLastError()
-
-    def getLastJSON(self):
-        return self._lastResult
-
-    def getLastRequest(self) -> Dict:
-        return self._last_request
     def getName(self):
         return LLMBackend.openai.name
 
@@ -561,17 +541,7 @@ class OpenAIBackend(AIBackend):
     def __init__(self, api_key, endpoint="https://api.openai.com"):
         super().__init__(endpoint)
         self.api_key = api_key
-        self._lastResult = None
         self._memoized_params = None
-
-    def getLastError(self):
-        return super().getLastError()
-
-    def getLastJSON(self):
-        return self._lastResult
-
-    def getLastRequest(self) -> Dict:
-        return super().getLastRequest()
 
     def getName(self):
         return LLMBackend.openai.name
