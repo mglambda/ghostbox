@@ -407,9 +407,11 @@ class LlamaCPPBackend(AIBackend):
         if self._config["llamacpp_use_chat_completion_endpoint"]:
             endpoint_suffix = "/chat/completions"
             # /chat/completions expects a more OAI like payload
-            llama_payload = OpenAIBackend.dataFromPayload(llama_payload)
+            llama_payload |= OpenAIBackend.dataFromPayload(llama_payload)
         else:
             endpoint_suffix = "/completion"
+            if "tools" in payload:
+                printerr("warning: Tool use with a custom prompt_format and using llama.cpp backend is currently experimental. Set your prompt_format to 'auto' or use the generic backend for a stable experience.")
             
         self._last_request = llama_payload
         return requests.post(self.endpoint + endpoint_suffix, json=llama_payload)
@@ -418,10 +420,8 @@ class LlamaCPPBackend(AIBackend):
         if result.status_code != 200:
             self.last_error = "HTTP request with status code " + str(result.status_code)
             return None
-        self._lastResult = result.json()
+        self._last_result = result.json()
 
-        import json
-        print(json.dumps(result.json(), indent=4))
         if self._config["llamacpp_use_chat_completion_endpoint"]:
             # this one wants more oai like results
             return OpenAIBackend.handleGenerateResultOpenAI(result.json())
@@ -435,7 +435,6 @@ class LlamaCPPBackend(AIBackend):
 
     def _makeLlamaCallback(self, callback):
         def f(d):
-            import json
             if d["stop"]:
                 self._last_result = d                            
             callback(d["content"])
