@@ -126,7 +126,8 @@ cmds = [
     ("/detokenize", detokenize),
     ("/tokenize", tokenize),
     ("/raw", showRaw),
-    ("/debuglast", debuglast),
+    ("/lastresult", debuglast),
+    ("/lastrequest", lastRequest),    
     ("/ttsdebug", ttsDebug),    
     ("/tts", toggleTTS),
     ("/set", setOption),
@@ -167,6 +168,8 @@ class Plumbing(object):
         util.printerr_callback = self._initial_printerr_callback
         # this is for the websock clients
         self.stderr_token = "[|STDER|]:"
+        self._stdout_ringbuffer = ""
+        self._stdout_ringbuffer_size = 1024
         self._frozen = False
         self._freeze_queue = Queue()        
         self.options = options
@@ -1008,7 +1011,14 @@ class Plumbing(object):
     def console_me(self, w):
         """Prints w to stderr, prepended by the AI name. This exists because it is a very common pattern to be used in tools.py"""
         printerr(self.getOption("chat_ai") + w)
-        
+
+    def _ringbuffer(self, w: str) -> str:
+        """Takes a string w and returns it unchanged, but copies it to a local ringbuffer.
+        The purpose of this is solely to let the CLI worker check if we have a newline at the end of the output.
+        Note: not actually a ringbuffer."""
+        self._stdout_ringbuffer = (self._stdout_ringbuffer + w)[:self._stdout_ringbuffer_size]
+        return w
+    
     def print(self, w, end="\n", flush=False, color="", style="", tts=True, interrupt=None, websock=True):
         # either prints, speaks, or both, depending on settings
         if w == "":
@@ -1026,9 +1036,9 @@ class Plumbing(object):
                 return
 
         if not(color) and not(style):
-            print(self.getDisplayFormatter().format(w), end=end, flush=flush)
+            print(self._ringbuffer(self.getDisplayFormatter().format(w), end=end, flush=flush))
         else:
-            print(style + color + self.getDisplayFormatter().format(w) + Fore.RESET + Style.RESET_ALL, end=end, flush=flush)
+            print(self._ringbuffer(style + color + self.getDisplayFormatter().format(w) + Fore.RESET + Style.RESET_ALL, end=end, flush=flush))
 
     def replaceForbidden(self, w):
         for forbidden in self.getOption("forbid_strings"):
@@ -1479,9 +1489,12 @@ returns - A string ready to be sent to the backend, including the full conversat
                     # this means someone wrote a command etc so user pressed enter and we don't need a newline
                     print_cli(prefix="")
                     self._triggered = False
+                    continue
+
+                # AI generated a bunch of text. there may or may not be a newline. llama actually has this in the result json but we roll our own
+                if self._stdout_ringbuffer.endswith("\n"):
+                    print_cli()
                 else:
-                    # AI generated a bunch of text. there may or may not be a newline. llama actually has this in the result json but
-                    # come on who picks up their socks this much we just print one
                     print_cli(prefix="\n")
                     
                 

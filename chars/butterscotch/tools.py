@@ -16,9 +16,9 @@ def directly_answer():
     """Calls an AI chatbot  to generate a response given the conversation history. Use this tool when no other tool is applicable."""
     return []
 
-def suspend_self() -> str:
+def suspend_self() -> Dict:
     """Suspend an AI chatbot's activity for an indeterminate amount of time. Use this when the user signals you to stop or be quiet for a while. Don't worry, you will be brought back.
-    :return: A string confirming suspension."""
+    :return: A dict containing information about the suspension status."""
     # injection _ghostbox_plumbing
     
     # right now all this does is stop the AI from listening for a while
@@ -32,10 +32,10 @@ def suspend_self() -> str:
         phrase_msg = "."
     _ghostbox_plumbing.console(me + " has gone to sleep. To resume listening, ask them by text to wake up" + phrase_msg)
 
-    r = "Suspending operation for a bit."        
+    r = "Suspending operation."        
     if phrase:
         r += " Maybe tell the user that they can bring you back by saying '" + phrase + "'"
-    return r
+    return {"status": r}
 
 def wake_up() -> str:
     """Unsuspend an AI chatbot.

@@ -233,7 +233,7 @@ default_params = {hp.name: hp.default_value for hp in sampling_parameters.values
 
 # some reference lists for convenience
 supported_parameters = {p:sampling_parameters[p] for p in "temperature frequency_penalty presence_penalty max_length repeat_penalty top_p stop".split(" ")}
-sometimes_parameters = {p:sampling_parameters[p] for p in "xtc_probability dry_multiplier min_p mirostat mirostat_tau mirostat_eta samplers".split(" ")}
+sometimes_parameters = {p:sampling_parameters[p] for p in "cache_prompt xtc_probability dry_multiplier min_p mirostat mirostat_tau mirostat_eta samplers".split(" ")}
 sampling_parameter_tags = {p.name : ArgumentTag(name=p.name,type=ArgumentType.Plumbing, group=ArgumentGroup.SamplingParameters, is_option=True, default_value=p.default_value,help=p.description) for p in sampling_parameters.values()}
 # some special ones
 for p in supported_parameters.keys():
@@ -698,6 +698,10 @@ class OpenAIBackend(AIBackend):
         if json is None:
             if (json := self._lastResult) is None:
                 return None
+
+            if "timings" not in json:
+                return None
+            
             time = json["timings"]
             return Timings(
                 prompt_n= time["prompt_n"],

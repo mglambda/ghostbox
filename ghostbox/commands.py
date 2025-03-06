@@ -466,7 +466,7 @@ Can you compare [img-1] and [img-2]?
             
 def debuglast(prog, argv):
     """
-    Dumps a bunch of information about the last request send. Note that this won't do anything if you haven't sent a request to a working backend server that answered you."""
+    Dumps a bunch of information about the last result received. Note that this won't do anything if you haven't sent a request to a working backend server that answered you."""
     r = prog.lastResult
     if not(r):
         return "Nothing."
@@ -475,6 +475,16 @@ def debuglast(prog, argv):
     for (k, v) in r.items():
         acc.append(k + ": " + str(v))
     return "\n".join(acc)
+
+
+def lastRequest(prog, argv):
+    """
+    Dumps a bunch of information about the last request send. Note that this won't do anything if you haven't sent a request to a working backend server that answered you."""
+    r = prog.getBackend().getLastRequest()
+    if not(r):
+        return "Nothing."
+
+    return json.dumps(r, indent=4)
 
 def showTime(prog, argv):
     """
