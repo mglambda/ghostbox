@@ -231,7 +231,7 @@ sampling_parameters = {
         name="add_generation_prompt",
         description='Include the prompt used to generate in the result.',
         default_value=True,
-    ),    
+    ),
 }
 ### end of big list
 
@@ -508,7 +508,14 @@ class LlamaCPPBackend(AIBackend):
         if json is None:
             if (json := self._last_result) is None:
                 return None
-            time = json["timings"]
+            
+        time = json["timings"]
+        # these are llama specific fields which aren't always available on the OAI endpoints
+        truncated, cached_n = json.get("truncated", None), json.get("tokens_cached", None)
+        if (verbose := json.get("__verbose", None)) is not None:
+            truncated, cached_n = verbose["truncated"], verbose["tokens_cached"]
+            
+            
             return Timings(
                 prompt_n=time["prompt_n"],
                 predicted_n=time["predicted_n"],
@@ -516,8 +523,8 @@ class LlamaCPPBackend(AIBackend):
                 predicted_ms=time["predicted_ms"],
                 predicted_per_token_ms=time["predicted_per_token_ms"],
                 predicted_per_second=time["predicted_per_second"],
-                truncated=json["truncated"],
-                cached_n=json["tokens_cached"],
+                truncated=truncated,
+                cached_n=cached_n,
                 original_timings=time,
             )
 
@@ -808,7 +815,7 @@ class OpenAIBackend(AIBackend):
 
     def timings(self, json=None) -> Optional[Timings]:
         if json is None:
-            if (json := self._lastResult) is None:
+            if (json := self._last_result) is None:
                 return None
 
             if "timings" not in json:

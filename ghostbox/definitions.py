@@ -70,7 +70,8 @@ api_default_options = {
     "verbose" : False,
     "log_time" : True,
     "cli_prompt" : "",
-    "dynamic_file_vars": False
+    "dynamic_file_vars": False,
+    "max_context_length":32000
 }
 
 

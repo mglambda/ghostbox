@@ -15,7 +15,7 @@ from ghostbox.definitions import *
 from ghostbox import definitions
 from ghostbox.api_internal import *
 
-def from_openai_generic(endpoint="http://localhost:8080", **kwargs):
+def from_generic(endpoint="http://localhost:8080", **kwargs):
     """Returns a Ghostbox instance that connects to an OpenAI API compatible endpoint.
     This generic backend adapter works with many backends, including llama.cpp, llama-box, ollama, as well as online providers, like OpenAI, Anthropic, etc. However, to use features specific to a given backend, that are not part of the OpenAI API, you may need to use a more specific backend.
     Note: Expects ENDPOINT to serve /v1/chat/completions and similar, so e.g. http://localhost:8080/v1/chat/completions should be reachable."""

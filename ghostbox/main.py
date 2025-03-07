@@ -666,6 +666,11 @@ class Plumbing(object):
             return nothing
 
         try:
+            import json as j
+            print("DEBUG:\n"+j.dumps(json, indent=4))
+            print(j.dumps(self.getBackend()._last_request, indent=4))
+            print(j.dumps(self.getBackend()._last_result, indent=4))
+            print(j.dumps(self.getBackend()._last_error, indent=4))
             if json["choices"][0]["finish_reason"] != "tool_calls":
                 return nothing
             tool_request = json["choices"][0]["message"]
