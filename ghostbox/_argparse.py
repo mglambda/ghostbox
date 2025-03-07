@@ -232,5 +232,7 @@ def makeTaggedParser(default_params) -> TaggedArgumentParser:
 
 
 def makeDefaultOptions():
-    parser = makeTaggedParser(backends.default_params).get_parser()
-    return parser.parse_args(args="")    
+    """Returns a pair of default options and tags."""
+    tp = makeTaggedParser(backends.default_params)
+    parser = tp.get_parser()
+    return parser.parse_args(args=""), tp.get_tags()

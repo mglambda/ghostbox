@@ -508,7 +508,9 @@ class LlamaCPPBackend(AIBackend):
         if json is None:
             if (json := self._last_result) is None:
                 return None
-            
+
+        if "timings" not in json:
+            printerr("warning: Got weird server result: " + str(json))
         time = json["timings"]
         # these are llama specific fields which aren't always available on the OAI endpoints
         truncated, cached_n = json.get("truncated", None), json.get("tokens_cached", None)

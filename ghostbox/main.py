@@ -265,6 +265,7 @@ class Plumbing(object):
 
     def initializeBackend(self, backend, endpoint):
         api_key = self.getOption("openai_api_key")
+        print("INIT_DEBUG: " + backend)
         if backend == LLMBackend.llamacpp.name:
             self.backend = LlamaCPPBackend(endpoint)
         elif backend == LLMBackend.openai.name:

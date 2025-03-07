@@ -19,22 +19,21 @@ class ToolTest(unittest.TestCase):
 
         print("DEBUG: " + box._plumbing.getBackend().getName())
         w = box.text("Can you look up the latest news about berlin?")
-        # not to hammer the search API
-        #time.sleep(5)        
-        
+
         self.assertGreater(len(w), 0)
 
     def test_tools_llama_streaming(self):
         box = ghostbox.from_llamacpp(character_folder="test_butterscotch",
                                      prompt_format="auto",
                                      **common)
-        time.sleep(3)        
+
         done = threading.Event()
         result = ""
         
         def f(w):
             nonlocal result
             nonlocal done
+            print("DEBUG: " + str(len(w)))            
             result = w
             done.set()
             
@@ -42,9 +41,7 @@ class ToolTest(unittest.TestCase):
                         chunk_callback=lambda w: w,
                         generation_callback=f)
         done.wait()
-        # not to hammer the search API
-        time.sleep(5)        
-        
+
         self.assertGreater(len(result), 0)
 
     def test_tools_generic(self):
@@ -52,9 +49,7 @@ class ToolTest(unittest.TestCase):
                                     force_params=True,
                                     **common)
         w = box.text("Can you look up the latest news about berlin?")
-        # not to hammer the search API
-        time.sleep(5)        
-        
+
         self.assertGreater(len(w), 0)
 
     def test_tools_generic_streaming(self):
@@ -67,6 +62,7 @@ class ToolTest(unittest.TestCase):
         def f(w):
             nonlocal result
             nonlocal done
+            print("DEBUG: " + str(len(w)))
             result = w
             done.set()
             
@@ -74,9 +70,6 @@ class ToolTest(unittest.TestCase):
                         chunk_callback=lambda w: w,
                         generation_callback=f)
         done.wait()
-        # not to hammer the search API
-        time.sleep(5)        
-        
         self.assertGreater(len(result), 0)
         
         
