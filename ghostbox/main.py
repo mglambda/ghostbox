@@ -666,11 +666,6 @@ class Plumbing(object):
             return nothing
 
         try:
-            import json as j
-            print("DEBUG:\n"+j.dumps(json, indent=4))
-            print(j.dumps(self.getBackend()._last_request, indent=4))
-            print(j.dumps(self.getBackend()._last_result, indent=4))
-            print(j.dumps(self.getBackend()._last_error, indent=4))
             if json["choices"][0]["finish_reason"] != "tool_calls":
                 return nothing
             tool_request = json["choices"][0]["message"]
@@ -1668,7 +1663,7 @@ class Plumbing(object):
     def _websockPopMsg(self) -> str:
         """Pops a message of the internal websocket queue and returns it.
         This function blocks until a message is found on the queue."""
-        while self.websock_server_running.isSet():
+        while self.websock_server_running.is_set():
             try:
                 return self.websock_msg_queue.get(timeout=1)
             except Empty:
@@ -1703,7 +1698,7 @@ class Plumbing(object):
 
             self.websock_clients.append(websocket)
             try:
-                while self.websock_server_running.isSet():
+                while self.websock_server_running.is_set():
                     msg = websocket.recv()
                     if type(msg) == str:
                         self.websock_msg_queue.put(msg)
@@ -1735,11 +1730,15 @@ class Plumbing(object):
         def cli_printer():
             while self.running:
                 self._busy.wait()
-                while self._busy.isSet():
+                while self._busy.is_set():
                     # don't blow up potato cpu
                     # user can wait for their coveted cli for 10ms
                     time.sleep(0.1)
                     continue
+
+                if self.getOption("quiet"):
+                    continue
+                
                 # bingo
                 if self._triggered:
                     # this means someone wrote a command etc so user pressed enter and we don't need a newline

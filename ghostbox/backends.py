@@ -683,23 +683,28 @@ class OpenAIBackend(AIBackend):
                 f"HTTP request with status code {response.status_code}: {response.text}"
             )
             return None
-        self._lastResult = response.json()
+        self._last_result = response.json()
         return response.json()
-
 
     def handleGenerateResult(self, result):
         # this is just so that others can use the openai specific handling, which is kind of an industry standard
         return self.handleGenerateResultOpenAI(result)
     
     @staticmethod
-    def handleGenerateResultOpenAI(result: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    def handleGenerateResultOpenAI(result: Dict[str, Any]) -> Any:
+        # used to be Optional[Dict[str, Any]]:
+        # now it's Optional[str|Dict]
+        # it's not completely terrible, since it makes sense - either return the text that the AI generated, or a dict if it was tools, or none on error
+        # but still, needs a rework FIXME
         if not result:
             return None
 
-        if (payload := result["choices"][0]["message"]["content"]) is not None:
+        if (payload := result["choices"][0]["message"].get("content", None)) is not None:
             return payload
-        if (payload := result["choices"][0]["message"]["tool_calls"]) is not None:
-            return payload
+        if result["choices"][0]["message"].get("tool_calls", None) is not None:
+            # consumers of this like applyTools expect a dict here
+            # FIXME: this is a bad function since it returns sometimes str sometimes dict. this is a big refactor though, as it would involve rewriting a bunch of internal types in pydantic
+            return result
         return None
 
     @staticmethod
