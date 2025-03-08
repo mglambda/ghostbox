@@ -25,6 +25,7 @@ def process_sse_streaming_events(callback, done_flag, r):
     global stop_streaming
     for event in r.iter_lines():
         if stop_streaming.is_set():
+            # FIXME: this being global will be an issue :/
             break
             
         if event:

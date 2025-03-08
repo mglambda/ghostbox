@@ -83,7 +83,6 @@ class Ghostbox:
             | {k: v for k, v in self.__dict__.items() if not(k.startswith("_")) or k in kwargs.keys()},
             tags=tags,
         )
-        print("APIDEBUG: " +         self.__dict__["_plumbing"].getBackend().getName())
 
         
         # override with some API defaults
@@ -214,6 +213,8 @@ class Ghostbox:
         printerr(start_session(self._plumbing, filepath))
         return self
 
+        
+        
     def load_config(self, config_file: str) -> Self:
         printerr(load_config(self._plumbing, config_file))
         # FIXME: update self.__dict__?

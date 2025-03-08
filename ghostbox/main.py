@@ -198,6 +198,7 @@ class Plumbing(object):
         self.backend = None
         self.initializeBackend(self.getOption("backend"), self.getOption("endpoint"))
         self.session = Session(chat_user=options.get("chat_user", ""))
+        # FIXME: make this a function returning backend.getlAStResult()
         self.lastResult = {}
         self._lastInteraction = 0
         self.tts_flag = False
@@ -265,7 +266,6 @@ class Plumbing(object):
 
     def initializeBackend(self, backend, endpoint):
         api_key = self.getOption("openai_api_key")
-        print("INIT_DEBUG: " + backend)
         if backend == LLMBackend.llamacpp.name:
             self.backend = LlamaCPPBackend(endpoint)
         elif backend == LLMBackend.openai.name:
@@ -301,7 +301,7 @@ class Plumbing(object):
         try:
             return self.session.stories.get().getData()[-1]["role"] == "tool"
         except:
-            print("debug")
+            printerr("warning: Tried to check for tools use with empty history.")
         return False
 
     def makeGeneratePayload(self, text):
@@ -751,7 +751,7 @@ class Plumbing(object):
                 printerr("unfreezing " + name + " : " + str(value))
 
     def setOption(self, name, value):
-        # new: we freeze state during some parts of execution, applying options after we unfreeze
+        # we freeze state during some parts of execution, applying options after we unfreeze
         if self._frozen:
             self._freeze_queue.put((name, value))
             return
@@ -1457,8 +1457,6 @@ class Plumbing(object):
                 + json.dumps(backend.getLastRequest(), indent=4)
             )
             return ""
-        # FIXME: we're currently formatting the AI string twice. Here and in addAIText. that's not a big deal, though
-        # result = result
         return result
 
     def interact(
@@ -1509,9 +1507,11 @@ class Plumbing(object):
                         # formatting is a bit broken in chat mode. Actually chat mode is a bit broken
                         output = generated_w
                     communicating = False
-                if user_generation_callback is not None:
-                    user_generation_callback(output)
-                generation_callback(output)
+
+            # done communicating
+            if user_generation_callback is not None:
+                user_generation_callback(output)
+            generation_callback(output)
             self.unfreeze()
             # end communicating loop
             self._lastInteraction = time_ms()

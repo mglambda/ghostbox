@@ -373,7 +373,7 @@ class AIBackend(ABC):
         pass
 
     @abstractmethod
-    def timings(self, json=None) -> Optional[Timings]:
+    def timings(self, result_json=None) -> Optional[Timings]:
         """Returns performance statistics for this backend.
         The method can take a json parameter, which may be a return value of the getLastJSON method. In this case, timings for that result are returned.
         Otherwise, if called without the json parameter, timings for the last request are returned.
@@ -504,13 +504,17 @@ class LlamaCPPBackend(AIBackend):
             return "error " + str(r.status_code)
         return r.json()["status"]
 
-    def timings(self, json=None) -> Optional[Timings]:
-        if json is None:
+    def timings(self, result_json=None) -> Optional[Timings]:
+        if result_json is None:
             if (json := self._last_result) is None:
                 return None
+        else:
+            json = result_json
 
         if "timings" not in json:
             printerr("warning: Got weird server result: " + str(json))
+            return
+        
         time = json["timings"]
         # these are llama specific fields which aren't always available on the OAI endpoints
         truncated, cached_n = json.get("truncated", None), json.get("tokens_cached", None)
@@ -635,7 +639,7 @@ class OpenAILegacyBackend(AIBackend):
         # OpenAI API does not have a direct health check endpoint
         return "OpenAI API is assumed to be healthy."
 
-    def timings(self) -> Optional[Timings]:
+    def timings(self, result_json=None) -> Optional[Timings]:
         # FIXME: not implemented yet
         return None
 
@@ -820,10 +824,12 @@ class OpenAIBackend(AIBackend):
         # OpenAI API does not have a direct health check endpoint
         return "OpenAI API is assumed to be healthy."
 
-    def timings(self, json=None) -> Optional[Timings]:
-        if json is None:
+    def timings(self, result_json=None) -> Optional[Timings]:
+        if result_json is None:
             if (json := self._last_result) is None:
                 return None
+        else:
+            json = result_json
 
             if "timings" not in json:
                 return None
