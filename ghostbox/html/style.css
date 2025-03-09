@@ -106,3 +106,8 @@ we leave this to the <code> tag
     padding: 10px;
 }
 
+footer {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+}
