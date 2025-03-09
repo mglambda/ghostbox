@@ -215,6 +215,7 @@ class Plumbing(object):
         self._stop_generation = threading.Event()
         # indicates generation work being done, really only used to print the goddamn cli prompt
         self._busy = threading.Event()
+        self._busy.set()
         self._triggered = False
         self._smartShifted = False
         self._systemTokenCount = None
@@ -1829,6 +1830,8 @@ def regpl(prog: Plumbing, input_function: Callable[[], str] = input) -> None:
     """Read user input, evaluate, generate LLM response, print loop."""
     skip = False
     prog.triggerCLI()
+    prog._busy.clear()
+
     while prog.running:
         last_state = prog.backup()
         try:

@@ -14,7 +14,7 @@ from ghostbox import commands
 from ghostbox.definitions import *
 from ghostbox import definitions
 from ghostbox.api_internal import *
-
+from ghostbox.agency import Tool, Function, Property, Parameters
 
 def from_generic(endpoint="http://localhost:8080", **kwargs):
     """Returns a Ghostbox instance that connects to an OpenAI API compatible endpoint.
@@ -49,15 +49,20 @@ def from_openai_official():
     """
     return Ghostbox(backend=LLMBackend.openai, **kwargs)
 
+class ChatContentComplex (BaseModel):
+    """Contentfield of a ChatMessage, at least when the content is not a mere string."""
+    type: Literal["text", "image-url"]
+    content: Optional[str] = None
+    
+ChatContent = str | List[ChatContentComplex]
 
 class ChatMessage(BaseModel):
-    role: str
-    content: str
-
+    role: Literal["system", "assistant", "user", "tool"]
+    content: Optional[ChatContent] = None
+    tool_calls: Optional[Tool] = None
 
 class ChatHistory(BaseModel):
     data: List[ChatMessage]
-
 
 @dataclass
 class ChatResult:
