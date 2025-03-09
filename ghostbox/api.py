@@ -49,31 +49,6 @@ def from_openai_official():
     """
     return Ghostbox(backend=LLMBackend.openai, **kwargs)
 
-class ChatContentComplex (BaseModel):
-    """Contentfield of a ChatMessage, at least when the content is not a mere string."""
-    type: Literal["text", "image-url"]
-    content: Optional[str] = None
-    
-ChatContent = str | List[ChatContentComplex]
-
-class ChatMessage(BaseModel):
-    role: Literal["system", "assistant", "user", "tool"]
-    content: Optional[ChatContent] = None
-    tool_calls: Optional[Tool] = None
-
-class ChatHistory(BaseModel):
-    data: List[ChatMessage]
-
-@dataclass
-class ChatResult:
-    # not sure yet
-    payload: str
-
-
-@dataclass
-class CompletionResult:
-    # also not sure yet
-    payload: str
 
 
 class Ghostbox:

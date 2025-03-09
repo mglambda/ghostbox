@@ -1,7 +1,53 @@
-
+from dataclasses import dataclass
 from enum import Enum
 from pydantic import BaseModel
 from typing import *
+
+class Property(BaseModel):
+    description: str
+    type: str
+
+class Parameters(BaseModel):
+    type: str = "object"
+    properties: Dict[str, Property]
+    required: List[str] = []
+    
+class Function(BaseModel):
+    name: str
+    description: str
+    # this wants jsonschema object
+    parameters: Parameters
+
+class Tool(BaseModel):
+    type: str = "function"
+    function: Function
+
+
+class ChatContentComplex (BaseModel):
+    """Contentfield of a ChatMessage, at least when the content is not a mere string."""
+    type: Literal["text", "image-url"]
+    content: Optional[str] = None
+    
+ChatContent = str | List[ChatContentComplex]
+
+class ChatMessage(BaseModel):
+    role: Literal["system", "assistant", "user", "tool"]
+    content: Optional[ChatContent] = None
+    tool_calls: Optional[Tool] = None
+
+class ChatHistory(BaseModel):
+    data: List[ChatMessage]
+
+@dataclass
+class ChatResult:
+    # not sure yet
+    payload: str
+
+
+@dataclass
+class CompletionResult:
+    # also not sure yet
+    payload: str
 
 
 LLMBackend = Enum("LLMBackend", "generic legacy llamacpp koboldcpp openai dummy")

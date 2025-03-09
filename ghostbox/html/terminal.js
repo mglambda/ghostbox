@@ -137,7 +137,7 @@ function addUserMessageToPage(message) {
     messageElement.className = 'user-message';
 
     // Replace newlines with <br> tags
-    const formattedMessage = message.replace(/\n/g, '<br>') ;
+    const formattedMessage = ("\n" + message).replace(/\n/g, '<br>') ;
 
     // we know that the user message at least comes in one chunk, so we can wrap it in <br>s
     messageElement.innerHTML = "<br>" + formattedMessage + "<br>";

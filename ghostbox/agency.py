@@ -4,9 +4,7 @@ import os, importlib, inspect, docstring_parser, json, re, traceback
 from pydantic import BaseModel
 from ghostbox.util import *
 from typing import *
-
-
-
+from ghostbox.definitions import *
 
 # # example of tool dict
 # "tools": [
@@ -28,26 +26,6 @@ from typing import *
 #     }
 #     }
 # ],
-
-class Property(BaseModel):
-    description: str
-    type: str
-
-class Parameters(BaseModel):
-    type: str = "object"
-    properties: Dict[str, Property]
-    required: List[str] = []
-    
-class Function(BaseModel):
-    name: str
-    description: str
-    # this wants jsonschema object
-    parameters: Parameters
-
-class Tool(BaseModel):
-    type: str = "function"
-    function: Function
-
 
 def type_to_json_schema(type_):
     type_map = {
