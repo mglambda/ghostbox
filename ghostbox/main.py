@@ -300,7 +300,7 @@ class Plumbing(object):
         # if the last message in the history has role 'tools', it means
         # we just send results, so we don't use tools for this interaction
         try:
-            return self.session.stories.get().getData()[-1]["role"] == "tool"
+            return self.session.stories.get().getData()[-1].role == "tool"
         except:
             printerr("warning: Tried to check for tools use with empty history.")
         return False
@@ -346,7 +346,7 @@ class Plumbing(object):
             # openai chat/completion needs the system prompt and story
             # we also do this for llama in "auto" template mode
             d["system"] = self.session.getSystem()
-            d["story"] = copy.deepcopy(self.session.stories.get().getData())
+            d["story"] = copy.deepcopy(self.session.stories.get().to_json())
         else:
             # all others get the text
             # FIXME: there is some deep mishandling here because this uses the text parameter while oai endpoitns use the story. must investigate this
@@ -650,7 +650,7 @@ class Plumbing(object):
 
     def applyTools(
         self, w: str = "", json={}
-    ) -> Tuple[List[Dict[str, Any]], Dict[str, Any]]:
+    ) -> Tuple[List[ChatMessage], ChatMessage]:
         """Takes an AI generated string w and optionally the json result from an OpenAI API compatible tool request. Tries to detect a tool request in both. If detected, will apply the tools and then return their results as structured data, as well as the fully parsed original tool call.
         Ideally the JSON result makes tool use obvious through the field
         json["choices"][0]["finish_reason"] == "tool_calls"
@@ -708,7 +708,16 @@ class Plumbing(object):
 
         if tool_results == []:
             return nothing
-        return tool_results, tool_request
+
+        # NOTE: the responses from the server come back more complex than what is later supposed to be sent in the chat history
+        # specifically, a message with role "assistant", conten null, and tool_calls=... should *not* have the tool c<calls be a layered dictionary with type and function key, it's just a plain list of dicts of names and arguments
+        # I have no idea why this is inconsistent but that's how it is, and that's the reason for the repackaging below.
+        tool_request_msg = ChatMessage(role="assistant",
+                                       tool_calls=[ToolCall(function=FunctionCall(name=fcall["function"]["name"], arguments=fcall["function"]["arguments"])) for fcall in tool_request["tool_calls"]])
+        
+        return tool_results, tool_request_msg
+
+
 
     def _formatToolResults(self, results):
         """Based on a list of dictionaries, returns a string that represents the tool outputs to an LLM."""
@@ -1488,16 +1497,23 @@ class Plumbing(object):
             self.addUserText(modified_w)
             while communicating:
                 # this only runs more than once if there is auto-activation, e.g. with tool use
-                generated_w = self.communicate(
+                if (generated_w := self.communicate(
                     self.buildPrompt(hint), stream_callback=stream_callback
-                )
+                )) == "":
+                    # empty string usually means something went wrong.
+                    # communicate will have already printed to stderr
+                    # it is important that we don't loop forever here though, so we bail
+                    communicating = False
+
+                    # if the generated string has tool calls, we apply them here
                 tool_results, tool_call = self.applyTools(
                     generated_w, json=self.lastResult
                 )
+                
                 output = ""
                 if tool_results != []:
                     # need to add both the calls and result to the history
-                    self.session.stories.get().addRawJSONs([tool_call] + tool_results)
+                    self.session.stories.get().addMessages([tool_call] + tool_results)
                     (w, hint) = ("", "")
                     if self.getOption("verbose"):
                         output = json.dumps(tool_results)

@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 from enum import Enum
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
+from pydantic.types import Json
 from typing import *
 
 class Property(BaseModel):
@@ -22,18 +23,31 @@ class Tool(BaseModel):
     type: str = "function"
     function: Function
 
-
 class ChatContentComplex (BaseModel):
     """Contentfield of a ChatMessage, at least when the content is not a mere string."""
     type: Literal["text", "image-url"]
-    content: Optional[str] = None
+    content: str
     
-ChatContent = str | List[ChatContentComplex]
+ChatContent = str | List[ChatContentComplex] | Dict
 
+class FunctionCall(BaseModel):
+    name: str
+    # this is weird but it really is str, no idea why not dict
+    arguments: str
+    
+class ToolCall(BaseModel):
+    type: str = "function"
+    function: FunctionCall
+    # FIXME: I don't quite understand id field yet
+    id: str = ""
+    
 class ChatMessage(BaseModel):
     role: Literal["system", "assistant", "user", "tool"]
     content: Optional[ChatContent] = None
-    tool_calls: Optional[Tool] = None
+    tool_calls: List[ToolCall] = []
+    tool_name: str = ""
+    tool_call_id: str = ""
+    
 
 class ChatHistory(BaseModel):
     data: List[ChatMessage]

@@ -80,18 +80,18 @@ The quick, brown fox jumps over the lazy hedgehog!<|im_end|><|im_start|>assistan
     def body(self, story, append_hint=True, **kwargs):
         def build(w, item):
             # you could do this more modular but why? this way users see the files and the template scheme is obvious. I bet this covers 99% of actual use cases for LLM
-            content = replaceFromDict(item["content"], kwargs, key_func=FilePFTemplate.var_decorator)
-            if item["role"] == "user":
+            content = replaceFromDict(item.content, kwargs, key_func=FilePFTemplate.var_decorator)
+            if item.role == "user":
                 return w + self.begin_user + content + self.end_user
-            elif item["role"] == "assistant":
+            elif item.role == "assistant":
                 return w + self.begin_assistant + content + self.end_assistant
-            elif item["role"] == "system":
+            elif item.role == "system":
                 # this is a bit more hairy
                 begin = self.__dict__.get("begin_system", self.begin_assistant)
                 end = self.__dict__.get("end_system", self.end_assistant)
                 return w + begin + content + end
             # throw if people use weird or no roles with this template
-            raise ValueError(item["role"] + " is not a valid role for this template.")
+            raise ValueError(item.role + " is not a valid role for this template.")
         if append_hint:
             hint = replaceFromDict(self.hint, kwargs, key_func=FilePFTemplate.var_decorator)
         else:
@@ -115,8 +115,8 @@ class RawTemplate(PFTemplate):
 
 
     def body(self, story, append_hint=True, **kwargs):
-        return "\n".join([item["content"] for item in story.getData()
-                          if type(item["content"]) == str])
+        return "\n".join([item.content for item in story.getData()
+                          if type(item.content) == str])
 
     def stops(self):
         return []
