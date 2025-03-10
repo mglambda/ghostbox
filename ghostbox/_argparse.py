@@ -112,7 +112,7 @@ def makeTaggedParser(default_params) -> TaggedArgumentParser:
                         tag=mktag(type=AT.Porcelain, group=AG.Generation, motd=True)) 
     parser.add_argument("--stream_flush", type=str, default="token", help="When to flush the streaming buffer. When set to 'token', will print each token immediately. When set to 'sentence', it will wait for a complete sentence before printing. This can be useful for TTS software. Default is 'token'.",
                         tag=mktag(type=AT.Plumbing, group=AG.Generation, motd=True))
-    parser.add_argument("--cli_prompt", type=str, default=" 👻 ", help="String to show at the bottom as command prompt. Can be empty.",
+    parser.add_argument("--cli_prompt", type=str, default=" {{current_tokens}} 👻 ", help="String to show at the bottom as command prompt. Can be empty.",
                         tag=mktag(type=AT.Plumbing, group=AG.Interface, motd=True))
     parser.add_argument("--cli_prompt_color", type=str, default="none", help="Color of the prompt. Uses names of standard ANSI terminal colors. Requires --color to be enabled.",
                         tag=mktag(type=AT.Plumbing, group=AG.Interface))

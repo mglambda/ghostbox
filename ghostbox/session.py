@@ -9,7 +9,7 @@ class Session(object):
     
     def __init__(self, dir=None, chat_user="", chat_ai="", additional_keys=[], tools_forbidden=[]):
         self.dir = dir
-        self.fileVars = {"chat_user" : chat_user, "chat_ai" : chat_ai, "system_msg" : "" }
+        self.fileVars = {"chat_user" : chat_user, "chat_ai" : chat_ai, "system_msg" : "", "current_tokens": "0"}
         self.stories = StoryFolder()
         self.tools = []
         self.tools_file = ""

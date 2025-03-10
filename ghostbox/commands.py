@@ -467,8 +467,7 @@ Can you compare [img-1] and [img-2]?
 def debuglast(prog, argv):
     """
     Dumps a bunch of information about the last result received. Note that this won't do anything if you haven't sent a request to a working backend server that answered you."""
-    r = prog.lastResult
-    if not(r):
+    if not(r := prog.lastResult):
         return "Nothing."
 
     acc = []

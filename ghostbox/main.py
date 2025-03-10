@@ -554,7 +554,7 @@ class Plumbing(object):
         if self.getOption("color"):
             f = ColorFormatter(self.getOption("cli_prompt_color")) + f
 
-        return f.format(self.getOption("cli_prompt"))
+        return self.session.expandVars(f.format(self.getOption("cli_prompt")))
 
     def getMode(self):
         w = self.getOption("mode")
@@ -1333,7 +1333,7 @@ class Plumbing(object):
             vars["system_msg"] += "\n" + tools_hint
         return self.getTemplate().header(**vars)
 
-    def showStory(self, story_folder=None, append_hint=True):
+    def showStory(self, story_folder=None, append_hint=True) -> str:
         """Returns the current story as a unformatted string, injecting the current prompt template."""
         # new and possibly FIXME: we need to add another hint from agency.makeToolInstructionMsg when using tools, so we disable the hint here
         if self.getOption("use_tools"):
@@ -1579,6 +1579,13 @@ class Plumbing(object):
 
     def setLastJSON(self, json_result):
         self.lastResult = json_result
+        try:
+            current_tokens = str(self.lastResult["usage"]["total_tokens"])
+        except:
+            # fail silently, it's not that important
+            current_tokens = "?"
+            
+        self.session.setVar("current_tokens", current_tokens)
 
     def backup(self):
         """Returns a data structure that can be restored to return to a previous state of the program."""

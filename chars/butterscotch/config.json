@@ -9,7 +9,7 @@
 	"audio_activation_phrase" : "Hey, butter",
 	"audio_activation_phrase_keep" : true,
 	"audio_activation_period_ms" : 120000,
-	"cli_prompt" : " 🪄 ",
+	"cli_prompt" : " {{current_tokens}} 🪄 ",
 	"cli_prompt_color" : "green",
 	"temperature" : 0.3,
 	"samplers": ["min_p", "temperature"]
