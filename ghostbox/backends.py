@@ -270,6 +270,11 @@ sampling_parameter_tags["temperature"].type = ArgumentType.Porcelain
 sampling_parameter_tags["top_p"].type = ArgumentType.Porcelain
 
 
+# These don't fit anywhere else and don't really need documentation
+special_parameters = {
+    "response_format" : {"type": "text"}
+    }
+
 class Timings(BaseModel):
     """Performance statistics for LLM backends.
     Most backends give timing statistics, though the format and particular stats vary. This class unifies the interface and boils it down to only the stats we care about.

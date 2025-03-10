@@ -189,20 +189,7 @@ The voice used depends on the value of tts_voice, which you can either /set or p
 ghostbox will attempt to provide the tts_program with the voice using a -V command line argument.
 To see the list of supported voices, try /lsvoices.
 Enabling TTS will automatically set stream_flush to 'sentence', as this works best with most TTS engines. You can manually reset it to 'token' if you want, though."""
-    prog.options["tts"] = not(prog.options["tts"])
-    w = ""
-    if prog.options["tts"]:
-        err = prog.initializeTTS()
-        if err:
-            return err
-        w += "Try /hide for a more immersive experience.\n"
-        prog.setOption("stream_flush", "sentence")
-    else:
-        # disabled tts
-        prog.tts.close()
-        prog.tts = None
-    return w + "TTS " + {True : "on.", False : "off."}[prog.options["tts"]]
-
+    return toggle_tts(prog)
 
 
 def ttsDebug(prog, argv):

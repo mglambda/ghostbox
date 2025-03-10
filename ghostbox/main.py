@@ -331,6 +331,10 @@ class Plumbing(object):
                 else:
                     d[param] = self.getOption(param)
 
+        # some special ones
+        for k, v in special_parameters.items():
+            d[k] = v if not(self.getOption(k)) else self.getOption(k)
+                    
         # just throw toools in for backends that can use them, unless user disabled
         if self.getOption("use_tools"):
             if not (self.justUsedTools()):
@@ -631,16 +635,22 @@ class Plumbing(object):
             continuation = self.getAIFormatter().format(w)
             self.session.stories.get().extendAssistantText(continuation)
             return continuation
-        else:
-            # hint may have been sent to the backend but we have to add it to the story ourselves.
-            if self.getOption("hint_sticky"):
-                hint = self.getOption("hint")
-            else:
-                hint = ""
 
+        # hint may have been sent to the backend but we have to add it to the story ourselves.
+        if self.getOption("hint_sticky"):
+            hint = self.getOption("hint")
+        else:
+            hint = ""
+
+
+        if ((rformat := self.getOption("response_format")) and
+            (rformat["type"] != "text")):
+            # don't use formatters if user expects structured data
+            addition = hint + w
+        else:
             addition = self.getAIFormatter().format(hint + w)
-            self.session.stories.get().addAssistantText(addition)
-            return addition
+        self.session.stories.get().addAssistantText(addition)
+        return addition
 
     def addSystemText(self, w):
         """Add a system message to the chat log, i.e. add a message with role=system. This is mostly used for tool/function call results."""
@@ -1141,7 +1151,9 @@ class Plumbing(object):
 
         # strip whitespace, we especially don't want to send pure whitespace like ' \n' or '  ' to a tts, this is known to crash some of them. It also shouldn't change the resulting output.
         w = w.strip()
-        if not (self.tts.is_running()):
+
+        
+        if self.tts is None or not (self.tts.is_running()):
             self.setOption("tts", False)
             printerr(
                 "error: TTS is dead. You may attempt to restart with /tts. Check errors with /ttsdebug ."
@@ -1507,7 +1519,9 @@ class Plumbing(object):
                     # it is important that we don't loop forever here though, so we bail
                     communicating = False
 
-                    # if the generated string has tool calls, we apply them here
+
+
+                # if the generated string has tool calls, we apply them here
                 tool_results, tool_call = self.applyTools(
                     generated_w, json=self.lastResult
                 )
@@ -1532,7 +1546,6 @@ class Plumbing(object):
                 user_generation_callback(output)
             generation_callback(output)
             self.unfreeze()
-            # end communicating loop
             self._lastInteraction = time_ms()
             self._busy.clear()            
 

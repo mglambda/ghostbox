@@ -7,7 +7,7 @@ from contextlib import contextmanager
 from typing import Callable, Dict
 from typing_extensions import Self
 import json
-from ghostbox.main import Plumbing
+from ghostbox.main import Plumbing, setup_plumbing
 from ghostbox.StoryFolder import StoryFolder
 from ghostbox._argparse import makeDefaultOptions
 from ghostbox.util import printerr
@@ -16,6 +16,7 @@ from ghostbox.definitions import *
 from ghostbox import definitions
 from ghostbox.api_internal import *
 from ghostbox.agency import Tool, Function, Property, Parameters
+
 
 def from_generic(endpoint="http://localhost:8080", **kwargs):
     """Returns a Ghostbox instance that connects to an OpenAI API compatible endpoint.
@@ -51,21 +52,23 @@ def from_openai_official():
     return Ghostbox(backend=LLMBackend.openai, **kwargs)
 
 
-
 class Ghostbox:
     def __init__(self, endpoint: str, backend: LLMBackend, **kwargs):
-        kwargs["endpoint"] = endpoint        
+        kwargs["endpoint"] = endpoint
         kwargs["backend"] = backend.name
 
         self.__dict__ |= kwargs
         default_options, tags = makeDefaultOptions()
         self.__dict__["_plumbing"] = Plumbing(
             options=default_options.__dict__
-            | {k: v for k, v in self.__dict__.items() if not(k.startswith("_")) or k in kwargs.keys()},
+            | {
+                k: v
+                for k, v in self.__dict__.items()
+                if not (k.startswith("_")) or k in kwargs.keys()
+            },
             tags=tags,
         )
 
-        
         # override with some API defaults
         # FIXME: only if not specified by user
         self.__dict__["_plumbing"].options |= definitions.api_default_options
@@ -74,12 +77,20 @@ class Ghostbox:
             self.load_config(self.config_file)
         setup_plumbing(self._plumbing)
 
+
+        # for arcane reasons we must startthe tts after everything else
+        if self._plumbing.tts_flag:
+            self._plumbing.tts_flag = False
+            self._plumbing.options["tts"] = False
+            printerr(toggle_tts(self._plumbing))
+
+
     @contextmanager
-    def options(self, options: dict):
+    def options(self, **kwargs):
         # copy old values
-        tmp = {k: v for (k, v) in self._plumbing.options.items() if k in options}
+        tmp = {k: v for (k, v) in self._plumbing.options.items() if k in kwargs}
         # this has to be done one by one as setoptions has sideffects
-        for new_k, new_v in options.items():
+        for new_k, new_v in kwargs.items():
             self._plumbing.setOption(new_k, new_v)
         yield self
         # now unwind, also one by one
@@ -122,15 +133,17 @@ class Ghostbox:
         pass
 
     def is_busy(self) -> bool:
+        """Returns true if an interaction with a backend is currently in progress.
+        While busy, all changes to the state of options (e.g. via set or the options context manager) will be buffered and applied when the ghostbox is no longer busy."""
         return self._plumbing._frozen
 
     # these are the payload functions
     def text(self, prompt_text: str, timeout=None) -> str:
-        with self.options({"stream": False}):
+        with self.options(**{"stream": False}):
             return self._plumbing.interactBlocking(prompt_text, timeout=timeout)
 
     def text_async(self, prompt_text: str, callback: Callable[[str], None]) -> None:
-        with self.options({"stream": False}):
+        with self.options(**{"stream": False}):
             # FIXME: this is tricky as we immediately return and set stream = True again ??? what to do
             self._plumbing.interact(prompt_text, user_generation_callback=callback)
         return
@@ -141,7 +154,7 @@ class Ghostbox:
         chunk_callback: Callable[[str], None],
         generation_callback: Callable[[str], None] = lambda x: None,
     ) -> None:
-        with self.options({"stream": True}):
+        with self.options(**{"stream": True}):
             self._plumbing.interact(
                 prompt_text,
                 user_generation_callback=generation_callback,
@@ -150,7 +163,8 @@ class Ghostbox:
         return
 
     def json(self, prompt_text: str) -> dict:
-        pass
+        with self.options(response_format={"type":"json_object"}):
+            return self.text(prompt_text)
 
     def json_async(self, prompt_text: str, callback: Callable[[dict], None]) -> None:
         pass
@@ -175,8 +189,6 @@ class Ghostbox:
         printerr(start_session(self._plumbing, filepath))
         return self
 
-        
-        
     def load_config(self, config_file: str) -> Self:
         printerr(load_config(self._plumbing, config_file))
         # FIXME: update self.__dict__?
@@ -219,7 +231,7 @@ class Ghostbox:
     def set_char(
         self,
         character_folder: str,
-        chat_history: Optional[List[ChatMessage | Dict[str, Any]]]=None
+        chat_history: Optional[List[ChatMessage | Dict[str, Any]]] = None,
     ) -> Self:
         """Set an active character_folder, which may be the same one, and optionally set the chat history.
         Note: This will wipe the previous history unless chat_history is None.
@@ -240,9 +252,11 @@ class Ghostbox:
             else:
                 # try to parse the item as ChatMessage
                 try:
-                    story.appendRawJSON(item)
+                    story.addRawJSON(item)
                 except:
-                    printerr("warning: Couldn't parse chat history. Not a valid ChatMessage. Skipping message. Traceback below.")
+                    printerr(
+                        "warning: Couldn't parse chat history. Not a valid ChatMessage. Skipping message. Traceback below."
+                    )
                     printerr(traceback.format_exc())
                     continue
 

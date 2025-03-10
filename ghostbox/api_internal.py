@@ -89,3 +89,20 @@ def hide_some_output(plumbing):
     plumbing.options["chat_show_ai_prompt"] = False
     plumbing.options["color"] = False
     
+
+def toggle_tts(plumbing) -> str:
+    prog = plumbing
+    prog.options["tts"] = not(prog.options["tts"])
+    w = ""
+    if prog.options["tts"]:
+        err = prog.initializeTTS()
+        if err:
+            return err
+        w += "Try /hide for a more immersive experience.\n"
+        prog.setOption("stream_flush", "sentence")
+    else:
+        # disabled tts
+        prog.tts.close()
+        prog.tts = None
+    return w + "TTS " + {True : "on.", False : "off."}[prog.options["tts"]]
+    

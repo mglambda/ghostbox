@@ -103,13 +103,13 @@ class LlamacppTest(unittest.TestCase):
             include=["/home/marius/prog/ai/ghostbox"],
             character_folder="test_dolphin",
             tts=True,
-            quiet=True,
-            tts_voice_dir="voices",
-            tts_program="/home/marius/prog/ai/ghostbox/tts.sh",
+            quiet=False,
+            tts_model="kokoro",
+            tts_voice="af_sky"
         )
-
         box.tts_say("This is an API use of the TTS.")
-        time.sleep(30)
+        # give it time to actually talk
+        time.sleep(10)
 
     def test_set_char(self):
         history = [
@@ -129,9 +129,19 @@ class LlamacppTest(unittest.TestCase):
             "Have you been paying attention? Please repeat to me what color my flamingo is."
         )
         self.assertEqual(type(w), str)
-        print("The following response should talk about a flamingo being green:\n" + w)
+        print("The following response should talk about a flamingo being green:\n" + w+ "\n")
         return
 
+    def test_json(self):
+        box = ghostbox.from_llamacpp(character_folder="test_dolphin")
+        import json
+        noises = json.loads(box.json("Can you list some animal noises? Please give key/value pairs."))
+        try:
+            self.assertTrue("Cat" in noises or "cat" in noises)
+        except:
+            print(json.dumps(noises, indent=4))
+
+        
 
 def main():
     unittest.main()
