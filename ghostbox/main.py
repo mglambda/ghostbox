@@ -1359,9 +1359,9 @@ class Plumbing(object):
 
         ws = []
         for item in sf.get().getData():
-            if type(w := item["content"]) != str:
+            if type(w := item.content) != str:
                 continue
-            if item["role"] == "assistant":
+            if item.role == "assistant":
                 ws.append(
                     (self.getAIColorFormatter() + self.getDisplayFormatter()).format(w)
                 )

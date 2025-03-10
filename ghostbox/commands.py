@@ -238,7 +238,7 @@ def previousStory(prog, argv):
         return "Cannot go to previous story branch: No previous branch exists."
     return "Now on branch " + str(prog.session.stories.index)    
 
-def retry(prog, argv, predicate=lambda item: item["role"] == "user"):
+def retry(prog, argv, predicate=lambda item: item.role == "user"):
     """
     Retry generation of the LLM's response.
 This will drop the last generated response from the current story and generate it again. Use this in most cases where you want to regenerate. If you extended the LLM's repsone (with /cont or hitting enter), the entire repsonse will be regenerated, not just the last part.
@@ -257,8 +257,8 @@ This will rewind the story to just before your last input, allowing you to rephr
     See also: /retry"""
     prog.session.stories.cloneStory()
     story = prog.session.stories.get()
-    story.dropUntil(lambda item: item["role"] == "user")
-    story.dropUntil(lambda item: item["role"] == "assistant")
+    story.dropUntil(lambda item: item.role == "user")
+    story.dropUntil(lambda item: item.role == "assistant")
     printerr("Now on branch " + str(prog.session.stories.index) )    
     return ""
 
