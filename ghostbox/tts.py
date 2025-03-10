@@ -168,6 +168,11 @@ while True:
     output_file = prog.temp_wav_file()
     try:
         tts.tts_to_file(text=msg, speaker_file=prog.getVoiceSampleFile(), file_path=output_file.name)
+    except IgnoreValueError as e:
+        # this happens on some bad values that are hard to filter but harmless.
+        # e.g. "---" for text in kokoro
+        printerr("Ignored `" + e.ignored_value + "`.")
+        continue
     except ZeroDivisionError:
         print("Caught zero division error. Ignoring.")
         # this happens when the tts is asked to process whitespace and produces a wav file in 0 seconds :) nothing to worry about

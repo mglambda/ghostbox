@@ -5,6 +5,12 @@ from typing import *
 from ghostbox.util import *
 from ghostbox.definitions import *
 
+class IgnoreValueError(ValueError):
+    def __init__(self, ignored_value, **kwargs):
+        super().__init__(**kwargs)
+        self.ignored_value = ignored_value
+        
+        
 def assert_downloaded(filepath: str, download_url: str) -> None:
     """Makes sure a file FILEPATH exists, downloading it from DOWNLOAD_URL if necessary."""
     if os.path.isfile(filepath):
@@ -257,7 +263,11 @@ class KokoroBackend(TTSBackend):
             samples, sample_rate = self._model.create(
                 text, voice=speaker_file, speed=1.0, lang=language
             )
-            sf.write(file_path, samples, sample_rate)            
+            sf.write(file_path, samples, sample_rate)
+        except ValueError as e:
+            # this happens when kokoro doesn't like a string, e.g. "---".
+            # rather than filtering all of these, we just throw and continue in the main loop
+            raise IgnoreValueError(text)
         except:
             # this happens e.g. when a wrong voice is picked. we exit to avoid infinite loop with the main thread retries.
                 printerr(traceback.format_exc())
