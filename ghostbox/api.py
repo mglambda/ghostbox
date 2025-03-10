@@ -1,4 +1,5 @@
 from __future__ import annotations
+import traceback
 from pydantic import BaseModel
 from typing import *
 from dataclasses import dataclass
@@ -237,23 +238,33 @@ class Ghostbox:
     def set_char(
         self,
         character_folder: str,
-        chat_history: Union[ChatHistory, List[Dict[str, str]], None] = None,
+        chat_history: Optional[List[ChatMessage | Dict[str, Any]]]=None
     ) -> Self:
         """Set an active character_folder, which may be the same one, and optionally set the chat history.
-        Note: This will wipe the previous history unless chat_history is None."""
+        Note: This will wipe the previous history unless chat_history is None.
+        :param character_folder: The new character folder to load.
+        :param chat_history: A list of ChatHistory items, valid JSON dictionaries that parse as ChatHistoryItems, or a mix of both. If None, chat history will be retained.
+        :return: Ghostbox instance."""
         if character_folder != self._plumbing.getOption("character_folder"):
             printerr(start_session(self._plumbing, character_folder))
 
         if chat_history is None:
             return self
 
-        if type(chat_history) == list:
-            chat_history = ChatHistory(
-                data=[ChatMessage(**chat_message) for chat_message in chat_history]
-            )
+        self._plumbing.session.stories.reset()
+        story = self._plumbing.session.stories.get()
+        for item in chat_history:
+            if type(item) == ChatMessage:
+                story.appendMessage(item)
+            else:
+                # try to parse the item as ChatMessage
+                try:
+                    story.appendRawJSON(item)
+                except:
+                    printerr("warning: Couldn't parse chat history. Not a valid ChatMessage. Skipping message. Traceback below.")
+                    printerr(traceback.format_exc())
+                    continue
 
-        # we know now that chat_history is a valid ChatHistory pydantic object
-        new_stories = StoryFolder()
-        new_stories.get().data = [msg.model_dump() for msg in chat_history.data]
-        self._plumbing.session.stories = new_stories
+        return self
+
         return self

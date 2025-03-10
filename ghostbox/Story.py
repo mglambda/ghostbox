@@ -14,12 +14,21 @@ class Story(object):
     def addAssistantText(self, w: str, **kwargs):
         self.data.append(ChatMessage(role="assistant", content= w, **kwargs))
 
+    def addRawJSON(self, json: Dict[str, Any]) -> None:
+        """Try to parse a raw json dictionary as a ChatMessage and then append it to the story.
+        This will throw if the parsing fails."""
+        self.data.append(ChatMessage(**json))
+        
     def addRawJSONs(self, json_list: List[Dict[str, Any]]) -> None:
         """Add one or more python dictionaries that will be interpreted as ChatMessages and appended to the story.
                          If any of the passed dictionaries don't conform to the ChatMessage schema, you will get a pydantic ValidationError."""
         self.data.extend([ChatMessage(**item)
                           for item in json_list])
 
+    def addMessage(self, msg: ChatMessage) -> None:
+        """Appends a chat message to the story."""
+        self.data.append(msg)
+        
     def addMessages(self, msgs: List[ChatMessage]) -> None:
         """Appends ChatMessages to the story."""
         self.data.extend(msgs)

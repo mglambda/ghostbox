@@ -20,6 +20,11 @@ class StoryFolder(object):
         self.stories.append(Story())
         self.index = len(self.stories) - 1
 
+    def reset(self) -> None:
+        """Reset storyfolder to an empty state."""
+        self.stories = [Story()]
+        self.index = 0
+        
     def cloneStory(self, index=-1):
         if index == -1:
             # -1  means currrent story
