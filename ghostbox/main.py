@@ -1773,8 +1773,15 @@ class Plumbing(object):
         self._cli_printer_thread = threading.Thread(target=cli_printer, daemon=True)
         self._cli_printer_thread.start()
 
-    def triggerCLI(self):
-        self._triggered = True
+    def triggerCLI(self, check: Optional[str]=None) -> None:
+        """Signals that the user has pressed enter, usually executing a command.
+        The entire purpose of this is to track wether we need to print a newline before printing the CLI prompt.
+        :param check: If none, is checked for a newline at the end, determining wether to print a newline."""
+        if check is None:
+            self._triggered = True
+        else:
+            self._triggered = True if check.endswith("\n") else False
+            
         # off to the races lulz
         self._busy.set()
         self._busy.clear()
@@ -1899,7 +1906,7 @@ def regpl(prog: Plumbing, input_function: Callable[[], str] = input) -> None:
                     # execute a / command
                     v = f(prog, w.split(" ")[1:])
                     printerr(v)
-                    prog.triggerCLI()
+                    prog.triggerCLI(check=v)
                     if not (prog.isContinue()):
                         # skip means we don't send a prompt this iteration, which we don't want to do when user issues a command, except for the /continue command
                         skip = True
