@@ -72,26 +72,7 @@ class Ghostbox:
 
         if self.config_file:
             self.load_config(self.config_file)
-        self.init()
-
-    def init(self):
-        if self.character_folder:
-            self.start_session(self.character_folder)
-
-        if self._plumbing.getOption("hide"):
-            hide(self._plumbing, [])
-
-        if self._plumbing.getOption("tts"):
-            printerr(self._plumbing.initializeTTS())
-
-        if self._plumbing.getOption("audio"):
-            self._plumbing.startAudioTranscription()
-            del self._plumbing.options["audio"]
-
-        if self._plumbing.getOption("image_watch"):
-            self._plumbing.startImageWatch()
-            del self._plumbing.options["image_watch"]
-        return self
+        setup_plumbing(self._plumbing)
 
     @contextmanager
     def options(self, options: dict):

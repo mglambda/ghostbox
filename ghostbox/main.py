@@ -6,6 +6,7 @@ from functools import *
 from colorama import just_fix_windows_console, Fore, Back, Style
 from lazy_object_proxy import Proxy
 import argparse
+from argparse import Namespace
 from ghostbox.commands import *
 from ghostbox.autoimage import *
 from ghostbox.output_formatter import *
@@ -1805,8 +1806,21 @@ def main():
         initial_cli_prompt=args.cli_prompt,
         tags=tagged_parser.get_tags(),
     )
-    # the following is setup, though it is subtly different from Plumbing.init, so beware
+    setup_plumbing(prog, args)
 
+    if (prompt := prog.getOption("prompt")) is not None:
+
+        def input_once():
+            prog.running = False
+            return prompt
+
+        regpl(prog, input_function=input_once)
+    else:
+        regpl(prog)
+    
+
+def setup_plumbing(prog: Plumbing, args: Namespace=Namespace()) -> None:
+    # the following is setup, though it is subtly different from Plumbing.init, so beware        
     if userConfigFile():
         prog.setOption("user_config", userConfigFile())
         printerr(loadConfig(prog, [userConfigFile()], override=False))
@@ -1814,17 +1828,20 @@ def main():
     if prog.getOption("config_file"):
         printerr(loadConfig(prog, [prog.options["config_file"]]))
 
-    # FIXME: this might also have to be done for other variables in the future, at which point we refactor and generalize
-    if "-u" in sys.argv or "--chat_user" in sys.argv:
-        prog.setOption("chat_user", args.chat_user)
 
-    if args.character_folder:
+    try:
+        # this can fail if called from api 
+        if "-u" in sys.argv or "--chat_user" in sys.argv:
+            prog.setOption("chat_user", args.chat_user)
+    except AttributeError:
+        # we don't have arg.xxx -> fine
+        pass
+    
+    if prog.getOption("character_folder"):
         printerr(newSession(prog, []))
 
     if prog.getOption("hide"):
         hide(prog, [])
-        # FIXME: this shouldn't be deleted so that it stays persistent when user does /start or /restart, but it's also a useless option. implement a emchanism for hidden options?
-    # del prog.options["hide"]
 
     if prog.getOption("tts"):
         prog.tts_flag = True
@@ -1845,16 +1862,6 @@ def main():
     if prog.getOption("http"):
         del prog.options["http"]
         prog.setOption("http", True)
-
-    if (prompt := prog.getOption("prompt")) is not None:
-
-        def input_once():
-            prog.running = False
-            return prompt
-
-        regpl(prog, input_function=input_once)
-    else:
-        regpl(prog)
 
 
 def regpl(prog: Plumbing, input_function: Callable[[], str] = input) -> None:
