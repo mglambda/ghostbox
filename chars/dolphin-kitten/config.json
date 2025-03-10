@@ -1,5 +1,5 @@
 {
 	"mode" : "default",
-	"cli_prompt" : "\n 🐬 ",
+	"cli_prompt" : "\n {{current_tokens}} 🐬 ",
 	"cli_prompt_color" : "blue"
 }

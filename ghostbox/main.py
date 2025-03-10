@@ -196,6 +196,7 @@ class Plumbing(object):
         self.options = options
         self.tags = tags
         self.backend = None
+        self.template = None        
         self.initializeBackend(self.getOption("backend"), self.getOption("endpoint"))
         self.session = Session(chat_user=options.get("chat_user", ""))
         # FIXME: make this a function returning backend.getlAStResult()
@@ -230,8 +231,8 @@ class Plumbing(object):
         else:
             self.setOption("grammar", "")
         # template
-        self.template = None
         self.loadTemplate(self.getOption("prompt_format"), startup=True)
+
 
         # whisper stuff. We do this with a special init function because it's lazy
         self.whisper = self._newTranscriber()
@@ -462,7 +463,7 @@ class Plumbing(object):
 
         # special cases
         if name == "auto":
-            if startup and self.template is not None:
+            if startup and (self.template is not None):
                 # don't set this twice
                 return
             printerr(
