@@ -55,7 +55,8 @@ function ansiToHTML(text) {
         } else {
             result += text.slice(lastIndex, offset);
             codes.forEach(code => {
-                if (htmlTags[code]) {
+				// we don't want bold
+                if (htmlTags[code] && (code != 1)) {
                     result += htmlTags[code];
                 }
             });
@@ -105,7 +106,7 @@ function addMessageToPage(message) {
 
     // Replace newlines with <br> tags
     // and replace ansi codes with corresponding html tags
-    const formattedMessage = ansiToHTML(message.replace(/\n/g, '<br>'));
+    const formattedMessage = ansiToHTML((message + "\n").replace(/\n/g, '<br>'));
 
     // Set the inner HTML to handle the <br> tags
     messageElement.innerHTML = formattedMessage;

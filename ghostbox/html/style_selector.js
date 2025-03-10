@@ -51,6 +51,12 @@ document.addEventListener('DOMContentLoaded', (event) => {
         link.rel = 'stylesheet';
         link.href = stylesheet;
         document.head.appendChild(link);
+
+		// don't forget to apply the base style.css over the newly selected one
+        const base = document.createElement('link');
+        link.rel = 'stylesheet';
+        link.href = "style.css";
+        document.head.appendChild(link);		
     }
 });
 
