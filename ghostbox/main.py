@@ -334,7 +334,12 @@ class Plumbing(object):
         # some special ones
         for k, v in special_parameters.items():
             d[k] = v if not(self.getOption(k)) else self.getOption(k)
-                    
+
+        # don't override grammar if it's null, rather not send it at all
+        if "grammar" in d:
+            if not(d["grammar"]):
+                del d["grammar"]
+            
         # just throw toools in for backends that can use them, unless user disabled
         if self.getOption("use_tools"):
             if not (self.justUsedTools()):

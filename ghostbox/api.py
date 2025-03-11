@@ -162,8 +162,23 @@ class Ghostbox:
             )
         return
 
-    def json(self, prompt_text: str) -> dict:
-        with self.options(response_format={"type":"json_object"}):
+    def json(self, prompt_text: str, schema: Optional[Dict]=None) -> str:
+        """Given a prompt, returns structured output as a string that is json deserializable.
+        Output is structured but somewhat unpredictable, unless you provide a json schema. If you are thinking about using pydantic objects and using their model_json_schema method, consider using the ghostbox.new method directly.
+        :param prompt_text: The prompt text as natural language.
+        :param schema: A dict representing a json schema, which will further restrict the generation.
+        :return: A string that contains json, hopefully adequately satisfying the prompt.
+        Example use:
+        noises = json.loads(box.json("Can you list some animal noises? Please give key/value pairs."))
+        noises is now e.g. {"dog": "woof", "cat":"meow", ...}
+        """
+        if schema is None:
+            format = {"type":"json_object"}
+        else:
+            format = {"type":"json_object",
+                      "schema":schema}
+            
+        with self.options(response_format=format):
             return self.text(prompt_text)
 
     def json_async(self, prompt_text: str, callback: Callable[[dict], None]) -> None:

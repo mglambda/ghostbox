@@ -1,7 +1,9 @@
 import unittest
 from collections import deque
 import threading, os, time
-
+from pydantic import BaseModel
+import json
+from typing import *
 import ghostbox
 
 
@@ -135,13 +137,28 @@ class LlamacppTest(unittest.TestCase):
     def test_json(self):
         box = ghostbox.from_llamacpp(character_folder="test_dolphin")
         import json
-        noises = json.loads(box.json("Can you list some animal noises? Please give key/value pairs."))
+        noises = json.loads(box.json("Generate a dictionary of animals and their typical noises."))
         try:
-            self.assertTrue("Cat" in noises or "cat" in noises)
-        except:
-            print(json.dumps(noises, indent=4))
+            self.assertTrue(type(noises) == type({}))
+        except AssertionError as e:
+            print("NOISES: " + json.dumps(noises, indent=4))
+            raise e
 
-        
+    def test_json_schema(self):
+        box = ghostbox.from_llamacpp(character_folder="test_dolphin")
+
+        class Animal(BaseModel):
+            """A member of the animal kingdom."""
+            animal: str
+            cute_name: str
+            number_of_legs: int
+            typical_noise: str
+            favorite_foods: List[str]
+            
+        cat = json.loads(box.json("Please provide data describing the typical cat.",
+                                     schema=Animal.model_json_schema()))
+        print(json.dumps(cat, indent=4))        
+        self.assertTrue(cat["animal"].lower() == "cat")
 
 def main():
     unittest.main()
