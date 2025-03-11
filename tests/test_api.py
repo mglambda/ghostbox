@@ -181,6 +181,12 @@ class LlamacppTest(unittest.TestCase):
         print(json.dumps(cat, indent=4))        
         self.assertTrue(cat["animal"].lower() == "cat")
 
+    def test_history(self):
+        box = ghostbox.from_llamacpp(character_folder="test_dolphin")
+        w = box.text("Write a haiku about cats.")
+        msgs = box.history()
+        self.assertEqual(w, msgs[-1].content)
+
 def main():
     unittest.main()
 
