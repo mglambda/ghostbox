@@ -144,6 +144,27 @@ class LlamacppTest(unittest.TestCase):
             print("NOISES: " + json.dumps(noises, indent=4))
             raise e
 
+    def test_json_async(self):
+        box = ghostbox.from_llamacpp(character_folder="test_dolphin")
+        import json
+        done = threading.Event()
+        noises = None
+        def f(w):
+            nonlocal noises
+            nonlocal done
+            noises = json.loads(w)
+            done.set()
+            
+        box.json_async("Generate a dictionary of animals and their typical noises.",
+                       callback=f)
+        done.wait()
+        try:
+            self.assertTrue(type(noises) == type({}))
+        except AssertionError as e:
+            print("NOISES: " + json.dumps(noises, indent=4))
+            raise e
+
+        
     def test_json_schema(self):
         box = ghostbox.from_llamacpp(character_folder="test_dolphin")
 

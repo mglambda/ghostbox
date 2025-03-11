@@ -77,13 +77,11 @@ class Ghostbox:
             self.load_config(self.config_file)
         setup_plumbing(self._plumbing)
 
-
         # for arcane reasons we must startthe tts after everything else
         if self._plumbing.tts_flag:
             self._plumbing.tts_flag = False
             self._plumbing.options["tts"] = False
             printerr(toggle_tts(self._plumbing))
-
 
     @contextmanager
     def options(self, **kwargs):
@@ -134,7 +132,8 @@ class Ghostbox:
 
     def is_busy(self) -> bool:
         """Returns true if an interaction with a backend is currently in progress.
-        While busy, all changes to the state of options (e.g. via set or the options context manager) will be buffered and applied when the ghostbox is no longer busy."""
+        While busy, all changes to the state of options (e.g. via set or the options context manager) will be buffered and applied when the ghostbox is no longer busy.
+        """
         return self._plumbing._frozen
 
     # these are the payload functions
@@ -162,27 +161,43 @@ class Ghostbox:
             )
         return
 
-    def json(self, prompt_text: str, schema: Optional[Dict]=None) -> str:
+    @staticmethod
+    def _make_json_schema(schema: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+        if schema is None:
+            return {"type": "json_object"}
+        return {"type": "json_object", "schema": schema}
+
+    def json(
+        self,
+        prompt_text: str,
+        schema: Optional[Dict] = None,
+        options: Dict[str, Any] = {},
+    ) -> str:
         """Given a prompt, returns structured output as a string that is json deserializable.
         Output is structured but somewhat unpredictable, unless you provide a json schema. If you are thinking about using pydantic objects and using their model_json_schema method, consider using the ghostbox.new method directly.
         :param prompt_text: The prompt text as natural language.
         :param schema: A dict representing a json schema, which will further restrict the generation.
+        :param options: Additional options that will be passed to the backend, e.g. `{"min_p": 0.01}`.
         :return: A string that contains json, hopefully adequately satisfying the prompt.
         Example use:
         noises = json.loads(box.json("Can you list some animal noises? Please give key/value pairs."))
         noises is now e.g. {"dog": "woof", "cat":"meow", ...}
         """
-        if schema is None:
-            format = {"type":"json_object"}
-        else:
-            format = {"type":"json_object",
-                      "schema":schema}
-            
-        with self.options(response_format=format):
+        with self.options(response_format=self._make_json_schema(schema), **options):
             return self.text(prompt_text)
 
-    def json_async(self, prompt_text: str, callback: Callable[[dict], None]) -> None:
-        pass
+    def json_async(
+        self,
+        prompt_text: str,
+        callback: Callable[[dict], None],
+        schema: Optional[Dict[str, Any]] = None,
+        options: Dict[str, Any] = {},
+    ) -> None:
+        """This is an asyncrhonous version of the json method. See its documentation for more. This method returns nothing but expects an additional callback parameter, which will be called with the generated json string as argument once the backend is done generating.
+        This function does not block, but returns immediately."""
+        with self.options(response_format=self._make_json_schema(schema), **options):
+            self.text_async(prompt_text, callback=callback)
+        return
 
     def chat(self, user_message: ChatMessage) -> ChatResult:
         pass
