@@ -1,6 +1,6 @@
 from __future__ import annotations
 import traceback
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 from typing import *
 from dataclasses import dataclass
 from contextlib import contextmanager
@@ -231,6 +231,74 @@ class Ghostbox:
             self.text_async(prompt_text, callback=callback)
         return
 
+    def new(
+        self,
+        pydantic_class,
+        text_prompt: str,
+        timeout: Optional[float] = None,
+        retries: int = 0,
+        options: Dict[str, Any] = {},
+    ) -> Any:
+        """Given a subclass of pydantic.BaseModel, returns a python object of that type, with its fields filled in by the LLM backend with adherence to a given text prompt.
+        This function will block until either generation finishes or a provided timeout is reached.
+        This function may raise a pydantic error if the object cannot be validated. Although the LLM will be forced to adhere to the pydantic data model, this can still happen occasionally, for example, in the case of refusals. Either use the retries argument, or wrap a call to new in a try block accordingly.
+        :param pydantic_class: The type of object that should be created.
+        :param text_prompt: Prompt given to the LLM that should aid in object creation. This will influence how the pydantic object's fields will be filled in. Depending on the model used, certain prompts may lead to refusal, even with object creation, so be careful.
+        :param timeout: A timeout in seconds after which generation is canceled.
+        :param retries: In case of a validation error, how often should the generation be retried? Since sampling, especially with temperature > 0.0, is not deterministic, retries can eventually yield valid results. A value of 0 means no retries will be performed and the function raises an error on invalid data or refusal. A value of -1 means retry forever or until the timeout is reached.
+        :param options: Additional options to pass to ghostbox and possibly the backend, e.g. `{"min_p": 0.01}`. This is an alternative to the `with options` context manager.
+        :return: A valid python object of the provided pydantic type, with its fields filled in.
+
+        Example:
+
+        ## animal.py
+        ```python
+        from pydantic import BaseModel
+        import ghostbox, json
+
+        class Animal(BaseModel):
+            name: str
+            cute_name: str
+            number_of_legs: int
+            friendly: bool
+            favorite_foods: List[str]
+
+        box = ghostbox.from_generic(...)
+        cat = box.new(Animal, "Please generate a cute housecat.")
+        print(json.dumps(cat.model_dump(), indent=4))
+        ```
+
+        ## Output
+
+        ```bash
+        $ python animal.py
+        {
+            "name" : "Cat",
+            "cute_name" : "Dr. Kisses",
+            "number_of_legs" : 4,
+            "friendly" : true,
+            "favorite_foods" : ["Tuna", "Cat Treats", "Water from the toilet"]
+        }
+        ```
+        """
+        with self.options(stream=False, **options):
+            while True:
+                try:
+                    return pydantic_class(
+                        **json.loads(
+                            self.json(
+                                text_prompt,
+                                schema=pydantic_class.model_json_schema(),
+                                timeout=timeout,
+                            )
+                        )
+                    )
+                except ValidationError as e:
+                    if retries == 0:
+                        raise e
+                    retries -= 1
+
+    # managing ghostbox operation
     def start_session(self, filepath: str, keep=False) -> Self:
         """Start a completely new session with a given character folder.
         This function wipes all history and context variables. It's a clean slate. If you want to switch characters while retaining context, use set_char instead.

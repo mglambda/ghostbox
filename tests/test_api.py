@@ -187,6 +187,18 @@ class LlamacppTest(unittest.TestCase):
         msgs = box.history()
         self.assertEqual(w, msgs[-1].content)
 
+    def test_new(self):
+        class Animal(BaseModel):
+            name: str
+            cute_name: str
+            number_of_legs: int
+            friendly: bool
+            favorite_foods: List[str]
+
+        box = ghostbox.from_generic(character_folder="test_dolphin")
+        cat = box.new(Animal, "Please generate a cute housecat.")
+        self.assertEqual(cat.number_of_legs, 4)
+        
 def main():
     unittest.main()
 
