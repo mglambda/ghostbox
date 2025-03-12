@@ -38,9 +38,13 @@ def wrapColorStyle(w, color, style):
 
 # this can be used to modify printerr behaviour. It can be a function that accepts one argument -> the to be printed string
 printerr_callback = None
-
+printerr_disabled = False
 
 def printerr(w, prefix=getErrorPrefix(), color=Fore.GREEN):
+    global printerr_disabled
+    if printerr_disabled:
+        return
+    
     if w == "":
         return
 

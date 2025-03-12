@@ -128,6 +128,7 @@ class SamplingParameterSpec(BaseModel):
 api_default_options = {
     "color" : False,
     "verbose" : False,
+    "stderr": True,
     "log_time" : True,
     "cli_prompt" : "",
     "dynamic_file_vars": False,

@@ -393,11 +393,11 @@ class Ghostbox:
 
         module.__dict__[symbol_name] = obj
 
-    def tts_say(self, text: str, interrupt: bool = False) -> Self:
+    def tts_say(self, text: str, interrupt: bool = True) -> Self:
         """Speak something with the underlying TTS engine.
         You can modify the tts behaviour by wrapping this call in a `with options(...)` context. For possible options, see the ghostbox documentation of the various tts_* options.
         :param text: The text to be spoken.
-        :param interrupt: If true, this call will interrupt speech output that is currently in progress.
+        :param interrupt: If true, this call will interrupt speech output that is currently in progress (the default). Otherwise, text will be queue and spoken in sequence.
         :return: The ghostbox instance.
         """
         self._plumbing.communicateTTS(text, interrupt=interrupt)

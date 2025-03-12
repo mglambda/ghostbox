@@ -185,9 +185,12 @@ mode_formatters = {
 
 class Plumbing(object):
     def __init__(self, options={}, initial_cli_prompt="", tags={}):
+        # the printerr stuff needs to happen early
         self._printerr_buffer = []
         self._initial_printerr_callback = lambda w: self._printerr_buffer.append(w)
         util.printerr_callback = self._initial_printerr_callback
+        if not(options["stderr"]):
+            util.printerr_disabled = True
         # this is for the websock clients
         self.stderr_token = "[|STDER|]:"
         self._stdout_ringbuffer = ""
@@ -857,6 +860,8 @@ class Plumbing(object):
                 self.startAudioTranscription()
             else:
                 self.stopAudioTranscription()
+        elif name == "stderr":
+            util.printerr_disabled = not(value)
         return ""
 
     def _ctPauseHandler(self, sig, frame):
