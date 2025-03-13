@@ -1,11 +1,14 @@
 #!/usr/bin/env python
 from pydantic import BaseModel, ValidationError, Field
+from enum import Enum
 from typing import *
 import ghostbox, json, argparse, random, os
+import traceback
+
 
 default_options = {
     "quiet": True,
-    "stderr": False,
+    "stderr": True,
     "max_context_length": 32000,
     "max_length": -1,
     "tts": True,
@@ -17,6 +20,118 @@ default_options = {
 
 MAX_HP = 40
 MAX_STRESS = 20
+
+# some utility for presenting dialog choices
+
+A = TypeVar("A")
+
+
+class DialogChoice(BaseModel):
+    text: str = ""
+    selection_string: Optional[str] = None
+    value: A | Callable[[], A]
+
+
+def choose_dialog(
+    choices: List[DialogChoice],
+    before: str = "",
+    after: str = "",
+    prompt: Optional[str] = None,
+    indent: int = 4,
+    fuzzy: bool = True,
+    reprint_on_newline: bool = True,
+    show_numbered_selection_string: bool = True,
+    show_extra_selection_strings: bool = True,
+    on_error: Optional[Callable[[str], None]] = None,
+    print_function: Callable[[str], None] = print,
+    input_function: Callable[[str], str] = input,
+) -> A:
+    from functools import reduce
+
+    # some setup
+    print, input = print_function, input_function
+    numbered_choices, extra_choices_list = reduce(
+        lambda pair, c: (
+            (pair[0] + [c], pair[1])
+            if c.selection_string is None
+            else (pair[0], pair[1] + [c])
+        ),
+        choices,
+        ([], []),
+    )
+    extra_choices = {
+        (
+            extra.selection_string.strip().lower() if fuzzy else extra.selection_string
+        ): extra
+        for extra in extra_choices_list
+    }
+
+    def value_or_call(x: A | Callable[[], A]) -> A:
+        if callable(x):
+            return x()
+        return x
+
+    while True:
+        if before:
+            print(before)
+        for i in range(len(numbered_choices)):
+            choice = choices[i]
+            text = choice.text if choice.text else str(choice.value)
+            print((indent * " ") + f"({i+1}) {text}")
+
+        if after:
+            print(after)
+        choice_str = (
+            f"Enter a number (1 - {len(numbered_choices)})"
+            if show_numbered_selection_string
+            else ""
+        )
+        extra_str = (
+            " or type " + ", ".join([extra_key for extra_key in extra_choices.keys()])
+            if show_extra_selection_strings and (extra_choices)
+            else ""
+        )
+        prompt_str = prompt if prompt is not None else ":"
+        while True:
+            w = input(choice_str + extra_str + prompt_str)
+            if fuzzy:
+                w = w.strip().lower()
+
+            if w == "" and reprint_on_newline:
+                break
+
+
+
+
+            # numbered choices override extra choices
+            if w.isdigit():
+                try:
+                    choice = numbered_choices[int(w) - 1]
+                except:
+                    continue
+                return value_or_call(choice.value)
+            
+
+
+            if not(fuzzy):
+                # exact matching, the easy case
+                if w in extra_choices.keys():
+                    return value_or_call(extra_choices[w].value)
+            else:
+                # fuzzy matching
+                for key in extra_choices.keys():
+                    if key.startswith(w):
+                        return value_or_call(extra_choices[key].value)
+
+            # at this point it was neither an extra key or a digit
+            # we consider this an error
+            if on_error is not None:
+                # on_error doesn't return anything, but may raise here, so user can exit the loop
+                on_error(w)
+
+
+# data model
+
 
 class SpecialAbility(BaseModel):
     """A special ability that is usable by a player character during play. Its fate cost should reflect its power to influence the story, with higher impact abilities costing more fate. The description should not refer to game mechanics."""
@@ -137,7 +252,34 @@ class Scenario(BaseModel):
 
         return filename_candidate
 
+class Choice(BaseModel):
+    "A short text describing a player's possible action in a dramatic situation, from their perspective."
 
+    text: str
+    is_dangerous: bool
+    is_part_of_player_motivation: bool
+
+    def fate(self) -> int:
+        """Returns the amount of fate points this choice is worth."""
+        fate = 0
+        if self.is_dangerous:
+            fate += 1
+
+        if self.is_part_of_player_motivation:
+            fate += 1
+
+        return fate
+
+    def show(self) -> str:
+        w = ""
+        danger = "*danger* " if self.is_dangerous else ""
+        motivation = "*fate* " if self.is_part_of_player_motivation else ""
+        w += danger + motivation + self.text
+        return w
+
+
+    
+FailureState = Enum("FailureState", "NoFailure Breakdown GameOver")
 class GameState(BaseModel):
     player: PlayerCharacter
     party: List[PlayerCharacter]
@@ -204,29 +346,42 @@ class GameState(BaseModel):
             + advancement
         )
 
-    def handle_consequences(self, consequences) -> Tuple[str, bool]:
+    def handle_consequences(self, consequences) -> Tuple[str, FailureState]:
         """Takes a consequence object, applies it to the current state, and then returns a pair of a message and a bool indicating if the game is over."""
         ws = [
             self.gain_health(
-                1 + (-1 * consequences.health_lost) + consequences.health_gained
+                (-1 * consequences.health_lost) + consequences.health_gained
             ),
             self.gain_stress(
                 consequences.stress_gained + (-1 * consequences.stress_lost)
             ),
         ]
-        game_over = False
 
-        if self.stress > self.player.max_health:
-            ws.append(
-                f"Due to stress and trauma, {self.player.name} loses their mind completely."
-            )
-            game_over = True
+        # by default, nothing bad happens
+        failure = FailureState.NoFailure
+
+        if self.stress > self.player.max_stress:
+            # this is only a soft failure
+            # if we can dump the stress into health, pc only panics/breaks down
+            if self.health >= self.stress:
+                game.health -= game.stress
+
+                ws.append(f"You break down from stress! Your mental breakdown takes a toll on your body, and you lose {game.stress} health.")
+                game.stress = 0
+                ws.append("You have narrowly averted permanent insanity.")
+                failure = FailureState.Breakdown
+            else:
+                # can't dump the stress
+                ws.append(
+                    f"Due to stress and trauma, {self.player.name} loses their mind completely."
+                )
+                failure = FailureState.GameOver
 
         if self.health <= 0:
             ws.append(f"{self.player.name} dies from their wounds.")
-            game_over = True
-
-        return "\n".join(ws), game_over
+            failure = FailureState.GameOver
+            
+        return "\n".join(ws), failure
 
     def try_use_special_ability(
         self, name_shorthand: str
@@ -253,52 +408,45 @@ class GameState(BaseModel):
         # all good
         return special, self.gain_fate(-1 * special.fate_cost)
 
+    # the following prompt_* methods are generators for the main prompts send to the llm
+    # it's nice to have them in one place and
+    # it also allows us to vary them based on various conditions, since the gamestate has access to
+    # pretty much all game state
+    def prompt_main_choices(self) -> str:
+        """Called when the LLM is supposed to generate choices, which happens in the main loop."""
+        return             "Generate some dramatic choices for the main character, along with a brief summary of the situation. These choices don't cost fate."
 
-class Choice(BaseModel):
-    "A short text describing a player's possible action in a dramatic situation, from their perspective."
+    def prompt_consequences_special_ability(self, special: SpecialAbility) -> str:
+        """Called when the player used a special ability and the LLM is supposed to generate consequences based on it and the current situation."""
+        return                     f"The player has used the following ability: {special.name}.\nPlease narrate the outcome of using this ability in this situation, or gently remind the player that this ability cannot be used, if it is not at all applicable to the current situation.",
+    
+    def prompt_consequences(self, choice: Choice) -> str:
+        """Called when the player made a choice and the LLM is supposed to generate consequences based on it and the current situation, hopefully leading into another situation with interesting choices."""
+        return "The player has chosen the following: \n" + choice.show() + "\nPlease narrate the consequences of the players choice. Drive the story forward and lead into a new dramatic situation. Keep it brief and focused, but evocative. Do not generate new choices as part of this response. Be sure to adhere to the scenario's style guide in your narration."
 
-    text: str
-    is_dangerous: bool
-    is_part_of_player_motivation: bool
-
-    def fate(self) -> int:
-        """Returns the amount of fate points this choice is worth."""
-        fate = 0
-        if self.is_dangerous:
-            fate += 1
-
-        if self.is_part_of_player_motivation:
-            fate += 1
-
-        return fate
-
-    def show(self) -> str:
-        w = ""
-        danger = "*danger* " if self.is_dangerous else ""
-        motivation = "*fate* " if self.is_part_of_player_motivation else ""
-        w += danger + motivation + self.text
-        return w
-
+    def prompt_consequences_stress_breakdown(self) -> str:
+        """Called when stress reaches >= maximum stress for a character, and they suffer a momentary mental breakdown. This is asoft failure, not a game over."""
+        return f"{{game.player.name}} has incurred too much stress and sufffers a momentary mental breakdown! Please narrate the consequences of {{game.player.name}} breaking down, losing consciousness, having a panic attack, or temporarily losing their sanity."
+        
+    def prompt_game_over(msg) -> str:
+        """Happens when player dies from lack of health or goes insane because stress can't be vented off anymore."""
+        return "The game is over for the player. Reason: "
+        + msg
+        + "\nPlease write a suitable goodbye narration to send them off."        
+        
 
 class Situation(BaseModel):
-    description: str
+    brief_description: str
+    current_location: str
+    characters_present: List[str]
     choices: List[Choice]
 
-    def show_choices(self) -> str:
-        w = ""
-        for i in range(len(self.choices)):
-            choice = self.choices[i]
-            w += "\n(" + str(i + 1) + ") " + choice.show() + "\n"
-        return w
+    def show(self) -> str:
+        return f"Location: {self.current_location}\nPresent: " + ", ".join(self.characters_present) + "\n\n" + self.brief_description
 
 
 class Consequences(BaseModel):
-    """Narration of the consequences to a choice or ability use. May include stress gain or health loss if applicable.
-    Health is only lost due to severe physical trauma or other bodily harm to the main character.
-    Health is gained when the main character receives healing, rest, or medical care.
-    Stress is gained only due to traumatic situations, complete loss of control, or supernatural fear.
-    Stress is lost whenever the main character succeeds on a task, a difficult situation resolves, or the players get a moment of rest and respite.
-    """
+    """Narration of the consequences to a choice or ability use. May include stress gain or health loss if applicable."""
 
     text: str
     stress_gained: int
@@ -314,6 +462,9 @@ class Message(BaseModel):
     text: str
 
 
+# dialog functions
+
+
 def scenario_creation_dialog(initial_prompt="") -> Scenario:
     box = ghostbox.from_generic(character_folder="scenario_creator", **default_options)
     hint = initial_prompt
@@ -325,31 +476,34 @@ def scenario_creation_dialog(initial_prompt="") -> Scenario:
             "Create a handful of interesting adventure scenarios. Present both fantasy and sci-fi options, and give a variety of tones and styles, with both dark and light hearted themes being explored. The description should be short and pithy, something that hooks and entices a potential player."
             + hint,
         ).drafts
-        print("Choose a scenario!\n")
-        indent = "    "
-        for i in range(len(drafts)):
-            draft = drafts[i]
-            print("(" + str(i + 1) + ") " + draft.name)
-            print(indent + draft.description.replace("\n", "\n" + indent))
-        while True:
-            w = input(
-                "\nChoose a scenario (1 - "
-                + str(len(drafts))
-                + "), or enter a message for the AI to regenerate scenarios: "
+
+        def set_hint(w):
+            # this will be called by choose_dialog when user enters something that isn't a number
+            nonlocal hint
+            hint = w
+            # we throw just to exit the choice loop
+            # the flag is so we don't capture other exceptions
+            e = Exception()
+            e.flag = True
+            raise e
+
+        try:
+            chosen_scenario = choose_dialog(
+                [
+                    DialogChoice(
+                        text=f"{draft.name}\n      {draft.description}", value=draft
+                    )
+                    for draft in drafts
+                ],
+                before="Choose a scenario!",
+                prompt=" or type a suggestion to regenerate scenarios: ",
+                on_error=set_hint,
             )
-            if w == "":
+        except Exception as e:
+            if e.flag:
+                # hint was set
                 continue
-            if w.isdigit():
-                try:
-                    n = int(w)
-                    chosen_scenario = drafts[n - 1]
-                    break
-                except:
-                    continue
-            else:
-                # it was a string input
-                hint = w
-                break
+            raise e
 
     # at this point we have a chosen scenario
     print("You selected `" + chosen_scenario.name + "`. Fleshing out scenario...")
@@ -378,34 +532,28 @@ def player_creation_dialog(scenario, party=True):
             + scenario.show()
             + "\n\nCreate a handful of player characters that would fit this scenario.",
         ).player_characters
-        print("Choose a character!\n")
-        indent = "    "
-        for i in range(len(pcs)):
-            pc = pcs[i]
-            print("(" + str(i + 1) + ") " + pc.show(indent=indent))
 
-        while True:
-            w = input(
-                "\nChoose a player character (1 - "
-                + str(len(pcs))
-                + "), or enter a message for the AI to regenerate characters: "
+        def set_hint(w):
+            nonlocal hint
+            hint = w
+            e = Exception()
+            e.flag = True
+            raise e
+
+        try:
+            chosen_player = choose_dialog(
+                [DialogChoice(text=pc.show(), value=pc) for pc in pcs],
+                before="Choose a player character!",
+                prompt=" or enter a suggestion to regenerate characters.: ",
+                on_error=set_hint,
             )
-            if w == "":
+        except Exception as e:
+            if e.flag:
                 continue
-            if w.isdigit():
-                try:
-                    n = int(w)
-                    chosen_player = pcs[n - 1]
-                    others = pcs[0 : (n - 1)] + pcs[(n - 1) :]
-                    break
-                except:
-                    continue
-            else:
-                # it was a string input
-                hint = w
-                break
 
     # at this point we have a chosen player
+    others = [pc for pc in pcs if pc.name != chosen_player.name]
+
     print(
         "Thank you for choosing `"
         + scenario.name
@@ -422,7 +570,7 @@ def advancement_dialog(game, box):
     """Happens when player chooses to level up."""
     # deduct the level up fate cost
     print(game.gain_fate(-1 * game.advancement_fate_required()))
-    
+
     # max hp and max stress advance through roll-over
     if random.randint(1, MAX_HP) > game.player.max_health:
         game.player.max_health += 1
@@ -431,7 +579,7 @@ def advancement_dialog(game, box):
     if random.randint(1, MAX_STRESS) > game.player.max_stress:
         game.player.max_stress += 1
         print("Your maximum stress has increased by 1.")
-    
+
     # there is a 1 in 6 chance that we have a special level up
     if random.randint(1, 6) == 6:
         print("***Special Advancement***")
@@ -449,46 +597,42 @@ def advancement_dialog(game, box):
         "Generate a handful of new special abilities the player may choose from for their advancement. Make sure to take their character, the adventure, and the story so far into account. Give a variety of choices. Focus on things the player cannot do yet. Do not generate abilities the player already has."
         + hint,
     ).special_ability_choices
-
-    print("Choose a new special ability!")
-    for i in range(len(new_abilities)):
-        special = new_abilities[i]
-        print(
-            f"({i+1}) {special.name}. {special.description} ({special.fate_cost} fate)"
-        )
-
-    while True:
-        try:
-            choice = new_abilities[
-                int(input(f"Choose (1 - {len(new_abilities)+1}): ")) - 1
-            ]
-            break
-        except:
-            continue
+    choice = choose_dialog(
+        [
+            DialogChoice(text=f"{special.name}: {special.description}", value=special)
+            for special in new_abilities
+        ],
+        before="Choose a new special ability!",
+    )
 
     print("You gain " + choice.name)
     game.player.special_abilities.append(choice)
-    print("You can choose to drop one of your abilities.")
-    for i in range(len(game.player.special_abilities)):
-        special = game.player.special_abilities[i]
-        print(
-            f"({i+1}) {special.name}. {special.description} ({special.fate_cost} fate)"
-        )
 
-    while True:
-        w = input(
-            f"Choose (1 - {len(game.player.special_abilities)+1}), or hit enter to keep all and proceed: "
-        )
-        if w.strip() == "":
-            return
-        try:
-            drop_i = int(w)
-        except:
-            continue
+    drop_i = choose_dialog(
+        [
+            DialogChoice(
+                text=f"{game.player.special_abilities[i].name}: {game.player.special_abilities[i].description}",
+                value=i,
+            )
+            for i in range(len(game.player.special_abilities))
+        ],
+        before="You can choose to drop one of your special abilities.",
+        prompt=" or hit enter to proceed without dropping: ",
+        on_error=lambda w: -1,
+    )
 
-    print(f"You lose {game.player.special_abilities[drop_i]}.")
-    del game.player.special_abilities[drop_i]
+    if drop_i != -1:
+        print(f"You lose {game.player.special_abilities[drop_i]}.")
+        del game.player.special_abilities[drop_i]
 
+def question_dialog(game, box) -> str:
+    """Happens when the player asks the GM a question with ?. Expect lots of soft hacking with this one."""
+    w = input("Question to the GM (information, clarification, visual description, etc): ")
+    if not(w):
+        return ""
+    
+    return box.new(Message,
+                  "Answer the following player question. Be informative and descriptive only, don't give away secrets or advance the story.\nQuestion: " + w).text
 
 def main():
     p = argparse.ArgumentParser(description="An LLM adventure game example.")
@@ -562,51 +706,47 @@ def run(game):
                 "party": "\n".join([npc.show() for npc in game.party]),
                 "pc": game.player.show(),
                 "fate": str(game.fate),
+    "pc_health": str(game.health),
+    "pc_stress": str(game.stress)
             }
         )
         situation = box.new(
             Situation,
-            "Describe the current situation to the player, and give them some dramatic choices. Choices are always from the players perspective. Do not include the consequences in the choice text. Do not mention fate points. Try to include a mix of choices, and take the scenario, players, and history into account. Do not include special abilities in choices, the player will activate those seperately. Likewise, avoid mentioning the other party members in the choices. Remember that choices that are dangerous or involve the players motivation let them earn fate, so be sparing with those.",
+            #"Briefly describe the situation to the player, including the current location, characters present, and the most relevant details. Give them some dramatic choices. Choices are always from the players perspective. Do not include the consequences in the choice text. Do not mention fate points. Try to include a mix of choices, and take the scenario, players, and history into account. Do not include special abilities in choices, the player will activate those seperately. Likewise, avoid mentioning the other party members in the choices. Do not list the choices in the description text. Remember that choices that are dangerous or involve the players motivation let them earn fate, so be sparing with those.",
+    game.prompt_main_choices()
         )
-        print("\n" + situation.description + "\n")
-        box.tts_say(situation.description, interrupt=False)
+        print("\n" + situation.show() + "\n")
+        box.tts_say(situation.brief_description, interrupt=False)
 
-        print(situation.show_choices())
-        n = len(situation.choices)
+        # we loop until we have narration for the consequences
+        # in the loop player may do a bunch of stuff, but using an ability or making a choice will break it
         while True:
-            w = input(
-                game.status()
-                + "\nChoose (1 - "
-                + str(n)
-                + ") or use an ability (type name or initial letter). Typing `*` spends 3 fate to write your own choice.\n"
-                + game.player.name
-                + " > "
+            # debug
+            #print(json.dumps([msg.model_dump() for msg in box.history()], indent=4))
+
+                
+            # type of choice is Optional[str | Choice | SpecialAbility]
+            choice = choose_dialog(
+                [
+                    DialogChoice(text=choice.show(), value=choice)
+                    for choice in situation.choices
+                ]
+                + [
+                    DialogChoice(selection_string=special.name, value=special)
+                    for special in game.player.special_abilities
+                ]
+                + [
+                    DialogChoice(selection_string="*", value="*"),
+                    DialogChoice(selection_string="?", value="?"),
+                    DialogChoice(selection_string="advance", value="advance"),
+                ],
+                after=game.status(),
+                prompt=f" or use an ability (type name or initial letter). Typing `*` spends 3 fate to write your own choice. Ask the GM a question with `?`.\n{game.player.name} > ",
+                show_extra_selection_strings=False,
             )
             box.tts_stop()
-            if w.strip() == "":
-                continue
 
-            if w.strip() == "advance" and game.fate >= game.advancement_fate_required():
-                print("You have advanced your abilities!")
-                advancement_dialog(game, box)
-                print("Done with advancement. Let's return to the story.")
-                continue
-
-            if not (w.isdigit()) and not (w.strip() == "*"):
-                # ability use
-                special, msg = game.try_use_special_ability(w.strip())
-                if special is None:
-                    print(msg)
-                    continue
-                # fate was deducted and ability should be used
-                print(msg)
-                narration = box.new(
-                    Consequences,
-                    f"The player has used the following ability: {special.name}.\nPlease narrate the outcome of using this ability in this situation, or gently remind the player that this ability cannot be used, if it is not at all applicable to the current situation.",
-                )
-                break
-
-            if w.strip() == "*":
+            if choice == "*":
                 # player gets to write their own
                 if game.fate >= 3:
                     print(game.gain_fate(-3))
@@ -619,37 +759,61 @@ def run(game):
                 else:
                     print("Insufficient fate!")
                     continue
-            else:
-                # ok, input was number, pick a dialog choice
-                try:
-                    choice = situation.choices[int(w) - 1]
-                except:
-                    continue
 
+            if choice == "?":
+                if (msg := question_dialog(game, box)):
+                    print(msg)
+                    box.tts_say(msg, interrupt=False)
+                continue
+                
+            if choice == "advance" and game.fate >= game.advancement_fate_required():
+                print("You have advanced your abilities!")
+                advancement_dialog(game, box)
+                print("Done with advancement. Let's return to the story.")
+                continue
+            if type(choice) == SpecialAbility:
+                # ability use
+                special, msg = game.try_use_special_ability(choice.name)
+                if special is None:
+                    print(msg)
+                    continue
+                # fate was deducted and ability should be used
+                print(msg)
+                narration = box.new(
+                    Consequences,
+                    game.prompt_consequences_special_ability(special)
+                )
+                break
+            # at this point, choice is a Choice -> player picked one of the options
             fate_msg = game.gain_fate(choice.fate())
             print(fate_msg + "\n" if fate_msg else "" + "Please wait...")
             narration = box.new(
                 Consequences,
-                "The player has chosen the following: \n"
-                + choice.show()
-                + "\nPlease narrate the consequences of the players choice, which should drive the story forward and lead into a new dramatic situation. Keep it brief, focused, but evocative. Do not generate new choices as part of this response. Be sure to adhere to the scenario's style guide in your narration.",
+                game.prompt_consequences(choice)
             )
             break
 
         # we have narration/consequences of choice or ability use
         box.tts_say(narration.text)
         print(narration.text)
-        msg, game_over = game.handle_consequences(narration)
+        msg, failure = game.handle_consequences(narration)
         print(msg)
-        if game_over:
+        if failure == FailureState.Breakdown:
+            # this is only a soft failure
+            # it will influence the story, but shouldn't incur more penalties to the player, so they can have a chance to recover
+            breakdown_msg = box.new(Message,
+                                    game.prompt_consequences_stress_breakdown()
+                                    ).text
+            print(breakdown_msg)
+            box.tts_say(breakdown_msg, interrupt=False)
+        elif failure == FailureState.GameOver:
             break
+        # there is also FailureState.NoFailure, which we just ignore and proceed                        
 
     # game over man
     goodbye = box.new(
         Message,
-        "The game is over for the player. Reason: "
-        + msg
-        + "\nPlease write a suitable goodbye narration to send them off.",
+        game.prompt_game_over(msg),
     ).text
     print(goodbye)
     box.tts_say(goodbye, interrupt=False)

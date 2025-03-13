@@ -124,6 +124,29 @@ class SamplingParameterSpec(BaseModel):
     name: str
     description: str
     default_value: Any
+
+class Timings(BaseModel):
+    """Performance statistics for LLM backends.
+    Most backends give timing statistics, though the format and particular stats vary. This class unifies the interface and boils it down to only the stats we care about.
+    """
+
+    prompt_n: int
+    predicted_n: int
+    cached_n: Optional[int] = None
+    truncated: bool
+    prompt_ms: float
+    predicted_ms: float
+    predicted_per_second: float
+    predicted_per_token_ms: float
+
+    original_timings: Optional[Dict[str, Any]] = {}
+
+    def total_n(self) -> int:
+        return self.prompt_n + self.predicted_n
+
+    def total_ms(self) -> float:
+        return self.prompt_ms + self.predicted_ms
+
     
 api_default_options = {
     "color" : False,

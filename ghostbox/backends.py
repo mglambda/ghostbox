@@ -229,7 +229,7 @@ sampling_parameters = {
     # new - only  got this from the git logs
     "add_generation_prompt": SamplingParameterSpec(
         name="add_generation_prompt",
-        description='Include the prompt used to generate in the result.',
+        description="Include the prompt used to generate in the result.",
         default_value=True,
     ),
 }
@@ -271,31 +271,7 @@ sampling_parameter_tags["top_p"].type = ArgumentType.Porcelain
 
 
 # These don't fit anywhere else and don't really need documentation
-special_parameters = {
-    "response_format" : {"type": "text"}
-    }
-
-class Timings(BaseModel):
-    """Performance statistics for LLM backends.
-    Most backends give timing statistics, though the format and particular stats vary. This class unifies the interface and boils it down to only the stats we care about.
-    """
-
-    prompt_n: int
-    predicted_n: int
-    cached_n: Optional[int] = None
-    truncated: bool
-    prompt_ms: float
-    predicted_ms: float
-    predicted_per_second: float
-    predicted_per_token_ms: float
-
-    original_timings: Optional[Dict[str, Any]] = {}
-
-    def total_n(self) -> int:
-        return self.prompt_n + self.predicted_n
-
-    def total_ms(self) -> float:
-        return self.prompt_ms + self.predicted_ms
+special_parameters = {"response_format": {"type": "text"}}
 
 
 class AIBackend(ABC):
@@ -423,14 +399,15 @@ class LlamaCPPBackend(AIBackend):
         else:
             endpoint_suffix = "/completion"
             if "tools" in payload:
-                printerr("warning: Tool use with a custom prompt_format and using llama.cpp backend is currently experimental. Set your prompt_format to 'auto' or use the generic backend for a stable experience.")
-
+                printerr(
+                    "warning: Tool use with a custom prompt_format and using llama.cpp backend is currently experimental. Set your prompt_format to 'auto' or use the generic backend for a stable experience."
+                )
 
         if "tools" in llama_payload:
             # FIXME: this is because using tools seems to invalidate the cache in llamacpp. probably because they are putting tool instructions in the system prompt. this is an attempt to fix or at least mitigate that.
             # i.e. we can just cache the inevitable streaming, non-tool generation that follows tool use.
             # however this will still suck for multi-turn tool use
-            llama_payload |= {"cache_prompt":False}
+            llama_payload |= {"cache_prompt": False}
         self._last_request = llama_payload
         return requests.post(self.endpoint + endpoint_suffix, json=llama_payload)
 
@@ -454,26 +431,29 @@ class LlamaCPPBackend(AIBackend):
     def _makeLlamaCallback(self, callback):
         def f(d):
             if d["stop"]:
-                self._last_result = d                            
+                self._last_result = d
             callback(d["content"])
+
         return f
 
     def generateStreaming(self, payload, callback=lambda w: print(w)):
         self.stream_done.clear()
-        llama_payload = payload | {"n_predict": payload["max_length"], "stream":True}
+        llama_payload = payload | {"n_predict": payload["max_length"], "stream": True}
 
         def one_line_lambdas_for_python(r):
             # thanks guido
             self._last_result = r
-            
+
         if self._config["llamacpp_use_chat_completion_endpoint"]:
             endpoint_suffix = "/chat/completions"
             # /chat/completions expects a more OAI like payload
             llama_payload |= OpenAIBackend.dataFromPayload(llama_payload)
-            final_callback = OpenAIBackend.makeOpenAICallback(callback, last_result_callback=one_line_lambdas_for_python)
+            final_callback = OpenAIBackend.makeOpenAICallback(
+                callback, last_result_callback=one_line_lambdas_for_python
+            )
         else:
             endpoint_suffix = "/completion"
-            final_callback =             self._makeLlamaCallback(callback)
+            final_callback = self._makeLlamaCallback(callback)
 
         self._last_request = llama_payload
 
@@ -519,14 +499,15 @@ class LlamaCPPBackend(AIBackend):
         if "timings" not in json:
             printerr("warning: Got weird server result: " + str(json))
             return
-        
+
         time = json["timings"]
         # these are llama specific fields which aren't always available on the OAI endpoints
-        truncated, cached_n = json.get("truncated", None), json.get("tokens_cached", None)
+        truncated, cached_n = json.get("truncated", None), json.get(
+            "tokens_cached", None
+        )
         if (verbose := json.get("__verbose", None)) is not None:
             truncated, cached_n = verbose["truncated"], verbose["tokens_cached"]
-            
-            
+
             return Timings(
                 prompt_n=time["prompt_n"],
                 predicted_n=time["predicted_n"],
@@ -683,8 +664,8 @@ class OpenAIBackend(AIBackend):
         if "tools" in data:
             # see the llamacpp generate method fixme
             # this has no effect on the official OAI api anyway
-            data |= {"cache_prompt":False}
-            
+            data |= {"cache_prompt": False}
+
         self._last_request = data
         response = requests.post(
             self.endpoint + "/v1/chat/completions", headers=headers, json=data
@@ -700,7 +681,7 @@ class OpenAIBackend(AIBackend):
     def handleGenerateResult(self, result):
         # this is just so that others can use the openai specific handling, which is kind of an industry standard
         return self.handleGenerateResultOpenAI(result)
-    
+
     @staticmethod
     def handleGenerateResultOpenAI(result: Dict[str, Any]) -> Any:
         # used to be Optional[Dict[str, Any]]:
@@ -710,7 +691,9 @@ class OpenAIBackend(AIBackend):
         if not result:
             return None
 
-        if (payload := result["choices"][0]["message"].get("content", None)) is not None:
+        if (
+            payload := result["choices"][0]["message"].get("content", None)
+        ) is not None:
             return payload
         if result["choices"][0]["message"].get("tool_calls", None) is not None:
             # consumers of this like applyTools expect a dict here
@@ -726,9 +709,9 @@ class OpenAIBackend(AIBackend):
             maybeChunk = choice["delta"].get("content", None)
             if maybeChunk is not None:
                 callback(maybeChunk)
-                
+
         return openAICallback
-    
+
     def generateStreaming(self, payload, callback=lambda w: print(w)):
         self.stream_done.clear()
         headers = {
@@ -740,11 +723,14 @@ class OpenAIBackend(AIBackend):
         # the /V1/chat/completions endpoint expects structured data of user/assistant pairs
         data |= self.dataFromPayload(payload)
         self._last_request = data
+
         def one_line_lambdas_for_python(r):
             self._last_result = r
-        
+
         response = streamPrompt(
-            self.makeOpenAICallback(callback, last_result_callback=one_line_lambdas_for_python),
+            self.makeOpenAICallback(
+                callback, last_result_callback=one_line_lambdas_for_python
+            ),
             self.stream_done,
             self.endpoint + "/v1/chat/completions",
             json=data,
@@ -836,22 +822,31 @@ class OpenAIBackend(AIBackend):
         else:
             json = result_json
 
-            if "timings" not in json:
-                return None
 
+        if "__verbose" in json:
+            verbose = json["__verbose"]
+            time = verbose["timings"]
+            truncated = verbose["truncated"]
+            cached = verbose["tokens_cached"]
+        elif "timings" in json:
             time = json["timings"]
-            return Timings(
-                prompt_n=time["prompt_n"],
-                predicted_n=time["predicted_n"],
-                prompt_ms=time["prompt_ms"],
-                predicted_ms=time["predicted_ms"],
-                predicted_per_token_ms=time["predicted_per_token_ms"],
-                predicted_per_second=time["predicted_per_second"],
-                # unfortunately openai don't reveal these FIXME: might be able to figure out truncated
-                truncated=False,
-                cached_n=None,
-                original_timings=time,
-            )
+            truncated = False
+            cached = None            
+        else:
+            return None
+
+        return Timings(
+            prompt_n=time["prompt_n"],
+            predicted_n=time["predicted_n"],
+            prompt_ms=time["prompt_ms"],
+            predicted_ms=time["predicted_ms"],
+            predicted_per_token_ms=time["predicted_per_token_ms"],
+            predicted_per_second=time["predicted_per_second"],
+            # unfortunately openai don't reveal these, unless we got __verbose
+            truncated=truncated,
+            cached_n=cached,
+            original_timings=time,
+        )
 
     def sampling_parameters(self) -> Dict[str, SamplingParameterSpec]:
         # I don't like doing this everytime

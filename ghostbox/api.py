@@ -133,6 +133,13 @@ class Ghostbox:
         """
         return self._plumbing._frozen
 
+    def timings(self) -> Optional[Timings]:
+        """Provides timing and usage statistics for the last request to the backend.
+        Returns none if no timings are available, which may happen if either no request has been sent yet, or the backend doesn't support timing.
+        :return: Either None or an object with timing statistics.
+        """
+        return self._plumbing.getBackend().timings()
+    
     # these are the payload functions
     def text(
         self,
