@@ -54,6 +54,7 @@ def from_openai_official():
 
 class Ghostbox:
     def __init__(self, endpoint: str, backend: LLMBackend, **kwargs):
+        self._ct = None
         kwargs["endpoint"] = endpoint
         kwargs["backend"] = backend.name
 
@@ -139,7 +140,7 @@ class Ghostbox:
         :return: Either None or an object with timing statistics.
         """
         return self._plumbing.getBackend().timings()
-    
+
     # these are the payload functions
     def text(
         self,
@@ -305,7 +306,64 @@ class Ghostbox:
                         raise e
                     retries -= 1
 
+    # images
+    @contextmanager
+    def images(self, image_urls: List[str]):
+        """Creates a context in which ghostbox queries can refer to images.
+        This context manager will not raise an error if an image cannot be found on the file system.
+        :param image_urls: A list of either file system paths or web URLs (or both) that point to images.
+        :return: A ghostbox instance.
+        """
+        for i in range(len(image_urls)):
+            url = image_urls[i]
+            self._plumbing.loadImage(url, i)
+        yield self
+        self._plumbing.images = {}
+
+    # audio transcription
+
+    def audio_start_transcription(
+        self,
+        transcription_callback: Callable[[str], None],
+        threshold_activation_callback: Callable[[], None],
+    ):
+        """Start to continuously record and transcribe audio above a certain threshold.
+        This method is for rolling your own transcriber. If you want to simply have the ghostbox react to a user saying things, just use the "audio"=True option. E.g.
+        ```
+        box = ghostbox.from_generic(character_folder="some_helpful_assistant",
+            audio=True)
+        while True:
+            # the box will be transcribing and answering the transcribed text on a seperate thread
+            # as if you had called box.text with the transcription
+            # (provided silence threshold and activation phrase are met and given)
+            # so we idle here
+            time.sleep(0.3)
+        ```
+
+        You can configure this transcriber with the options context manager. See the various audio_* options for more. Especially the audio_silence_threshold may be interesting.
+        If the transcription seems to do nothing, make sure the threshold is low enough and that no activation phrase is set.
+        :param transcription_callback: A function that will be called whenever a successful transcription was made. For a transcription to be successful, three conditions must be met: 1. The microhphone must record sound above the activation threshold. 2. If an activation phrase is set, a fuzzy version of the phrase must be found in the transcription. 3. The recording must eventually register audio below the silence threshold again, ending the transcription. If all things are true, the callback will be invoked with the finished transcription. Note that this can be quiet a long time (tens of seconds) away from the beginning of recording.
+        :param activation_callback: This function will be called whenever the audio recording goes above the silence threshold. It is called immediately when transcription begins. This is useful, if e.g. you are trying to build a responsive AI that stops the tts instantly when the user speaks.
+        :return: The ghostbox instance.
+        """
+        self.audio_stop_transcription()
+        self._ct = self._plumbing.whisper.transcribeContinuously(
+            callback=transcription_callback,
+            on_threshold=threshold_activation_callback,
+            websock=self._plumbing.getOption("audio_websock"),
+            websock_host=self._plumbing.getOption("audio_websock_host"),
+            websock_port=self._plumbing.getOption("audio_websock_port"),
+            silence_threshold=self._plumbing.getOption("audio_silence_threshold"),
+        )
+        return self
+
+    def audio_stop_transcription(self):
+        """Stops an ongoing continuous transcription."""
+        if self._ct is not None:
+            self._ct.stop()
+
     # managing ghostbox operation
+
     def start_session(self, filepath: str, keep=False) -> Self:
         """Start a completely new session with a given character folder.
         This function wipes all history and context variables. It's a clean slate. If you want to switch characters while retaining context, use set_char instead.

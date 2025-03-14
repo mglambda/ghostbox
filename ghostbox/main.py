@@ -976,11 +976,6 @@ class Plumbing(object):
         if self.getOption("audio_show_transcript"):
             self.print(w, tts=False)
 
-        # FIXME: this is possibly better put in the whispertranscriber when it picks up any audio
-        # update: moved to whisper transcriber
-        # if self.getOption("audio_interrupt"):
-        # self.stopAll()
-
         w = self.modifyTranscription(w)
         if not (w):
             self.printActivationPhraseWarning()
@@ -1868,25 +1863,28 @@ def setup_plumbing(prog: Plumbing, args: Namespace=Namespace()) -> None:
 
     if prog.getOption("tts"):
         prog.tts_flag = True
+        
+    if prog.getOption("image_watch"):
+        del prog.options["image_watch"]
+        prog.setOption("image_watch", True)
+
+
+    if prog.getOption("http"):
+        del prog.options["http"]
+        prog.setOption("http", True)
+        
+        
+    if prog.getOption("websock"):
+        del prog.options["websock"]
+        prog.setOption("websock", True)
+
 
     if prog.getOption("audio"):
         del prog.options["audio"]
         prog.setOption("audio", True)
 
-    if prog.getOption("image_watch"):
-        del prog.options["image_watch"]
-        prog.setOption("image_watch", True)
 
-    if prog.getOption("websock"):
-        del prog.options["websock"]
-        prog.setOption("websock", True)
-
-    # importantt to set this last as http overrides other options and we don't want to start services twice
-    if prog.getOption("http"):
-        del prog.options["http"]
-        prog.setOption("http", True)
-
-
+        
 def regpl(prog: Plumbing, input_function: Callable[[], str] = input) -> None:
     """Read user input, evaluate, generate LLM response, print loop."""
     skip = False
