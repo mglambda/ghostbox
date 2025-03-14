@@ -344,7 +344,13 @@ def dirtyGetJSON(url):
 
 
 def replaceFromDict(w, d, key_func=lambda k: k):
-    return reduce(lambda v, pair: v.replace(key_func(pair[0]), pair[1]), d.items(), w)
+    def replace_and_check(v, pair):
+        v_new = v.replace(key_func(pair[0]), pair[1])
+        if type(v_new) != str:
+            return str(v_new)
+        return v_new
+        
+    return reduce(replace_and_check, d.items(), w)
 
 
 ansi_escape = re.compile(r"\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])")
