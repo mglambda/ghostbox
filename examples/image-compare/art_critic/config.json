@@ -1,0 +1,4 @@
+{
+	"temperature":0.8,
+ "samplers":["min_p","dry","xtc","temperature"]
+}
