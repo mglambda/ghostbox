@@ -2,6 +2,7 @@ import argparse, os
 from ghostbox.util import *
 from ghostbox import backends
 from ghostbox.definitions import *
+from ghostbox.__init__ import get_ghostbox_data
 
 class TaggedArgumentParser():
     """Creates an argument parser along with a set of tags for each argument.
@@ -38,9 +39,9 @@ def makeTaggedParser(default_params) -> TaggedArgumentParser:
     mktag = ArgumentTag
     AT = ArgumentType
     AG = ArgumentGroup
-    parser.add_argument("-I", '--include', action="append", default=[userCharDir(), "chars/"], help="Include paths that will be searched for character folders named with the /start command or the --character_folder command line argument.",
+    parser.add_argument("-I", '--include', action="append", default=[userCharDir(), get_ghostbox_data("chars/"), "chars/"], help="Include paths that will be searched for character folders named with the /start command or the --character_folder command line argument.",
                         tag=mktag(type=AT.Porcelain, group=AG.Characters, motd=True))
-    parser.add_argument('--template_include', action="append", default=[userTemplateDir(), "templates/"], help="Include paths that will be searched for prompt templates. You can specify a template to use with the -T option.",
+    parser.add_argument('--template_include', action="append", default=[userTemplateDir(), get_ghostbox_data("templates/"), "templates/"], help="Include paths that will be searched for prompt templates. You can specify a template to use with the -T option.",
                         tag=mktag(type=AT.Plumbing, group=AG.Templates))
     parser.add_argument("-T", '--prompt_format', type=str, default="auto", help="Prompt format template to use. The default is 'auto', which means ghostbox will .let the backend handle templating, which is usually the right choice. You can still use other settings, like 'raw', to experiment. This is ignored if you use the generic or openai backend. Note: Prompt format templates used to be more important in the early days of LLMs, as confusion was rampant and mistakes were not uncommon even in official releases. Nowadays, it is quite safe to use the official templates. You may still want to use this option for experimentation, however.",
                         tag=mktag(type=AT.Plumbing, group=AG.Templates))

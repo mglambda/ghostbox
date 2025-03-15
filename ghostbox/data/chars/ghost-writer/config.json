@@ -1,0 +1,8 @@
+{
+	"cli_prompt" : " {{current_tokens}} 🕮 ",
+	"chat_ai" : "Ghost-writer",
+	"cli_prompt_color" : "red",
+	"temperature": 1.3,
+	"min_p" : 0.02,
+	"samplers": ["min_p", "dry", "xtc", "temperature"]
+}
