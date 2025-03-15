@@ -125,6 +125,8 @@ def makeTaggedParser(default_params) -> TaggedArgumentParser:
                         tag=mktag(type=AT.Porcelain, group=AG.TTS, very_important=True, service=True))
     parser.add_argument("--tts_model", type=str, default="kokoro", help="The TTS model to use. This is ignored unless you use ghostbox-tts as your tts_program.",
                         tag=mktag(type=AT.Porcelain, group=AG.TTS))
+    parser.add_argument("--tts_language", type=str, default="en", help="Set the TTS voice language. Right now, this is only relevant for kokoro.",
+                        tag=mktag(type=AT.Porcelain, group=AG.TTS))    
     parser.add_argument("--tts_output_method", type=str, choices=[om.name for om in TTSOutputMethod], default=TTSOutputMethod.default.name, help="How to play the generated speech. Using the --http argument automatically sets this to websock.",
                         tag=mktag(type=AT.Plumbing, group=AG.TTS))
     parser.add_argument("--tts_websock", action=argparse.BooleanOptionalAction, default=False, help="Enable websock as the output method for TTS. This is equivalent to `--tts_output_method websock`.",

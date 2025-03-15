@@ -40,11 +40,12 @@ def wrapColorStyle(w, color, style):
 printerr_callback = None
 printerr_disabled = False
 
+
 def printerr(w, prefix=getErrorPrefix(), color=Fore.GREEN):
     global printerr_disabled
     if printerr_disabled:
         return
-    
+
     if w == "":
         return
 
@@ -349,7 +350,7 @@ def replaceFromDict(w, d, key_func=lambda k: k):
         if type(v_new) != str:
             return str(v_new)
         return v_new
-        
+
     return reduce(replace_and_check, d.items(), w)
 
 
@@ -398,6 +399,64 @@ def getVoices(prog):
     pollyvoices = "Lotte, Maxim, Ayanda, Salli, Ola, Arthur, Ida, Tomoko, Remi, Geraint, Miguel, Elin, Lisa, Giorgio, Marlene, Ines, Kajal, Zhiyu, Zeina, Suvi, Karl, Gwyneth, Joanna, Lucia, Cristiano, Astrid, Andres, Vicki, Mia, Vitoria, Bianca, Chantal, Raveena, Daniel, Amy, Liam, Ruth, Kevin, Brian, Russell, Aria, Matthew, Aditi, Zayd, Dora, Enrique, Hans, Danielle, Hiujin, Carmen, Sofie, Gregory, Ivy, Ewa, Maja, Gabrielle, Nicole, Filiz, Camila, Jacek, Thiago, Justin, Celine, Kazuha, Kendra, Arlet, Ricardo, Mads, Hannah, Mathieu, Lea, Sergio, Hala, Tatyana, Penelope, Naja, Olivia, Ruben, Laura, Takumi, Mizuki, Carla, Conchita, Jan, Kimberly, Liv, Adriano, Lupe, Joey, Pedro, Seoyeon, Emma, Niamh, Stephen".split(
         ", "
     )
+
+    kokoro_voices = """af_alloy
+af_aoede
+af_bella
+af_heart
+af_jessica
+af_kore
+af_nicole
+af_nova
+af_river
+af_sarah
+af_sky
+am_adam
+am_echo
+am_eric
+am_fenrir
+am_liam
+am_michael
+am_onyx
+am_puck
+am_santa
+bf_alice
+bf_emma
+bf_isabella
+bf_lily
+bm_daniel
+bm_fable
+bm_george
+bm_lewis
+ef_dora
+em_alex
+em_santa
+ff_siwis
+hf_alpha
+hf_beta
+hm_omega
+hm_psi
+if_sara
+im_nicola
+jf_alpha
+jf_gongitsune
+jf_nezumi
+jf_tebukuro
+jm_kumo
+pf_dora
+pm_alex
+pm_santa
+zf_xiaobei
+zf_xiaoni
+zf_xiaoxiao
+zf_xiaoyi
+zm_yunjian
+zm_yunxi
+zm_yunxia
+zm_yunyang""".split(
+        "\n"
+    )
+
     vs = []
     if prog.getOption("tts_program") == "ghostbox-tts-polly":
         for voice in pollyvoices:
@@ -406,6 +465,22 @@ def getVoices(prog):
         # vs = list(tortoise.utils.audio.get_voices(extra_voice_dirs=list(filter(bool, [prog.getOption("tts_voice_dir")]))))
         # FIXME: find another way to get the list of voices
         vs = []
+    elif prog.getOption("tts_model") == "kokoro":
+        english_voices = [
+            voice
+            for voice in kokoro_voices
+            if voice.startswith("af_")
+            or voice.startswith("am_")
+            or voice.startswith("bm_")
+            or voice.startswith("bf_")
+        ]
+        if prog.getOption("tts_language") == "en":
+            return english_voices
+        elif prog.getOption("tts_language") == "":
+            return kokoro_voices
+        else:
+            return [voice for voice in kokoro_voice if voice not in english_voices]
+
     else:
         # for file in ultraglob(prog.getOption("include"), prog.getOption("tts_voice_dir")):
         vs = [
