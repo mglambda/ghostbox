@@ -1,0 +1,54 @@
+[build-system]
+requires = ["setuptools>=42", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ghostbox"
+version = "0.20.2"
+description = "Ghostbox is a command line interface to local LLM (large language model) server applications, such as koboldcpp or llama.cpp. It's primary purpose is to give a simple, stripped-down way to engage with AI chat bots."
+authors = [
+    { name = "Marius Gerdes", email = "integr@gmail.com" }
+]
+readme = "README.md"
+license-files = { paths = ["LICENSE"] }
+dependencies = [
+    "requests",
+    "boto3",
+    "appdirs",
+    "lazy-object-proxy",
+    "openai-whisper",
+    "pyaudio",
+    "pydub",
+    "colorama",
+    "automodinit",
+    "deepspeed",
+    "docstring_parser",
+    "jsonpickle",
+    "shutils",
+    "moviepy2",
+    "nltk",
+    "wget",
+    "kokoro_onnx[gpu]",
+    "websockets",
+    "duckduckgo-search",
+    "markdownify",
+    "h2",
+    "pyperclip"
+]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: GNU General Public License v2 (GPLv2)",
+    "Operating System :: OS Independent",
+]
+requires-python = ">=3.7"
+
+[tool.setuptools]
+packages = ["ghostbox"]
+package-data = { "ghostbox" = ["data/*.wav"] }
+scripts = [
+    "scripts/ghostbox",
+    "scripts/ghostbox-tts"
+]
+
+[project.urls]
+"Homepage" = "https://github.com/mglambda/ghostbox"
