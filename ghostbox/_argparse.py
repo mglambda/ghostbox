@@ -47,7 +47,7 @@ def makeTaggedParser(default_params) -> TaggedArgumentParser:
                         tag=mktag(type=AT.Plumbing, group=AG.Templates))
     parser.add_argument("-s", "--stop", action="append", default=[], help="Forbidden strings that will stop the LLM backend generation.",
                         tag=mktag(type=AT.Porcelain, group=AG.Generation, motd=True))
-    parser.add_argument("-c", '--character_folder', type=str, default="", help="character folder to load at startup. The folder may contain templates, as well as arbitrary text files that may be injected in the templates. See the examples for more. Path is attempted to be resolved relative to the include paths, if any are provided.",
+    parser.add_argument("-c", '--character_folder', type=str, default="", help="character folder to load at startup. The folder may contain a `system_msg` file, a `config.json`, and a `tools.py`, as well as various other files used as file variables. See the examples and documentation for more.",
                         tag=mktag(type=AT.Porcelain, group=AG.Characters, very_important=True, motd=True))
     parser.add_argument("-p", '--prompt', type=str, default=None, help="If provided, process the prompt and exit.",
                         tag=mktag(type=AT.Porcelain, group=AG.Generation))    
@@ -59,7 +59,7 @@ def makeTaggedParser(default_params) -> TaggedArgumentParser:
                         tag=mktag(type=AT.Plumbing, group=AG.OpenAI))    
     parser.add_argument("--max_length", type=int, default=300, help="Number of tokens to request from backend for generation. Generation is stopped when this number is exceeded. Negative values mean generation is unlimited and will terminate when the backend generates a stop token.",
                         tag=mktag(type=AT.Porcelain, group=AG.Generation, very_important=True))
-    parser.add_argument("--max_context_length", type=int, default=4092, help="Maximum number of tokens to keep in context.",
+    parser.add_argument("--max_context_length", type=int, default=32768, help="Maximum number of tokens to keep in context.",
                         tag=mktag(type=AT.Porcelain, group=AG.Generation, very_important=True))
     parser.add_argument("-u", "--chat_user", type=str, default="user", help="Username you wish to be called when chatting in 'chat' mode. It will also replace occurrences of {chat_user} anywhere in the character files. If you don't provide one here, your username will be determined by your OS session login.",
                         tag=mktag(type=AT.Porcelain, group=AG.General, very_important=True))
@@ -113,7 +113,7 @@ def makeTaggedParser(default_params) -> TaggedArgumentParser:
                         tag=mktag(type=AT.Porcelain, group=AG.Generation, motd=True)) 
     parser.add_argument("--stream_flush", type=str, default="token", help="When to flush the streaming buffer. When set to 'token', will print each token immediately. When set to 'sentence', it will wait for a complete sentence before printing. This can be useful for TTS software. Default is 'token'.",
                         tag=mktag(type=AT.Plumbing, group=AG.Generation, motd=True))
-    parser.add_argument("--cli_prompt", type=str, default=" {{current_tokens}} 👻 ", help="String to show at the bottom as command prompt. Can be empty.",
+    parser.add_argument("--cli_prompt", type=str, default=" {{current_tokens}} > ", help="String to show at the bottom as command prompt. Can be empty.",
                         tag=mktag(type=AT.Plumbing, group=AG.Interface, motd=True))
     parser.add_argument("--cli_prompt_color", type=str, default="none", help="Color of the prompt. Uses names of standard ANSI terminal colors. Requires --color to be enabled.",
                         tag=mktag(type=AT.Plumbing, group=AG.Interface))

@@ -1,9 +1,10 @@
 import os, datetime, glob, sys, requests, traceback, random, json
+from typing import *
 from ghostbox.session import Session
 from ghostbox.util import ultraglob
 
-def start_session(plumbing, filepath, keep=False) -> str:
-    #allpaths = [filepath] + [p + "/" + filepath for p in plumbing.getOption("include")]
+def start_session(plumbing, filepath: str, keep=False) -> str:
+    
     allpaths = [filepath] + [p + "/" + filepath for p in plumbing.getOption("include")]    
     for path in allpaths:
         path = os.path.normpath(path)
@@ -106,3 +107,17 @@ def toggle_tts(plumbing) -> str:
         prog.tts = None
     return w + "TTS " + {True : "on.", False : "off."}[prog.options["tts"]]
     
+
+
+def all_chars(prog) -> List[str]:
+    allchars = []
+    for dir in prog.getOption("include"):
+        if not(os.path.isdir(dir)):
+            printerr("warning: Include path '" + dir + "' is not a directory.")
+            continue
+        for charpath in glob.glob(dir + "/*"):
+            if os.path.isfile(charpath):
+                continue
+            allchars.append(os.path.split(charpath)[1])
+
+    return allchars

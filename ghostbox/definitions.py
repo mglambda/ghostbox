@@ -49,21 +49,6 @@ class ChatMessage(BaseModel):
     tool_call_id: str = ""
     
 
-class ChatHistory(BaseModel):
-    data: List[ChatMessage]
-
-@dataclass
-class ChatResult:
-    # not sure yet
-    payload: str
-
-
-@dataclass
-class CompletionResult:
-    # also not sure yet
-    payload: str
-
-
 LLMBackend = Enum("LLMBackend", "generic legacy llamacpp koboldcpp openai dummy")
 
 # these are the models supported by ghostbox-tts

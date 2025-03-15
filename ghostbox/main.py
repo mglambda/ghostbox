@@ -595,7 +595,7 @@ class Plumbing(object):
             self.options["cli_prompt"] = self.initial_cli_prompt
 
     def getOption(self, key):
-        return self.options.get(key, False)
+        return self.options.get(key, None)
 
     def optionDiffers(self, name, newValue):
         if name not in self.options:
@@ -1891,6 +1891,11 @@ def regpl(prog: Plumbing, input_function: Callable[[], str] = input) -> None:
     prog.triggerCLI()
     prog._busy.clear()
 
+
+    # check if someone started the cli without a char and try to be helpful
+    if not(prog.getOption("character_folder")):
+        printerr("warning: Running ghostbox without a character folder. Use `/start <charname>` to actually load an AI character.\n  For example `/start ghostbox-helper` will load a helpful AI that can explain ghostbox to you.\n  Other choices are: " + ", ".join(all_chars(prog)))
+        
     while prog.running:
         last_state = prog.backup()
         try:
