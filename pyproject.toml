@@ -10,7 +10,7 @@ authors = [
     { name = "Marius Gerdes", email = "integr@gmail.com" }
 ]
 readme = "README.md"
-license-files = { paths = ["LICENSE"] }
+license = { file = "LICENSE" }
 dependencies = [
     "requests",
     "boto3",
@@ -25,7 +25,6 @@ dependencies = [
     "docstring_parser",
     "jsonpickle",
     "shutils",
-    "moviepy2",
     "nltk",
     "wget",
     "kokoro_onnx[gpu]",
@@ -44,11 +43,8 @@ requires-python = ">=3.7"
 
 [tool.setuptools]
 packages = ["ghostbox"]
-package-data = { "ghostbox" = ["data/*.wav"] }
-scripts = [
-    "scripts/ghostbox",
-    "scripts/ghostbox-tts"
-]
+package-data = { "ghostbox" = ["data/**"] }
+script-files = ["scripts/ghostbox", "scripts/ghostbox-tts"]
 
 [project.urls]
 "Homepage" = "https://github.com/mglambda/ghostbox"
