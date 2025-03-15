@@ -14,7 +14,9 @@ p.add_argument("image2", type=str, help="Path to the second image to compare.")
 args = p.parse_args()
 
 # get a ghostbox
-box = ghostbox.from_generic(character_folder="art_critic")
+box = ghostbox.from_generic(character_folder="art_critic",
+                            stderr=False,
+                            quiet=True)
 
 # let's make sure the images exist
 # ghostbox will not raise an error if they don't

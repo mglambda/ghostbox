@@ -7,8 +7,15 @@ class Story(object):
     
     data: List[ChatMessage] = [] 
 
-    def addUserText(self, w: str, image_id:Optional[int]=None, **kwargs) -> None:
-        new_data = ChatMessage(role = "user", content = w, image_id=image_id, **kwargs)
+    def addUserText(self, w: str, image_context: Dict[int, ImageRef]={}, **kwargs) -> None:
+        """Adds a user message to the story.
+        :param w: The user's prompt or message as plaintext.
+        :param images: A list of 0 or more images to include with the message. The images, confusingly, may be http URLs, filenames, or binary data.
+        """
+        if image_context == {}:
+            new_data = ChatMessage(role = "user", content = w, **kwargs)
+        else:
+            new_data = ChatMessage.make_image_message(w, image_context.values(), **kwargs)
         self.data.append(new_data)
 
     def addAssistantText(self, w: str, **kwargs):
@@ -45,7 +52,7 @@ class Story(object):
                 if msg.content is None:
                     # this case is too weird, we just skip empty content
                     continue
-                elif type(msg) == str:
+                elif type(msg.content) == str:
                     # easy case
                     msg.content += w
                     return

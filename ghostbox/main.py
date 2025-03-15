@@ -189,7 +189,7 @@ class Plumbing(object):
         self._printerr_buffer = []
         self._initial_printerr_callback = lambda w: self._printerr_buffer.append(w)
         util.printerr_callback = self._initial_printerr_callback
-        if not(options["stderr"]):
+        if not (options["stderr"]):
             util.printerr_disabled = True
         # this is for the websock clients
         self.stderr_token = "[|STDER|]:"
@@ -200,7 +200,7 @@ class Plumbing(object):
         self.options = options
         self.tags = tags
         self.backend = None
-        self.template = None        
+        self.template = None
         self.initializeBackend(self.getOption("backend"), self.getOption("endpoint"))
         self.session = Session(chat_user=options.get("chat_user", ""))
         # FIXME: make this a function returning backend.getlAStResult()
@@ -237,7 +237,6 @@ class Plumbing(object):
         # template
         self.loadTemplate(self.getOption("prompt_format"), startup=True)
 
-
         # whisper stuff. We do this with a special init function because it's lazy
         self.whisper = self._newTranscriber()
         self.ct = None
@@ -271,13 +270,13 @@ class Plumbing(object):
         }
 
     def initializeBackend(self, backend, endpoint):
-        api_key = self.getOption("openai_api_key")
+        api_key = self.getOption("api_key")
         if backend == LLMBackend.llamacpp.name:
             self.backend = LlamaCPPBackend(endpoint)
         elif backend == LLMBackend.openai.name:
             if not api_key:
                 printerr(
-                    "error: OpenAI API key is required for the OpenAI backend. Did you forget to provide --openai_api_key?"
+                    "error: OpenAI API key is required for the OpenAI backend. Did you forget to provide --api_key?"
                 )
                 # this is rough but we are in init phase so it's ok
                 sys.exit()
@@ -336,13 +335,13 @@ class Plumbing(object):
 
         # some special ones
         for k, v in special_parameters.items():
-            d[k] = v if not(self.getOption(k)) else self.getOption(k)
+            d[k] = v if not (self.getOption(k)) else self.getOption(k)
 
         # don't override grammar if it's null, rather not send it at all
         if "grammar" in d:
-            if not(d["grammar"]):
+            if not (d["grammar"]):
                 del d["grammar"]
-            
+
         # just throw toools in for backends that can use them, unless user disabled
         if self.getOption("use_tools"):
             if not (self.justUsedTools()):
@@ -357,31 +356,19 @@ class Plumbing(object):
             or self.getOption("prompt_format")
             == PromptFormatTemplateSpecialValue.auto.name
         ):
-            # openai chat/completion needs the system prompt and story
+            # openai chat/completion needs the 'messages' key
             # we also do this for llama in "auto" template mode
             d["system"] = self.session.getSystem()
-            d["story"] = copy.deepcopy(self.session.stories.get().to_json())
+            d["messages"] = [
+                {"role": "system", "content": d["system"]}
+            ] + copy.deepcopy(self.session.stories.get().to_json())
+            # FIXME: I don't even know if this does something right now
+            self.images_dirty = False
+
         else:
             # all others get the text
             # FIXME: there is some deep mishandling here because this uses the text parameter while oai endpoitns use the story. must investigate this
             d["prompt"] = text
-
-        # images
-        # currently only supporting /v1/chat/completions style endpoints
-        if not (
-            self.getOption("backend") == LLMBackend.generic.name
-            or self.getOption("backend") == LLMBackend.openai.name
-        ):
-            return d
-        d["images"] = self.images
-        self._images_dirty = False
-        # FIXME: experimental. keep the images only in story log?
-
-        # FIXME: place image hint here maybe
-        # d["image_message"] =
-
-        # disabled because llama-server hasn't supported this in a while
-        # d["image_data"] = [packageImageDataLlamacpp(d["data"], id) for (id, d) in self.images.items()]
         return d
 
     def isContinue(self):
@@ -628,10 +615,10 @@ class Plumbing(object):
     def getAIFormatter(self, with_color=False):
         return self.getAIColorFormatter() + self.getFormatters()[3]
 
-    def addUserText(self, w, image_id=None):
+    def addUserText(self, w):
         if w:
             self.session.stories.get().addUserText(
-                self.getUserFormatter().format(w), image_id=image_id
+                self.getUserFormatter().format(w), image_context=self.images
             )
 
     def addAIText(self, w):
@@ -650,9 +637,9 @@ class Plumbing(object):
         else:
             hint = ""
 
-
-        if ((rformat := self.getOption("response_format")) and
-            (rformat["type"] != "text")):
+        if (rformat := self.getOption("response_format")) and (
+            rformat["type"] != "text"
+        ):
             # don't use formatters if user expects structured data
             addition = hint + w
         else:
@@ -668,9 +655,7 @@ class Plumbing(object):
         # FIXME: we're currently rawdogging system msgs. is this correct?
         self.session.stories.get().addSystemText(w)
 
-    def applyTools(
-        self, w: str = "", json={}
-    ) -> Tuple[List[ChatMessage], ChatMessage]:
+    def applyTools(self, w: str = "", json={}) -> Tuple[List[ChatMessage], ChatMessage]:
         """Takes an AI generated string w and optionally the json result from an OpenAI API compatible tool request. Tries to detect a tool request in both. If detected, will apply the tools and then return their results as structured data, as well as the fully parsed original tool call.
         Ideally the JSON result makes tool use obvious through the field
         json["choices"][0]["finish_reason"] == "tool_calls"
@@ -732,12 +717,20 @@ class Plumbing(object):
         # NOTE: the responses from the server come back more complex than what is later supposed to be sent in the chat history
         # specifically, a message with role "assistant", conten null, and tool_calls=... should *not* have the tool c<calls be a layered dictionary with type and function key, it's just a plain list of dicts of names and arguments
         # I have no idea why this is inconsistent but that's how it is, and that's the reason for the repackaging below.
-        tool_request_msg = ChatMessage(role="assistant",
-                                       tool_calls=[ToolCall(function=FunctionCall(name=fcall["function"]["name"], arguments=fcall["function"]["arguments"])) for fcall in tool_request["tool_calls"]])
-        
+        tool_request_msg = ChatMessage(
+            role="assistant",
+            tool_calls=[
+                ToolCall(
+                    function=FunctionCall(
+                        name=fcall["function"]["name"],
+                        arguments=fcall["function"]["arguments"],
+                    )
+                )
+                for fcall in tool_request["tool_calls"]
+            ],
+        )
+
         return tool_results, tool_request_msg
-
-
 
     def _formatToolResults(self, results):
         """Based on a list of dictionaries, returns a string that represents the tool outputs to an LLM."""
@@ -861,7 +854,7 @@ class Plumbing(object):
             else:
                 self.stopAudioTranscription()
         elif name == "stderr":
-            util.printerr_disabled = not(value)
+            util.printerr_disabled = not (value)
         return ""
 
     def _ctPauseHandler(self, sig, frame):
@@ -883,7 +876,7 @@ class Plumbing(object):
         self.loadImage(image_path, image_id)
         # FIXME: what if loadImage fails?
         (modified_w, hint) = self.modifyInput(w)
-        self.addUserText(modified_w, image_id=image_id)
+        self.addUserText(modified_w)
         image_watch_hint = self.getOption("image_watch_hint")
         self.addAIText(self.communicate(self.buildPrompt(hint + image_watch_hint)))
         # print(self.showCLIPrompt(), end="")
@@ -1157,7 +1150,6 @@ class Plumbing(object):
         # strip whitespace, we especially don't want to send pure whitespace like ' \n' or '  ' to a tts, this is known to crash some of them. It also shouldn't change the resulting output.
         w = w.strip()
 
-        
         if self.tts is None or not (self.tts.is_running()):
             self.setOption("tts", False)
             printerr(
@@ -1516,21 +1508,21 @@ class Plumbing(object):
             self.addUserText(modified_w)
             while communicating:
                 # this only runs more than once if there is auto-activation, e.g. with tool use
-                if (generated_w := self.communicate(
-                    self.buildPrompt(hint), stream_callback=stream_callback
-                )) == "":
+                if (
+                    generated_w := self.communicate(
+                        self.buildPrompt(hint), stream_callback=stream_callback
+                    )
+                ) == "":
                     # empty string usually means something went wrong.
                     # communicate will have already printed to stderr
                     # it is important that we don't loop forever here though, so we bail
                     communicating = False
 
-
-
                 # if the generated string has tool calls, we apply them here
                 tool_results, tool_call = self.applyTools(
                     generated_w, json=self.lastResult
                 )
-                
+
                 output = ""
                 if tool_results != []:
                     # need to add both the calls and result to the history
@@ -1552,7 +1544,7 @@ class Plumbing(object):
             generation_callback(output)
             self.unfreeze()
             self._lastInteraction = time_ms()
-            self._busy.clear()            
+            self._busy.clear()
 
         t = threading.Thread(target=loop_interact, args=[w])
         t.start()
@@ -1594,7 +1586,7 @@ class Plumbing(object):
             printerr("warning: Could not load image '" + url + "'. File not found.")
             return
 
-        self.images[id] = {"url": url, "data": loadImageData(url)}
+        self.images[id] = ImageRef(url=url, data=loadImageData(url))
         self._images_dirty = True
 
     def setLastJSON(self, json_result):
@@ -1604,7 +1596,7 @@ class Plumbing(object):
         except:
             # fail silently, it's not that important
             current_tokens = "?"
-            
+
         self.session.setVar("current_tokens", current_tokens)
 
     def backup(self):
@@ -1783,7 +1775,7 @@ class Plumbing(object):
 
                 if self.getOption("quiet"):
                     continue
-                
+
                 # bingo
                 if self._triggered:
                     # this means someone wrote a command etc so user pressed enter and we don't need a newline
@@ -1800,15 +1792,16 @@ class Plumbing(object):
         self._cli_printer_thread = threading.Thread(target=cli_printer, daemon=True)
         self._cli_printer_thread.start()
 
-    def triggerCLI(self, check: Optional[str]=None) -> None:
+    def triggerCLI(self, check: Optional[str] = None) -> None:
         """Signals that the user has pressed enter, usually executing a command.
         The entire purpose of this is to track wether we need to print a newline before printing the CLI prompt.
-        :param check: If none, is checked for a newline at the end, determining wether to print a newline."""
+        :param check: If none, is checked for a newline at the end, determining wether to print a newline.
+        """
         if check is None:
             self._triggered = True
         else:
             self._triggered = True if check.endswith("\n") else False
-            
+
         # off to the races lulz
         self._busy.set()
         self._busy.clear()
@@ -1835,10 +1828,10 @@ def main():
         regpl(prog, input_function=input_once)
     else:
         regpl(prog)
-    
 
-def setup_plumbing(prog: Plumbing, args: Namespace=Namespace()) -> None:
-    # the following is setup, though it is subtly different from Plumbing.init, so beware        
+
+def setup_plumbing(prog: Plumbing, args: Namespace = Namespace()) -> None:
+    # the following is setup, though it is subtly different from Plumbing.init, so beware
     if userConfigFile():
         prog.setOption("user_config", userConfigFile())
         printerr(loadConfig(prog, [userConfigFile()], override=False))
@@ -1846,15 +1839,14 @@ def setup_plumbing(prog: Plumbing, args: Namespace=Namespace()) -> None:
     if prog.getOption("config_file"):
         printerr(loadConfig(prog, [prog.options["config_file"]]))
 
-
     try:
-        # this can fail if called from api 
+        # this can fail if called from api
         if "-u" in sys.argv or "--chat_user" in sys.argv:
             prog.setOption("chat_user", args.chat_user)
     except AttributeError:
         # we don't have arg.xxx -> fine
         pass
-    
+
     if prog.getOption("character_folder"):
         printerr(newSession(prog, []))
 
@@ -1863,39 +1855,37 @@ def setup_plumbing(prog: Plumbing, args: Namespace=Namespace()) -> None:
 
     if prog.getOption("tts"):
         prog.tts_flag = True
-        
+
     if prog.getOption("image_watch"):
         del prog.options["image_watch"]
         prog.setOption("image_watch", True)
 
-
     if prog.getOption("http"):
         del prog.options["http"]
         prog.setOption("http", True)
-        
-        
+
     if prog.getOption("websock"):
         del prog.options["websock"]
         prog.setOption("websock", True)
-
 
     if prog.getOption("audio"):
         del prog.options["audio"]
         prog.setOption("audio", True)
 
 
-        
 def regpl(prog: Plumbing, input_function: Callable[[], str] = input) -> None:
     """Read user input, evaluate, generate LLM response, print loop."""
     skip = False
     prog.triggerCLI()
     prog._busy.clear()
 
-
     # check if someone started the cli without a char and try to be helpful
-    if not(prog.getOption("character_folder")):
-        printerr("warning: Running ghostbox without a character folder. Use `/start <charname>` to actually load an AI character.\n  For example `/start ghostbox-helper` will load a helpful AI that can explain ghostbox to you.\n  Other choices are: " + ", ".join(all_chars(prog)))
-        
+    if not (prog.getOption("character_folder")):
+        printerr(
+            "warning: Running ghostbox without a character folder. Use `/start <charname>` to actually load an AI character.\n  For example `/start ghostbox-helper` will load a helpful AI that can explain ghostbox to you.\n  Other choices are: "
+            + ", ".join(all_chars(prog))
+        )
+
     while prog.running:
         last_state = prog.backup()
         try:

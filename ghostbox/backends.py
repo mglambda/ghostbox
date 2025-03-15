@@ -394,8 +394,6 @@ class LlamaCPPBackend(AIBackend):
 
         if self._config["llamacpp_use_chat_completion_endpoint"]:
             endpoint_suffix = "/chat/completions"
-            # /chat/completions expects a more OAI like payload
-            llama_payload |= OpenAIBackend.dataFromPayload(llama_payload)
         else:
             endpoint_suffix = "/completion"
             if "tools" in payload:
@@ -446,8 +444,7 @@ class LlamaCPPBackend(AIBackend):
 
         if self._config["llamacpp_use_chat_completion_endpoint"]:
             endpoint_suffix = "/chat/completions"
-            # /chat/completions expects a more OAI like payload
-            llama_payload |= OpenAIBackend.dataFromPayload(llama_payload)
+
             final_callback = OpenAIBackend.makeOpenAICallback(
                 callback, last_result_callback=one_line_lambdas_for_python
             )
@@ -658,8 +655,6 @@ class OpenAIBackend(AIBackend):
             "Content-Type": "application/json",
         }
         data = payload | {"max_tokens": payload["max_length"], "stream": False}
-        # the /V1/chat/completions endpoint expects structured data of user/assistant pairs
-        data |= self.dataFromPayload(payload)
 
         if "tools" in data:
             # see the llamacpp generate method fixme
@@ -720,8 +715,6 @@ class OpenAIBackend(AIBackend):
         }
 
         data = payload | {"stream": True, "stream_options": {"include_usage": True}}
-        # the /V1/chat/completions endpoint expects structured data of user/assistant pairs
-        data |= self.dataFromPayload(payload)
         self._last_request = data
 
         def one_line_lambdas_for_python(r):
@@ -743,47 +736,6 @@ class OpenAIBackend(AIBackend):
             self.stream_done.set()
             return True
         return False
-
-    @staticmethod
-    def dataFromPayload(payload: Dict[str, Any]) -> Dict[str, Any]:
-        """Take a payload dictionary from Plumbing and return dictionary with elements specific to the chat/completions endpoint.
-        This expects payload to include the messages key, with various dictionaries in it, unlike other backends.
-        """
-        messages = [{"role": "system", "content": payload["system"]}]
-        # story is list of dicts with role and content keys
-        # we go through story one by one, mostly because of images
-        for story_item in payload["story"]:
-            if "image_id" in story_item:
-                # images is more complicated, see https://platform.openai.com/docs/guides/vision
-                # API wants the content field of an image message to be a list of dicts, not a string
-                # the dicts have the type field, which determines wether its a user msg (text) or image (image-url)
-                image_id = story_item["image_id"]
-                image_content_list = []
-                image_content_list.append(
-                    {"type": "text", "content": story_item["content"]}
-                )
-                if "images" not in payload or image_id not in payload["images"]:
-                    printerr("warning: image with id " + str(image_id) + " not found.")
-                    continue
-
-                # actually packaging the image
-                image_data = payload["images"][image_id]
-                ext = getImageExtension(image_data["url"], default="png")
-                base64_image = image_data["data"].decode("utf-8")
-                image_content_list.append(
-                    {
-                        "type": "image_url",
-                        "image_url": {"url": f"data:image/{ext};base64,{base64_image}"},
-                    }
-                )
-
-                messages.append(
-                    {"role": story_item["role"], "content": image_content_list}
-                )
-            else:
-                messages.append(story_item)
-
-        return {"messages": messages}
 
     def tokenize(self, w):
         headers = {

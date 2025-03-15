@@ -1,81 +1,67 @@
 ## README.md
 
 ```md
-# ghostbox
+# Ghostbox
 
-Ghostbox is a command line interface to local LLM (large language model) server applications, such as koboldcpp or llama.cpp. It's primary purpose is to give a simple, stripped-down way to engage with AI chat bots.
-Ghostbox was made to be blind-accessible, and is fully compatible with any screen reader that can read a shell.
+Do you love comprehensive LLM frameworks? Me neither.
+
+I like things like this:
+
+```python
+import ghostbox
+box = ghostbox.from_llamacpp(character_folder="unix_philosopher")
+
+with box.options(temperature=0.6, samplers=["min_p", "temperature"]):
+    answer = box.text("How do you make developing with LLMs easy and painless?")
+    
+box.tts_say(answer)
+```
+
+Output: `ghostbox`.
+
+## What it is
+
+Ghostbox is a python library and toolkit for querying LLMs (large language models), both locally hosted and remote. It let's you use AI independent of any particular provider and backend. It wants to make developing applications with tightly integrated AI as painless as possible, without tieing you down to some kind of framework.
+
+Ghostbox ships with the `ghostbox` CLI program, a fully featured terminal client that let's you interact and chat with LLMs from the comfort of your own shell, as well as monitor and debug AIs that are running in your program.
+
+It also includes `ghostbox-tts`, which allows text-to-speech synthesis with various SOTA speech models. This is integrated in the library, but serves as a standalone TTS client in its own right.
 
 ## Features
+ - Generate text, json, or pydantic classes with LLMs
+ - Support for OpenAI, Llama.cpp, Lllama-box, and anyone who supports the OAI API.
+ - Interruptible, streaming TTS with Kokoro, Zonos, Amazon Polli, and others.
+ - Continuous, voice activated transcription with OpenAI's whisper model
+ - Include images for multimodal models (OAI and Llama-box only)
+ - Create, configure, and switch between AI characters 
+ - Tool calling for idiots: Write python functions in tools.py, the model does the rest.
+ - Track and save chat history (with branching, retries, and all the usual features in the CLI)
+ - Integrated HTTP webserver using websockets, with a basic web UI that let's you monitor your applications AI while it is running
+ - Prompt format templates if you want them (you probably don't, everyone uses Jinja now)
+ - Self documenting: Try `ghostbox -cghostbox-helper` to have a friendly chat with an expert on the project
+ - Much more. This is a work in progress.
 
- - Command line interface that plays well with standard input and output
- - Supports various backends, including llama.cpp, llama.box, as well as anything using the OpenAI API
- - Character templates to define AI characters in a simple, file based manner
- - Includes prompt templates for many popular formats (like chat-ml)
- - Chat functionality, including retrying or rewriting prompts, and a chat history that can be saved and reloaded
- - Live audio transcription using OpenAI's Whisper model
- - Multimodal support for images (llava, qwen2-vl), including automatic descriptions for screenshots or arbitrary image files.
- - Painless JSON output (just do --json)
- - Grammars to arbitrarily restrict token output 
- - TTS (text-to-speech) with various backends, including Zonos, Kokoro and Amazon Polli, using ghostbox-tts.
- - Token streaming
- - Model Sampling parameter control (temperature, top p, etc.), including with config-files
- - small web ui with --http on localhost:5050
- - Simple design. By default, ghostbox let's you just send raw text to your LLM, and returns the generated output. This is great if you want to learn about proper prompting, which was part of my motivation for making this.
-
-## Documentation
-### Character Templates
-
-Coming soon!
-
-### Additional Documentation
-
-Try `ghostbox --help` or type `/help` at the CLI for additional information.
-
+## Examples
 ## Installation
+
 ### Requirements
 
 Ghostbox requires an LLM backend. Currently supported backends are
- - Llama.cpp (currently prefered, find it at https://github.com/ggerganov/llama.cpp )  
- - Koboldcpp ( https://github.com/LostRuins/koboldcpp )
+ - [Llama.cpp](currently prefered, find it athttps://github.com/ggerganov/llama.cpp)  
+ - [Kobold.cpp](https://github.com/LostRuins/koboldcpp)
+ - [Llama-box](https://github.com/gpustack/llama-box) (use this for multimodality atm)
+ - OpenAI (untested)
+ - If you have another backend that supports the OpenAI API, feel free to test ghostbox and give me feedback.
+ 
+If you want to run LLM locally, clone your chosen repository, build the project and run the backend server. Make sure you start ghostbox with the correct `--endpoint` parameter for your chosen backend, at least if you run on a non-default endpoint.
 
-Clone either repository, build the project and run the backend server. Make sure you start ghostbox with the --endpoint parameter to the endpoint provided by the backend. This is http://localhost:8080 for Llama.cpp (default), or http://localhost:5001 for koboldcpp, at least by default.
+If you use a cloud provider, be sure to set your API key with the `--api_key` command line option or do this if you use ghostbox as a library
 
-
-### Amazon Polly
-
-The default TTS script provided allows the use of amazon web services (aws) polly voices. To use them, you must create an aws account, which will give you API keys. You can then do (example for arch-linux)
-
+```python
+import ghostbox
+box = ghostbox.from_openai(api_key="hF8sk;08xi'mnottellingyoumykeyareyoucrazy")
+bot_payload = box.text("Can you create a typical Sam Altman 🔥 tweet?")
 ```
-pacman -S aws
-aws configure
-```
-
-and you will be asked for your keys. To test if it works, you can either run ghostbox with the `--tts` option, activate TTS by typing `/tts` at the ghostbox CLI, or try the `scripts/ghostbox-tts-polly` script in the repository.
-### Multimodal Image Description
-
-Acquire the latest Llava model from huggingface. You will need a gguf file and a mmproj file with model projections for the underlying LLM (e.g. `mmproj-model-f16.gguf`). You can then start Llama.cpp like this
-
-```
-cd ~/llama.cpp/build/bin 
-./server --ctx-size 2048 --parallel 1 --mlock --no-mmap -m llava-v1.6-mistral-7b.Q5_K_M.gguf --mmproj mmproj-model-f16.gguf
-```
-
-assuming you built the project in `llama.cpp/build`. You may then do either 
-```
-ghostbox -cdolphin
-/image ~/Pictures.paris.png
-Here is a picture of paris. [img-1] Can you please describe it?
-```
-
-or, for automatically describing the screen when you make a screenshot
-
-```
-ghostbox -cdolphin --image_watch
-```
-
-assuming screenshots are stored in `~/Pictures/Screenshots/`, which is the default for the gnome-screenshot utility.
-Note that multimodal support is currently working with Llama.cpp only.
 
 ### Python Package
 The repository can be installed as a python package.
@@ -113,6 +99,7 @@ ghostbox -cjoshu --tts --audio --hide
 ```
 
 for an immersive chat with a zen master.
+
 
 ```
 
@@ -296,7 +283,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "ghostbox"
-version = '0.21.0'
+version = '0.21.2'
 description = "Ghostbox is a command line interface to local LLM (large language model) server applications, such as koboldcpp or llama.cpp. It's primary purpose is to give a simple, stripped-down way to engage with AI chat bots."
 authors = [
     { name = "Marius Gerdes", email = "integr@gmail.com" }
@@ -1290,7 +1277,7 @@ def makeTaggedParser(default_params) -> TaggedArgumentParser:
                         tag=mktag(type=AT.Porcelain, group=AG.Backend))
     parser.add_argument("--backend", type=str, default=LLMBackend.generic.name, help="Backend to use. The default is `generic`, which conforms to the OpenAI REST API, and is supported by most LLM providers. Choosing a more specific backend may provide additional functionality. Other possible values are " + ", ".join([e.name for e in LLMBackend]) + ".",
                         tag=mktag(type=AT.Porcelain, group=AG.Backend, very_important=True))
-    parser.add_argument("--openai_api_key", type=str, default="", help="API key for OpenAI. Without the `--backend openai` option, this has no effect.",
+    parser.add_argument("--api_key", type=str, default="", help="API key for OpenAI. Without the `--backend openai` option, this has no effect.",
                         tag=mktag(type=AT.Plumbing, group=AG.OpenAI))    
     parser.add_argument("--max_length", type=int, default=300, help="Number of tokens to request from backend for generation. Generation is stopped when this number is exceeded. Negative values mean generation is unlimited and will terminate when the backend generates a stop token.",
                         tag=mktag(type=AT.Porcelain, group=AG.Generation, very_important=True))
@@ -1360,6 +1347,8 @@ def makeTaggedParser(default_params) -> TaggedArgumentParser:
                         tag=mktag(type=AT.Porcelain, group=AG.TTS, very_important=True, service=True))
     parser.add_argument("--tts_model", type=str, default="kokoro", help="The TTS model to use. This is ignored unless you use ghostbox-tts as your tts_program.",
                         tag=mktag(type=AT.Porcelain, group=AG.TTS))
+    parser.add_argument("--tts_language", type=str, default="en", help="Set the TTS voice language. Right now, this is only relevant for kokoro.",
+                        tag=mktag(type=AT.Porcelain, group=AG.TTS))    
     parser.add_argument("--tts_output_method", type=str, choices=[om.name for om in TTSOutputMethod], default=TTSOutputMethod.default.name, help="How to play the generated speech. Using the --http argument automatically sets this to websock.",
                         tag=mktag(type=AT.Plumbing, group=AG.TTS))
     parser.add_argument("--tts_websock", action=argparse.BooleanOptionalAction, default=False, help="Enable websock as the output method for TTS. This is equivalent to `--tts_output_method websock`.",
@@ -3605,13 +3594,13 @@ class Plumbing(object):
         }
 
     def initializeBackend(self, backend, endpoint):
-        api_key = self.getOption("openai_api_key")
+        api_key = self.getOption("api_key")
         if backend == LLMBackend.llamacpp.name:
             self.backend = LlamaCPPBackend(endpoint)
         elif backend == LLMBackend.openai.name:
             if not api_key:
                 printerr(
-                    "error: OpenAI API key is required for the OpenAI backend. Did you forget to provide --openai_api_key?"
+                    "error: OpenAI API key is required for the OpenAI backend. Did you forget to provide --api_key?"
                 )
                 # this is rough but we are in init phase so it's ok
                 sys.exit()
@@ -6983,10 +6972,10 @@ def main():
     done = threading.Event()
 
     def input_loop():
-        global done
-        global prog
-        global tts
-        global output_module
+        nonlocal done
+        nonlocal prog
+        nonlocal tts
+        nonlocal output_module
 
         while True:
             try:
@@ -7369,11 +7358,12 @@ def wrapColorStyle(w, color, style):
 printerr_callback = None
 printerr_disabled = False
 
+
 def printerr(w, prefix=getErrorPrefix(), color=Fore.GREEN):
     global printerr_disabled
     if printerr_disabled:
         return
-    
+
     if w == "":
         return
 
@@ -7678,7 +7668,7 @@ def replaceFromDict(w, d, key_func=lambda k: k):
         if type(v_new) != str:
             return str(v_new)
         return v_new
-        
+
     return reduce(replace_and_check, d.items(), w)
 
 
@@ -7727,6 +7717,64 @@ def getVoices(prog):
     pollyvoices = "Lotte, Maxim, Ayanda, Salli, Ola, Arthur, Ida, Tomoko, Remi, Geraint, Miguel, Elin, Lisa, Giorgio, Marlene, Ines, Kajal, Zhiyu, Zeina, Suvi, Karl, Gwyneth, Joanna, Lucia, Cristiano, Astrid, Andres, Vicki, Mia, Vitoria, Bianca, Chantal, Raveena, Daniel, Amy, Liam, Ruth, Kevin, Brian, Russell, Aria, Matthew, Aditi, Zayd, Dora, Enrique, Hans, Danielle, Hiujin, Carmen, Sofie, Gregory, Ivy, Ewa, Maja, Gabrielle, Nicole, Filiz, Camila, Jacek, Thiago, Justin, Celine, Kazuha, Kendra, Arlet, Ricardo, Mads, Hannah, Mathieu, Lea, Sergio, Hala, Tatyana, Penelope, Naja, Olivia, Ruben, Laura, Takumi, Mizuki, Carla, Conchita, Jan, Kimberly, Liv, Adriano, Lupe, Joey, Pedro, Seoyeon, Emma, Niamh, Stephen".split(
         ", "
     )
+
+    kokoro_voices = """af_alloy
+af_aoede
+af_bella
+af_heart
+af_jessica
+af_kore
+af_nicole
+af_nova
+af_river
+af_sarah
+af_sky
+am_adam
+am_echo
+am_eric
+am_fenrir
+am_liam
+am_michael
+am_onyx
+am_puck
+am_santa
+bf_alice
+bf_emma
+bf_isabella
+bf_lily
+bm_daniel
+bm_fable
+bm_george
+bm_lewis
+ef_dora
+em_alex
+em_santa
+ff_siwis
+hf_alpha
+hf_beta
+hm_omega
+hm_psi
+if_sara
+im_nicola
+jf_alpha
+jf_gongitsune
+jf_nezumi
+jf_tebukuro
+jm_kumo
+pf_dora
+pm_alex
+pm_santa
+zf_xiaobei
+zf_xiaoni
+zf_xiaoxiao
+zf_xiaoyi
+zm_yunjian
+zm_yunxi
+zm_yunxia
+zm_yunyang""".split(
+        "\n"
+    )
+
     vs = []
     if prog.getOption("tts_program") == "ghostbox-tts-polly":
         for voice in pollyvoices:
@@ -7735,6 +7783,22 @@ def getVoices(prog):
         # vs = list(tortoise.utils.audio.get_voices(extra_voice_dirs=list(filter(bool, [prog.getOption("tts_voice_dir")]))))
         # FIXME: find another way to get the list of voices
         vs = []
+    elif prog.getOption("tts_model") == "kokoro":
+        english_voices = [
+            voice
+            for voice in kokoro_voices
+            if voice.startswith("af_")
+            or voice.startswith("am_")
+            or voice.startswith("bm_")
+            or voice.startswith("bf_")
+        ]
+        if prog.getOption("tts_language") == "en":
+            return english_voices
+        elif prog.getOption("tts_language") == "":
+            return kokoro_voices
+        else:
+            return [voice for voice in kokoro_voice if voice not in english_voices]
+
     else:
         # for file in ultraglob(prog.getOption("include"), prog.getOption("tts_voice_dir")):
         vs = [

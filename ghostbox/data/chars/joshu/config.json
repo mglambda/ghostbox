@@ -1,0 +1,8 @@
+{
+	"chat_ai" : "Joshu",
+    "temperature": 0.7,
+	"tts": true,
+	"tts_model":"kokoro",
+	"tts_voice":"zm_yunjian",
+	"samplers":["min_p", "dry", "temperature"]
+}

@@ -55,7 +55,7 @@ def makeTaggedParser(default_params) -> TaggedArgumentParser:
                         tag=mktag(type=AT.Porcelain, group=AG.Backend))
     parser.add_argument("--backend", type=str, default=LLMBackend.generic.name, help="Backend to use. The default is `generic`, which conforms to the OpenAI REST API, and is supported by most LLM providers. Choosing a more specific backend may provide additional functionality. Other possible values are " + ", ".join([e.name for e in LLMBackend]) + ".",
                         tag=mktag(type=AT.Porcelain, group=AG.Backend, very_important=True))
-    parser.add_argument("--openai_api_key", type=str, default="", help="API key for OpenAI. Without the `--backend openai` option, this has no effect.",
+    parser.add_argument("--api_key", type=str, default="", help="API key for OpenAI. Without the `--backend openai` option, this has no effect.",
                         tag=mktag(type=AT.Plumbing, group=AG.OpenAI))    
     parser.add_argument("--max_length", type=int, default=300, help="Number of tokens to request from backend for generation. Generation is stopped when this number is exceeded. Negative values mean generation is unlimited and will terminate when the backend generates a stop token.",
                         tag=mktag(type=AT.Porcelain, group=AG.Generation, very_important=True))
