@@ -70,12 +70,12 @@ def start_session(plumbing, filepath: str, keep=False) -> str:
     return w
 
 
-def load_config(plumbing, filepath, override=True) -> str:
+def load_config(plumbing, filepath, override=True, protected_keys: List[str]=[]) -> str:
     try:
         w = open(filepath, "r").read()
     except Exception as e:
         return str(e)
-    err = plumbing.loadConfig(w, override=override)
+    err = plumbing.loadConfig(w, override=override, protected_keys=protected_keys)
     if err:
         return err
     return "Loaded config " + filepath

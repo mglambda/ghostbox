@@ -54,29 +54,29 @@ def from_openai_official():
 
 class Ghostbox:
     def __init__(self, endpoint: str, backend: LLMBackend, **kwargs):
-        self._ct = None
+        self._ct = None  # continuous transcriber
         kwargs["endpoint"] = endpoint
         kwargs["backend"] = backend.name
 
-        self.__dict__ |= kwargs
         default_options, tags = makeDefaultOptions()
-        self.__dict__["_plumbing"] = Plumbing(
-            options=default_options.__dict__
-            | {
+        options = (
+            {
                 k: v
-                for k, v in self.__dict__.items()
-                if not (k.startswith("_")) or k in kwargs.keys()
-            },
+                for k, v in default_options.__dict__.items()
+                if not (k.startswith("_"))
+            }
+            | definitions.api_default_options
+            | kwargs
+        )
+        self.__dict__ |= options
+        self.__dict__["_plumbing"] = Plumbing(
+            options=options,
             tags=tags,
         )
 
-        # override with some API defaults
-        # FIXME: only if not specified by user
-        self.__dict__["_plumbing"].options |= definitions.api_default_options
-
         if self.config_file:
-            self.load_config(self.config_file)
-        setup_plumbing(self._plumbing)
+            load_config(self._plumbing, self.config_file, protected_keys=kwargs.keys())
+        setup_plumbing(self._plumbing, protected_keys=kwargs.keys())
 
         # for arcane reasons we must startthe tts after everything else
         if self._plumbing.tts_flag:
@@ -394,6 +394,10 @@ class Ghostbox:
         printerr(load_config(self._plumbing, config_file))
         # FIXME: update self.__dict__?
         return self
+
+    def stop(self) -> None:
+        """Stops all ongoing interaction, including asynchronous or streaming text generation, and TTS output."""
+        self._plumbing.stopAll()
 
     def tools_inject_dependency(self, symbol_name: str, obj: object) -> Self:
         """Make a python object available in the python tool module of a running ghostbox AI, without having defined it in the tools.py.

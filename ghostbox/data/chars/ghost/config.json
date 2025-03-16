@@ -2,7 +2,6 @@
 	"cli_prompt" : " {{current_tokens}} 👻 ",
 	"chat_ai" : "Ghost",
 	"cli_prompt_color" : "blue",
-	"tts_voice": "random",
 	"temperature": 0.1,
 	"samplers": ["min_p", "temperature"]
 }

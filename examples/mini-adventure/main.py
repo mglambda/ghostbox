@@ -8,8 +8,8 @@ import ghostbox, time, random
 box = ghostbox.from_generic(
     character_folder="game_master",  # see below
     stderr=False,  # since this is a CLI program, we don't want clutter
-    quiet=True,  # we do printing and tts ourselves
-    tts=True,  # this means responses will be spoken automatically
+    tts=True,  # start the tts engine
+    quiet=False,  # this means generations will be spoken automatically
     tts_model="kokoro",  # kokoro is nice because it's small and good
     tts_voice="bm_daniel",  # daniel is real GM material
 )
@@ -30,7 +30,8 @@ print(
 )
 
 # we start conservative, but the adventure will get wilder as we go on
-current_temperature, escalation_factor = 0.3, 0.05
+box.temperature = 0.3
+escalation_factor = 0.05
 while True:
     user_msg = input("Your response (q to quit): ")
     box.tts_stop()  # users usually like it when the tts shuts up after they hit enter
@@ -44,7 +45,6 @@ while True:
         break
 
     with box.options(
-        temperature=current_temperature,  # this changes every loop iteration
         max_length=100
         + 10
         * random.randint(
@@ -53,6 +53,6 @@ while True:
     ):
         print(box.text(user_msg))
 
-    current_temperature = min(current_temperature + escalation_factor, 1.3)
+    box.temperature = min(box.temperature + escalation_factor, 1.3)
 
 time.sleep(10)  # give time to finish the speech

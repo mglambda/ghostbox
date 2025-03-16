@@ -29,7 +29,7 @@ def showHelpCommands(prog, argv):
     w = ""
     candidate = "/" + "".join(argv).strip()
     failure = True
-    for cmd_name, f in cmds:
+    for cmd_name, f in sorted(cmds, key=lambda p: p[0]):
         if candidate != "/" and cmd_name != candidate:
             continue
         failure = False
@@ -44,6 +44,25 @@ def showHelpCommands(prog, argv):
         return "Command not found. See /help for more."
     return ""
 
+def show_help_option_tag(prog, tag) -> str:
+    w = ""
+    cv = str(prog.getOption(tag.name))
+    w += (
+        tag.name
+        + "\n"
+        + "\n".join(textwrap.wrap(tag.help))
+        + "\n"
+        + "\n".join(textwrap.wrap(tag.show_description()))
+        + "\nIts current value is "
+        + (cv if cv else '""')
+        + "."
+    )
+    if tag.default_value is not None:
+        dv = str(tag.default_value)
+        w += " Its default value is " + (dv if dv else '""')
+    if tag.service:
+        w += "\nSetting it to True will start the corresponding service."    
+    return w
 
 def showHelp(prog, argv):
     """[TOPIC] [-v|--verbose]
@@ -89,23 +108,15 @@ def showHelp(prog, argv):
     if topic in prog.getTags():
         tag = prog.getTags()[topic]
         if tag.is_option:
-            w += (
-                topic
-                + "\n"
-                + "\n".join(textwrap.wrap(tag.help))
-                + "\n"
-                + "\n".join(textwrap.wrap(tag.show_description()))
-                + "\nIts current value is "
-                + str(prog.getOption(topic))
-                + "."
-            )
-            if tag.default_value is not None:
-                w += " Its default value is " + str(tag.default_value)
-            if tag.service:
-                w += "\nSetting it to True will start the corresponding service."
+            return show_help_option_tag(prog, tag)
+    elif topic == "commands":
+                # list all commands with help        
+        return showHelpCommands(prog, [])
+    elif topic == "options":
+            # list full options with description
+        return "\n\n".join([show_help_option_tag(prog, tag) for tag in sorted(prog.getTags().values(), key=lambda t: t.name) if tag.is_option])
     else:
-        # it's a command
-        # FIXME: commands aren't tagged yet
+        # fix it's a command
         return showHelpCommands(prog, [topic])
     # else:
     # not found
@@ -510,7 +521,7 @@ class Plumbing(object):
         self.options["prompt_format"] = name
         printerr("Using '" + name + "' as prompt format template.")
 
-    def loadConfig(self, json_data, override=True):
+    def loadConfig(self, json_data, override=True, protected_keys: List[str]=[]):
         """Loads a config file provided as json into options. Override=False means that command line options that have been provided will not be overriden by the config file."""
         d = json.loads(json_data)
         if type(d) != type({}):
@@ -541,7 +552,9 @@ class Plumbing(object):
             d.items(), key=cmp_to_key(lambda a, b: -1 if a[0] == "mode" else 1)
         )
         for k, v in items:
-            self.setOption(k, v)
+            if not(k in protected_keys):
+                print(f"{k}:{v}")
+                self.setOption(k, v)
         return ""
 
     def showCLIPrompt(self):
@@ -1830,11 +1843,11 @@ def main():
         regpl(prog)
 
 
-def setup_plumbing(prog: Plumbing, args: Namespace = Namespace()) -> None:
+def setup_plumbing(prog: Plumbing, args: Namespace = Namespace(), protected_keys: List[str]=[]) -> None:
     # the following is setup, though it is subtly different from Plumbing.init, so beware
     if userConfigFile():
         prog.setOption("user_config", userConfigFile())
-        printerr(loadConfig(prog, [userConfigFile()], override=False))
+        printerr(loadConfig(prog, [userConfigFile()], override=False, protected_keys=protected_keys))
 
     if prog.getOption("config_file"):
         printerr(loadConfig(prog, [prog.options["config_file"]]))

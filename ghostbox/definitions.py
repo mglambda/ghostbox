@@ -107,7 +107,8 @@ class ChatMessage(BaseModel):
 LLMBackend = Enum("LLMBackend", "generic legacy llamacpp koboldcpp openai dummy")
 
 # these are the models supported by ghostbox-tts
-TTSModel = Enum("TTSModel", "zonos kokoro xtts")
+TTSModel = Enum("TTSModel", "zonos kokoro xtts polly")
+ZonosTTSModel = Enum("ZonosTTSModel", "hybrid transformer")
 
 # these are ways of playing sound that are supported by ghostbox-tts
 TTSOutputMethod = Enum("TTSOutputMethod", "default websock")
@@ -220,5 +221,5 @@ api_default_options = {
     "log_time": True,
     "cli_prompt": "",
     "dynamic_file_vars": False,
-    "max_context_length": 32000,
+    "max_context_length": 2**15
 }

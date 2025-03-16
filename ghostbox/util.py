@@ -458,7 +458,7 @@ zm_yunyang""".split(
     )
 
     vs = []
-    if prog.getOption("tts_program") == "ghostbox-tts-polly":
+    if prog.getOption("tts_model") == "polly":
         for voice in pollyvoices:
             vs.append(voice)
     elif prog.getOption("tts_program") == "ghostbox-tts-tortoise":

@@ -23,7 +23,7 @@ def main():
     parser.add_argument("--websock-host", type=str, default="localhost", help="The hostname to bind to when using websock as output method.")
     parser.add_argument("--websock-port", type=int, default=5052, help="The port to listen on for connections when using websock as output method.")
     # zonos specific
-    parser.add_argument("--zonos_model", type=str, default="hybrid", help="The pretrained checkpoint to use with the Zonos TTS engine. Try picking 'transformer' or 'hybrid' for good defaults, otherwise consult the zonos project for more checkpoints. Tip: Hybrid seems to give better results than transformer, but requires the mamba-ssm and flash-attn pip packages and doesn't work on all GPUs.")
+    parser.add_argument("--zonos_model", type=str, default=ZonosTTSModel.hybrid.name, help="The pretrained checkpoint to use with the Zonos TTS engine. Hybrid seems to get the best results. This argument is ignored unless you use the Zonos model. Options: " + ", ".join([m.name for m in ZonosTTSModel]))
     args = parser.parse_args()
 
 

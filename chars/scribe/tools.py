@@ -1,7 +1,6 @@
 import os, datetime, sys
 
-
-file = os.path.expanduser("~/butterscotch.org")
+file = os.path.expanduser("~/scribe_notes.org")
 
 def directly_answer():
     """Calls a standard (un-augmented) AI chatbot to generate a response given the conversation history"""
@@ -26,8 +25,6 @@ def take_note(label : str, text : str) -> dict:
             "note label" : label,
             "note text" : text}
 
-
-
 def read_notes() -> dict:
     """Read the users notes."""
     global file
@@ -45,7 +42,7 @@ def read_notes() -> dict:
                          "date" : vs[1].replace("date: ", "") if vs[1].startswith("date: ") else "",
                          "text" : vs[2:] if vs[1].startswith("date: ") else vs[1:]}
         except:
-            print("warning: Syntax error in butterscotch notes, offending note: " + ws[i], file=sys.stderr)
+            print("warning: Syntax error in Scribe notes, offending note: " + ws[i], file=sys.stderr)
             continue
         d["note " + str(i)] = note_data
     return d

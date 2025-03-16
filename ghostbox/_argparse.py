@@ -22,6 +22,8 @@ class TaggedArgumentParser():
             self.tags[arg].name = arg
             # and if there is no help then let it blow up
             self.tags[arg].help = kwargs["help"]
+            if "default" in kwargs:
+                self.tags[arg].default_value = kwargs["default"] if kwargs["default"] is not None else "None"
             del kwargs["tag"]
             
         self.parser.add_argument(*args, **kwargs)
@@ -123,8 +125,10 @@ def makeTaggedParser(default_params) -> TaggedArgumentParser:
                         tag=mktag(type=AT.Plumbing, group=AG.Generation))
     parser.add_argument("--tts", action=argparse.BooleanOptionalAction, default=False, help="Enable text to speech on generated text.",
                         tag=mktag(type=AT.Porcelain, group=AG.TTS, very_important=True, service=True))
-    parser.add_argument("--tts_model", type=str, default="kokoro", help="The TTS model to use. This is ignored unless you use ghostbox-tts as your tts_program.",
+    parser.add_argument("--tts_model", type=str, default=TTSModel.kokoro.name, help="The TTS model to use. This is ignored unless you use ghostbox-tts as your tts_program. Options are:  " + ", ".join([m.name for m in TTSModel]),
                         tag=mktag(type=AT.Porcelain, group=AG.TTS))
+    parser.add_argument("--tts_zonos_model", type=str, default=ZonosTTSModel.hybrid.name, help="The Zonos TTS model offers two architecural variants: A pure transformer implementation or a transformer-mamba hybrid variant. Hybrid usually gives the best results, but requires flash attention. This option has no effect on non-zonos TTS engines. Options are: " + ", ".join([m.name for m in ZonosTTSModel]),
+                        tag=mktag(type=AT.Plumbing, group=AG.TTS))    
     parser.add_argument("--tts_language", type=str, default="en", help="Set the TTS voice language. Right now, this is only relevant for kokoro.",
                         tag=mktag(type=AT.Porcelain, group=AG.TTS))    
     parser.add_argument("--tts_output_method", type=str, choices=[om.name for om in TTSOutputMethod], default=TTSOutputMethod.default.name, help="How to play the generated speech. Using the --http argument automatically sets this to websock.",
