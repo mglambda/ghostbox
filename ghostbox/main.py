@@ -44,30 +44,56 @@ def showHelpCommands(prog, argv):
         return "Command not found. See /help for more."
     return ""
 
-def show_help_option_tag(prog, tag) -> str:
+def show_help_option_tag(prog, tag, markdown: bool=False) -> str:
     w = ""
-    cv = str(prog.getOption(tag.name))
-    w += (
-        tag.name
-        + "\n"
-        + "\n".join(textwrap.wrap(tag.help))
-        + "\n"
-        + "\n".join(textwrap.wrap(tag.show_description()))
-        + "\nIts current value is "
-        + (cv if cv else '""')
-        + "."
-    )
-    if tag.default_value is not None:
-        dv = str(tag.default_value)
-        w += " Its default value is " + (dv if dv else '""')
-    if tag.service:
-        w += "\nSetting it to True will start the corresponding service."    
+    if not(markdown):
+        cv = str(prog.getOption(tag.name))
+        w += (
+            tag.name
+            + "\n"
+            + "\n".join(textwrap.wrap(tag.help))
+            + "\n"
+            + "\n".join(textwrap.wrap(tag.show_description()))
+            + "\nIts current value is "
+            + (cv if cv else '""')
+            + "."
+        )
+        if tag.default_value is not None:
+            dv = str(tag.default_value)
+            w += " Its default value is " + (dv if dv else '""')
+        if tag.service:
+            w += "\nSetting it to True will start the corresponding service."
+    else:
+        # we generate markdown for the docs
+        w += (
+            f"## `{tag.name}`"
+            + "\n"
+            + tag.help
+            + "\n\n```\n"
+            + "\n".join(textwrap.wrap(tag.show_description()))
+            )
+        if tag.default_value is not None:
+            dv = str(tag.default_value)
+            w += "\nIts default value is " + (dv if dv else '""')
+        if tag.service:
+            w += "\nSetting it to True will start the corresponding service."            # this is for the docs
+        w += "\n```\n"
+        # avoid printerr prefix
+        print(w)
+        return ""
     return w
 
 def showHelp(prog, argv):
-    """[TOPIC] [-v|--verbose]
+    """[TOPIC] [-v|--verbose] [--markdown]
     List help on various topics. Use -v to see even more information."""
     w = ""
+    if argv != [] and argv[-1] == "--markdown":
+        markdown = True
+        del argv[-1]
+    else:
+        markdown = False
+        
+        
     if argv == []:
         # list topics
         w += "[Commands]\nUse these with a preceding slash like e.g. '/retry'. Do /help COMMANDNAME for more information on an individual command.\n\n"
@@ -108,13 +134,13 @@ def showHelp(prog, argv):
     if topic in prog.getTags():
         tag = prog.getTags()[topic]
         if tag.is_option:
-            return show_help_option_tag(prog, tag)
+            return show_help_option_tag(prog, tag, markdown=markdown)
     elif topic == "commands":
                 # list all commands with help        
         return showHelpCommands(prog, [])
     elif topic == "options":
             # list full options with description
-        return "\n\n".join([show_help_option_tag(prog, tag) for tag in sorted(prog.getTags().values(), key=lambda t: t.name) if tag.is_option])
+        return "\n\n".join(filter(lambda w: w != "", [show_help_option_tag(prog, tag, markdown=markdown) for tag in sorted(prog.getTags().values(), key=lambda t: t.name) if tag.is_option]))
     else:
         # fix it's a command
         return showHelpCommands(prog, [topic])
@@ -553,7 +579,6 @@ class Plumbing(object):
         )
         for k, v in items:
             if not(k in protected_keys):
-                print(f"{k}:{v}")
                 self.setOption(k, v)
         return ""
 

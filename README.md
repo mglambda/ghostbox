@@ -634,7 +634,7 @@ You can use this for great convenience at the CLI, e.g.
 
 In this case, the `{[README.md]}` expression would be expanded into the content of this very file (woah). Incidentally, the backslashes above are used to enter a newline at the CLI.
 
-Note that although they are useful, dynamic file variables are disabled for every other input method except the terminal program. Think putting `{[/etc/passwd]}` deep in some python code and other such skullduggery.
+Note that although they are useful, for security reasons, dynamic file variables are disabled for every other input method except the terminal program. Think putting `{[/etc/passwd]}` deep in some python code and other such skullduggery.
 
 ## Tool Calling Guide
 
