@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from contextlib import contextmanager
 from typing import Callable, Dict
 from typing_extensions import Self
-import json
+import json, time
 from ghostbox.main import Plumbing, setup_plumbing
 from ghostbox.StoryFolder import StoryFolder
 from ghostbox._argparse import makeDefaultOptions
@@ -471,6 +471,26 @@ class Ghostbox:
         """
         self._plumbing.communicateTTS(text, interrupt=interrupt)
         return self
+
+    def tts_is_speaking(self) -> bool:
+        """Returns True if the TTS engine is currently speaking."""
+        return self._plumbing.ttsIsSpeaking()
+
+    def tts_wait(self, timeout: Optional[float] = None, minimum: float = 2.0) -> bool:
+        """Blocks thread of execution until the TTS has finished speaking.
+        :param timeout: Number of seconds, if any, after which to resume execution. If you also want to stop the tts you'll have to do that yourself.
+        :param minimum: Number of seconds to wait at minimum. This is useful because, although the TTS engines are realtime capable, there may be a small delay between a request for speech output and the actual output starting.
+        :return: This function always returns True"""
+        begin = time.time()
+        time.sleep(minimum)
+        
+        # we have to do it this way because we poll the process in plumbing
+        while self.tts_is_speaking():
+            if timeout is not None:
+                if (time.time() - begin) > timeout:
+                    break
+            time.sleep(0.3)
+        return True
 
     def tts_stop(self) -> Self:
         """Stops speech output that is in progress.

@@ -1844,7 +1844,23 @@ class Plumbing(object):
         self._busy.set()
         self._busy.clear()
 
+    def ttsIsSpeaking(self) -> bool:
+        """Returns true if the tts is currently speaking.
+        If querying this is not supported by the tts_program, this method will always return False."""
+        if self.getOption("tts_program") != "ghostbox-tts":
+            return False
 
+        if not(self.getOption("tts")):
+            return False
+
+        # to figure out if ghostbox-tts is speaking, we send a '<is_speaking> message
+        # the return in stdout should be is_speaking: True'
+        self.tts.write_line("<is_speaking>")
+        time.sleep(0.1)
+        lines = self.tts.get()
+        return "is_speaking: True\n" in lines
+
+        
 def main():
     just_fix_windows_console()
     tagged_parser = makeTaggedParser(backends.default_params)

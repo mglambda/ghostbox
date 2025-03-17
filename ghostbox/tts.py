@@ -89,6 +89,9 @@ def main():
                     continue
                 elif w.strip() == "":
                     msg_queue.put(silence_token)
+                elif w == "<is_speaking>":
+                    print("is_speaking: " + str(output_module.is_speaking()), flush=True)
+                    continue
                 elif w.startswith("/"):
                     vs = w[1:].split(" ")
                     option = vs[0]

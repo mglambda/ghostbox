@@ -41,3 +41,6 @@ box.text_stream(
 
 # now we need to keep the program from exiting right away
 done.wait()
+
+# speaking is usually slower than generation, so we need to wait for the tts as well
+box.tts_wait()

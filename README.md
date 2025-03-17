@@ -329,7 +329,8 @@ while True:
 
     box.temperature = min(box.temperature + escalation_factor, 1.3)
 
-time.sleep(10)  # give time to finish the speech
+# prevent halting of program until the epilogue narration has ended
+box.tts_wait()
 ```
 
 And this would be in `game_master/system_msg`:
@@ -386,6 +387,9 @@ box.text_stream(
 
 # now we need to keep the program from exiting right away, while streaming is happening
 done.wait()
+
+# speaking is usually slower than generation, so we wait for the tts as well
+box.tts_wait()
 ```
 
 ### Requirements

@@ -55,4 +55,5 @@ while True:
 
     box.temperature = min(box.temperature + escalation_factor, 1.3)
 
-time.sleep(10)  # give time to finish the speech
+# prevent halting of program until the epilogue narration has ended
+box.tts_wait()
