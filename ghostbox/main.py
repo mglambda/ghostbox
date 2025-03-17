@@ -1715,7 +1715,7 @@ class Plumbing(object):
 
     def stopWebsock(self):
         printerr("Stopping websocket server.")
-        self.websock_running.clear()
+        self.websock_server_running.clear()
         self.websock_clients = []
         self._printerr_buffer = ["Resetting stderr buffer."]
         util.printerr_callback = self._initial_printerr_callback
@@ -1902,11 +1902,11 @@ def setup_plumbing(prog: Plumbing, args: Namespace = Namespace(), protected_keys
         del prog.options["http"]
         prog.setOption("http", True)
 
-    if prog.getOption("websock"):
+    if prog.getOption("websock") and not(prog.websock_server_running.is_set()):
         del prog.options["websock"]
         prog.setOption("websock", True)
 
-    if prog.getOption("audio"):
+    if prog.getOption("audio") and prog.ct is None:
         del prog.options["audio"]
         prog.setOption("audio", True)
 

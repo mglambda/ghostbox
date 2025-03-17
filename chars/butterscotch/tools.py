@@ -173,7 +173,7 @@ def visit_website(url: str) -> str:
     return w
 
 
-def shell_command(command: str, stdin: str=None, cwd=None) -> Dict:
+def shell_command(command: str, stdin: str=None) -> Dict:
     """Execute a shell command.
     :param command: A string which will be executed as if typed at a bash prompt.
     :param stdin: An optional string that will be fed to the invoked program's standard input.
@@ -191,15 +191,12 @@ def shell_command(command: str, stdin: str=None, cwd=None) -> Dict:
             prog.console("warning: " + msg)
             return {"error": msg}
 
-        # llms love to fill in optional vars with '' etc for some reason, but subprocess doesn't like that
-    cwd = cwd if cwd else None
     stdin = stdin if stdin else None
     try:
         prog.console_me(" is executing `" + command + "` ...")
         r = subprocess.run(command,
                            text=True,
                            capture_output=True,
-                           cwd=cwd,
                            shell=True)
     except:
         msg = traceback.format_exc()

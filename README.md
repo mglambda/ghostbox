@@ -17,7 +17,7 @@ box.tts_say(answer)
 You would hear a voice saying "ghostbox". Probably.
 
 ## What it is
-
+<a href="https://raw.github.com/mglambda/ghostbox/master/screenshots/terminal.png"><img alt="A screenshot displaying ghostbox used in a terminal." width="300" align="right" src="https://raw.github.com/mglambda/ghostbox/master/screenshots/terminal.png"></a>
 Ghostbox is a python library and toolkit for querying LLMs (large language models), both locally hosted and remote. It let's you use AI independent of any particular provider and backend. It wants to make developing applications with tightly integrated AI as painless as possible, without tieing you down to some kind of framework.
 
 Ghostbox ships with the `ghostbox` CLI program, a fully featured terminal client that let's you interact and chat with LLMs from the comfort of your own shell, as well as monitor and debug AIs that are running in your program.
@@ -27,6 +27,7 @@ It also includes `ghostbox-tts`, which allows text-to-speech synthesis with vari
 I wrote this because I wanted to build stuff with LLMs, while still understanding what's going on under the hood. And also because I wanted an actually good, blind accessible terminal client. Ghostbox is those things.
 
 ## Features
+<a href="https://raw.github.com/mglambda/ghostbox/master/screenshots/webui.png"><img alt="A screenshot displaying ghostbox used in the Chrome web browser through the Web UI" width="300" align="right" src="https://raw.github.com/mglambda/ghostbox/master/screenshots/webui.png"></a>
  - Generate text, json, or pydantic class instances with LLMs
  - Support for OpenAI, Llama.cpp, Lllama-box, and anyone who supports the OAI API.
  - Interruptible, streaming TTS with Kokoro, Zonos, Amazon Polli, and others.
