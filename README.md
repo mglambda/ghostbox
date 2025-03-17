@@ -61,11 +61,6 @@ cloud_box = ghostbox.from_openai(character_folder="ghost", api_key="...")
 llama_box = ghostbox.from_llamacpp(
     character_folder="ghost", samplers=["min_p", "dry", "xtc", "temperature"]
 )
-
-# Instanciating a ghostbox instance directly is not recommended
-# but you can do it of course
-# it takes the same arguments as the command line parameters on the CLI
-diy_box = Ghostbox(endpoint="http:somehost.local:8080", backend="llamacpp")
 ```
 
 ### Using the terminal client
@@ -177,7 +172,7 @@ Your opinions on art are nuanced and sophisticated. Your sense of aesthetics is 
 When asked your opinion, you react extremely snobbish and arrogantly. You love to criticise bad art in creative ways, and you do so often, and with great intensity.
 ```
 
-Heree's the output (using qwen2-vl): 
+Here's the output (using qwen2-vl): 
 ```
 I am indeed a discerning critic, and these artworks certainly do not meet my standards of artistry and design.
 
@@ -584,9 +579,9 @@ Ghostbox expects character folders in the following places
 Ghostbox will the nlook for character folders in the following places:
  - The current working directory
  - Whatever valid directory paths are set in the `include` option, in order. By default, these are
- -- A platform specific ghostbox Application directory location, e.g. `~/.local/share/ghostbox/chars/`
- -- A char dir in the ghostbox python package. This contains a handful of built-in characters (like `ghost`). Its location depends on your package manager, but will be something like `env/lib/python/site-packages/ghostbox/data/chars/`.
- -- A directory `chars/` in the current working directory.
+     - A platform specific ghostbox Application directory location, e.g. `~/.local/share/ghostbox/chars/`
+     - A char dir in the ghostbox python package. This contains a handful of built-in characters (like `ghost`). Its location depends on your package manager, but will be something like `env/lib/python/site-packages/ghostbox/data/chars/`.
+     - A directory `chars/` in the current working directory.
 
 You can append to the include paths by using the `--include` command line argument.
 
@@ -655,10 +650,10 @@ Options can be used in the following places:
  - User config files, which also contain json
  - As a property on a ghostbox instance, e.g. `box.temperature = 1.0`
  - Parameters to API functions, including
- -- The `from_*` factory functions, e.g. `box = from_llamacpp(temperature=1.3, tts_voice="af_sky")`.
- -- The `options` context manager, e.g. `with box.options(temperature=1.3, tts_voice="af_sky"):`
- -- The `Ghostbox` constructor
- -- as `**options` parameter in many method signatures
+     - The `from_*` factory functions, e.g. `box = from_llamacpp(temperature=1.3, tts_voice="af_sky")`.
+     - The `options` context manager, e.g. `with box.options(temperature=1.3, tts_voice="af_sky"):`
+     - The `Ghostbox` constructor
+     - as `**options` parameter in many method signatures
  - The `/set` command in the CLI, e.g. `/set temperature 1.3` or `/set tts_voice "af_sky"`. List these with `/lsoptions`
 
 Across these different uses for options, the naming is always consistent.
