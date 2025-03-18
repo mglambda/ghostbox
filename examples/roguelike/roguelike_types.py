@@ -1,6 +1,6 @@
 from pydantic import BaseModel, Field
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from queue import Queue
 import threading
 from typing import *
@@ -166,20 +166,24 @@ class Controller:
 
     view: ViewInterface
 
-    messages: List[str] = Field(default_factory=list)
-    accessibility_messages: List[str] = Field(default_factory=list)
+    messages: List[str] = field(default_factory=list)
+    accessibility_messages: List[str] = field(default_factory=list)
 
     # these are instructions that come in from the player through keypresses
-    input_instruction_queue: Queue = Field(default_factory=Queue)
+    input_instruction_queue: Queue = field(default_factory=Queue)
 
     # this is a flag that when false, means we have to get some kind of confimartion from the user, before continuing execution
     # this is so that events don't all happen really fast in sequence
-    continue_execution: threading.Event = Field(default_factory=threading.Event)
+    continue_execution: threading.Event = field(default_factory=threading.Event)
 
-    def input_instructions(self, instructions: List[GameInstruction]) -> None:
+    def push_input_instructions(self, instructions: List[GameInstruction]) -> None:
         for i in instructions:
             self.input_instruction_queue.put(i)
 
+    def confirm(self) -> None:
+        """Causes the controller to seek user confirmation before continuing execution of game logic."""
+        self.continue_execution.clear()
+            
     def print(self, text: str) -> None:
         """Print a message to the log."""
         self.messages.append(text)
