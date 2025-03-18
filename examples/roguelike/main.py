@@ -4,6 +4,7 @@ from roguelike_results import *
 from roguelike_instructions import *
 import roguelike_controller as control
 from roguelike_view import *
+from roguelike_map import *
 
 
 def make_minimal_gamestate(player_name: str) -> GameState:
@@ -30,7 +31,9 @@ def make_minimal_gamestate(player_name: str) -> GameState:
     )
     game.enable(GroupMember, player_uid, GroupMember(group_name=Group.Human, rank=0))
     game.enable(Damage, player_uid, Damage(health=100, leaves_corpse=True))
+    return game
 
+def make_minimal_room(game: GameState) -> GameState:
     # Create a small room of floor tiles (5x5)
     for x in range(5):
         for y in range(5):
@@ -57,7 +60,23 @@ def make_minimal_gamestate(player_name: str) -> GameState:
 
     return game
 
+def ensure_player_on_floor(game: GameState, player: UID) -> GameState:
+    for x in range(1, 200):
+        for y in range(1, 200):
+            entities_here = game.at(x, y, 0)
+            bad = False
+            for entity in entities_here: 
+                if game.get(Solid, entity):
+                    break
+            if not(bad):
+                for entity in entities_here:
+                    if game.get(MapTile, entity):
+                        game.enable(Move, player, Move(x=x, y=y, dungeon_level=0))
+                        return game
 
+    raise RuntimeError("No place to put player!")
+                    
+                            
 def main():
     # Initialize Pygame
     pygame.init()
@@ -78,6 +97,11 @@ def main():
     # make some defaults for testing
     game = make_minimal_gamestate("Tav")
 
+    # Generate dungeon levels
+    for level in range(3):  # Generate 3 levels for testing
+        mapgen_generic(game, dungeon_level=level)
+
+    ensure_player_on_floor(game, 0)
     # initialize the controller
     # by convention, the player is UID 0
     ctl = Controller(
