@@ -1,8 +1,12 @@
 from pydantic import BaseModel, Field
 from abc import ABC, abstractmethod
+from dataclasses import dataclass
+from queue import Queue
+import threading
 from typing import *
 from functools import reduce
 from enum import StrEnum
+import pygame
 
 UID = NewType("UID", int)
 
@@ -123,21 +127,69 @@ class GameState(BaseModel):
         return self.get(component, entity) is None
 
 
-class Controller(BaseModel):
+class ViewInterface(Protocol):
+    """Interface for the controller module that provides graphical displaying."""
+
+    @abstractmethod
+    def draw_map(
+        self,
+        game: GameState,
+        center_x: int,
+        center_y: int,
+        dungeon_level: int,
+        screen: pygame.Surface,
+    ) -> None:
+        pass
+
+    @abstractmethod
+    def draw_status(
+        self, game: GameState, player_uid: UID, screen: pygame.Surface
+    ) -> None:
+        pass
+
+    @abstractmethod
+    def draw_messages(self, messages: List[str], screen: pygame.Surface):
+        pass
+
+
+
+
+@dataclass
+class Controller:
     """The controller has the overview over all game resources, including the model  (GameState) and the view (i.e. some graphical interface. It also handles user input."""
 
     game: GameState
-    # view is not defined yet
-    view: Any = None
 
     # the entity that the player controls
     # the controller needs to know this, because obviously this is the entity we will display information about
     player: UID
-    message_log: List[str] = []
+
+    view: ViewInterface
+
+    messages: List[str] = Field(default_factory=list)
+    accessibility_messages: List[str] = Field(default_factory=list)
+
+    # these are instructions that come in from the player through keypresses
+    input_instruction_queue: Queue = Field(default_factory=Queue)
+
+    # this is a flag that when false, means we have to get some kind of confimartion from the user, before continuing execution
+    # this is so that events don't all happen really fast in sequence
+    continue_execution: threading.Event = Field(default_factory=threading.Event)
+
+    def input_instructions(self, instructions: List[GameInstruction]) -> None:
+        for i in instructions:
+            self.input_instruction_queue.put(i)
 
     def print(self, text: str) -> None:
-        """Simple wrapper for print, for the terminal only version of controller."""
-        self.message_log.append(text)
+        """Print a message to the log."""
+        self.messages.append(text)
+        print(text)
+
+    def speak(self, text: str) -> None:
+        """Speak a message using text-to-speech.
+        This is intended as an accessibility feature for blind players."""
+        self.accessibility_messages.append(text)
+        # for now we rely on the console TTS
         print(text)
 
 

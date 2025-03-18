@@ -5,7 +5,7 @@ from typing import List, Tuple
 
 
 @dataclass
-class PyGameView:
+class PyGameView(ViewInterface):
     screen_width: int
     screen_height: int
     _last_center_x: int = 0
