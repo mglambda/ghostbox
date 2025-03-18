@@ -57,7 +57,65 @@ def draw(self: Controller, screen: pygame.Surface) -> None:
     self.view.draw_status(self.game, self.player, screen)
     self.view.draw_messages(self.messages, screen)
 
+def handle_accessibility_focus(self: Controller, old_focus: FocusObject, new_focus: FocusObject) -> None:
+    """Speaks whatever is appropriate to a certain focus change context."""
+    match new_focus:
+        case FocusTile(which_tile_x=x, which_tile_y=y, which_tile_dungeon_level=lvl):
+            # we don't need to say the dlvl every time
+            position = f"at {x}, {y}"
+            if (tile_pair := find_floor_tile(self.game, x, y, lvl)) is None:
+                self.speak("Nothing" + position)
+                return
+            tile_id, tile_component = tile_pair
+            if (tile_name_component := self.game.get(Name, tile_id)) is None:
+                self.speak("Unknown tile" + position)
+                return
 
+            # ok it's a real tile, now it gets a little more involved
+            tile_name = tile_name_component.name
+            
+            # what else is here?
+            entities = find_all_sorted(self.game, x, y, lvl)
+            # we know entities has at least 1 member (the tile)
+            # if there are more things, we will speak only one
+            # and of those things, we will speak whatever is solid (like a monster)
+            if (first := entities[0]) == tile_id:
+                things_msg = ""
+            else:
+                if (name_component := self.game.get(Name, first)) is not None:
+                    things_msg = f" with {name_component.name} "
+
+            # ok now we got everything
+            self.speak(tile_name + things_msg + position)
+            return
+        case FocusEntity(which_entity=which_entity):
+            # for now we just speak some basic info about entity
+            if (name_component := self.game.get(Name, which_entity)) is None:
+                self.speak("A strange, bewildering thing.")
+                return
+            description = "" if name_component.description is None else ": " + name_component.description
+            self.speak(f"{name_component.name}" + description)
+            return
+        case FocusMessages(which_msg=which_msg):
+            # for now we just speak the latest message
+            if self.messages == []:
+                self.speak("No messages yet.")
+                return
+            msg = self.messages[-1]
+            self.speak(msg)
+            return
+        case FocusStatus():
+            # not implemented yet
+            pass
+            
+def change_focus(self: Controller, new_focus: FocusObject) -> None:
+    """Changes the focus selection in the itnerface and procs appropriate side effects."""
+    if type(self.focus) == FocusTile:
+        self.last_tile_focused = self.focus
+
+    handle_accessibility_focus(self, self.focus, new_focus)
+    self.focus = new_focus
+        
 def move_player_left(self: Controller) -> None:
     self.push_input_instructions([MoveEntity(entity=self.player, dx=-1, dy=0)])
 

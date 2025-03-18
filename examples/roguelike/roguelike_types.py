@@ -102,7 +102,7 @@ class GameState(BaseModel):
     def entities(self) -> Set[UID]:
         return set(
             reduce(
-                lambda a, b: a + b,
+                lambda a, b: a + b, # type: ignore
                 [list(store.data.keys()) for store in self.stores.values()],
                 [],
             )
@@ -152,7 +152,26 @@ class ViewInterface(Protocol):
         pass
 
 
+# these are some helpers to track focus in the controller
+class FocusStatus(BaseModel):
+    pass
 
+
+class FocusTile(BaseModel):
+    which_tile_x: int = 0
+    which_tile_y: int = 0
+    which_tile_dungeon_level: int = 0
+
+
+class FocusEntity(BaseModel):
+    which_entity: UID
+
+
+class FocusMessages(BaseModel):
+    which_msg: int
+
+
+FocusObject = FocusMessages | FocusStatus | FocusEntity | FocusTile
 
 
 @dataclass
@@ -167,23 +186,29 @@ class Controller:
 
     view: ViewInterface
 
-    keybindings: Dict[int, Callable[['Controller'], None]] = field(default_factory=dict)
-    
+    keybindings: Dict[int, Callable[["Controller"], None]] = field(default_factory=dict)
+
     messages: List[str] = field(default_factory=list)
     accessibility_messages: List[str] = field(default_factory=list)
 
     # these are instructions that come in from the player through keypresses
     input_instruction_queue: Queue = field(default_factory=Queue)
 
+    # what is currently in focus
+    focus: FocusObject = field(default_factory=lambda: FocusEntity(which_entity=UID(0)))
+    # always holds the last map tile that was focused
+    last_tile_focused: FocusTile = field(default_factory=lambda: FocusTile())
+
     # this is a flag that when false, means we have to get some kind of confimartion from the user, before continuing execution
     # this is so that events don't all happen really fast in sequence
     continue_execution: threading.Event = field(default_factory=threading.Event)
 
     # this is for the run loop
-    _running: bool = False 
+    _running: bool = False
 
     def __post_init__(self):
         self.continue_execution.set()
+
     def push_input_instructions(self, instructions: List[GameInstruction]) -> None:
         for i in instructions:
             self.input_instruction_queue.put(i)
@@ -195,6 +220,7 @@ class Controller:
     def confirm(self) -> None:
         """Resumes execution of game logic."""
         self.continue_execution.set()
+
     def print(self, text: str) -> None:
         """Print a message to the log."""
         self.messages.append(text)
