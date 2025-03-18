@@ -102,8 +102,8 @@ class GameState(BaseModel):
     def entities(self) -> Set[UID]:
         return set(
             reduce(
-                lambda a, b: a + b,  # type: ignore
-                [store.data.keys() for store in self.stores.values()],
+                lambda a, b: a + b,
+                [list(store.data.keys()) for store in self.stores.values()],
                 [],
             )
         )
@@ -154,6 +154,7 @@ class ViewInterface(Protocol):
 
 
 
+
 @dataclass
 class Controller:
     """The controller has the overview over all game resources, including the model  (GameState) and the view (i.e. some graphical interface. It also handles user input."""
@@ -166,6 +167,8 @@ class Controller:
 
     view: ViewInterface
 
+    keybindings: Dict[int, Callable[['Controller'], None]] = field(default_factory=dict)
+    
     messages: List[str] = field(default_factory=list)
     accessibility_messages: List[str] = field(default_factory=list)
 
@@ -176,14 +179,22 @@ class Controller:
     # this is so that events don't all happen really fast in sequence
     continue_execution: threading.Event = field(default_factory=threading.Event)
 
+    # this is for the run loop
+    _running: bool = False 
+
+    def __post_init__(self):
+        self.continue_execution.set()
     def push_input_instructions(self, instructions: List[GameInstruction]) -> None:
         for i in instructions:
             self.input_instruction_queue.put(i)
 
-    def confirm(self) -> None:
+    def wait_confirm(self) -> None:
         """Causes the controller to seek user confirmation before continuing execution of game logic."""
         self.continue_execution.clear()
-            
+
+    def confirm(self) -> None:
+        """Resumes execution of game logic."""
+        self.continue_execution.set()
     def print(self, text: str) -> None:
         """Print a message to the log."""
         self.messages.append(text)
@@ -195,6 +206,10 @@ class Controller:
         self.accessibility_messages.append(text)
         # for now we rely on the console TTS
         print(text)
+
+    def handle_key_event(self, key: int) -> None:
+        if key in self.keybindings:
+            self.keybindings[key](self)
 
 
 class Script(BaseModel):

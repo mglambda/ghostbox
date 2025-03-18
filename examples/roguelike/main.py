@@ -79,10 +79,14 @@ def main():
     # by convention, the player is UID 0
     ctl = Controller(
         game=game,
+        keybindings=control.default_keybindings,
         view=PyGameView(screen_width=SCREEN_WIDTH, screen_height=SCREEN_HEIGHT),
         player=0,
     )
 
+    # start the controller's game event loop (different from pygame events)
+    control.run(ctl, [DoNothing()])
+    
     # Main game loop
     running = True
     while running:
@@ -90,9 +94,13 @@ def main():
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 running = False
+                ctl._running = False
             elif event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_q:
                     running = False
+                    ctl._running = False
+                else:
+                    ctl.handle_key_event(event.key)
 
         # Update the game state
         screen.fill((0, 0, 0))  # Fill the screen with black

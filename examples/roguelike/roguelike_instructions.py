@@ -7,6 +7,7 @@ class MoveEntity(GameInstruction):
     entity: UID
     dx: int
     dy: int
+    dungeon_level_delta: int = 0
 
     def delta(self, game: GameState) -> DeltaResultType:
         move_component = game.get(Move, self.entity)
@@ -15,13 +16,13 @@ class MoveEntity(GameInstruction):
 
         new_x = move_component.x + self.dx
         new_y = move_component.y + self.dy
-
+        new_dungeon_level = move_component.dungeon_level + self.dungeon_level_delta
         # Check for collisions with solid entities
         if check_collision(game, new_x, new_y, move_component.dungeon_level, self.entity):
             return NothingHappened(), []
 
         # Update the entity's position
-        game.enable(Move, self.entity, Move(x=new_x, y=new_y, dungeon_level=move_component.dungeon_level))
+        game.enable(Move, self.entity, Move(x=new_x, y=new_y, dungeon_level=new_dungeon_level))
         return EntityMoved(entity=self.entity, new_x=new_x, new_y=new_y), []
 
 class CreateEntity(GameInstruction):

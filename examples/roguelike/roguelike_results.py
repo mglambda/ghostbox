@@ -6,7 +6,7 @@ class EntityMoved(GameResult):
     entity: UID
     new_x: int
     new_y: int
-
+    
     def handle(self, ctl: Controller) -> None:
         ctl.print(f"Entity {self.entity} moved to ({self.new_x}, {self.new_y})")
 
