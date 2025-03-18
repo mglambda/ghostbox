@@ -7,160 +7,241 @@ from queue import Empty
 # they are not methods because we want to keep the controller object as minimal as possible
 # but they all have essentially private membership in the controller class, and the self argument is used as a controller object throughout
 
-def run(self: Controller, initial_instructions: List[GameInstruction]) -> None:
+def run(ctl: Controller, initial_instructions: List[GameInstruction]) -> None:
     """Runs the game on a seperate thread, based on initial instructions.
     This function will use some initial instructions to generate GameResults with the internal GameState, potentially changing it and generating more instructions. It continuously pops instructions of an internal input instruction queue.
     :param initial_instructions: A list of instructions to start the game with, or continue a paused one.
     :return: Nothing. The function runs until it is interrupted or until all instructions have been processed and no new ones are generated. Implicitly, the GameState is returned as a property of the controller.
     """
-    self.print(f"Starting game with player uid {self.player}")
+    ctl.print(f"Starting game with player uid {ctl.player}")
     def loop(instructions: List[GameInstruction]):
-        self.input_instruction_queue.queue.extendleft(instructions)
-        while self._running:
+        reset_focus(ctl)
+        ctl.input_instruction_queue.queue.extendleft(instructions)
+        while ctl._running:
             try:
-                instruction = self.input_instruction_queue.get(timeout=1)
+                instruction = ctl.input_instruction_queue.get(timeout=1)
             except Empty:
                 # don't remove this or the thread won't handle signals
                 continue
 
             # the program might want us to wait, for e.g. user confirmation
-            self.continue_execution.wait()
+            ctl.continue_execution.wait()
             
             # execute the instruction with the current gamestate
             # the GameState will be changed, and we potentially get new instructions
-            result, new_instructions = instruction.delta(self.game)
+            result, new_instructions = instruction.delta(ctl.game)
             # the result's side effects procure, with access to the controller
             # sound, graphics, in our case printing
-            result.handle(self)
+            result.handle(ctl)
 
             # add the new instructions to the beginning
             # (appending them would completely change the game)
-            with self.input_instruction_queue.mutex:
-                self.input_instruction_queue.queue.extendleft(new_instructions)
+            with ctl.input_instruction_queue.mutex:
+                ctl.input_instruction_queue.queue.extendleft(new_instructions)
 
     # start the run loop
     t = threading.Thread(target=loop, args=(initial_instructions,), daemon=True)
-    self._running = True
+    ctl._running = True
     t.start()
     
 
-def draw(self: Controller, screen: pygame.Surface) -> None:
+def draw(ctl: Controller, screen: pygame.Surface) -> None:
     """Draws the entire game.
     This completely assumes a PyGameView, or a dreived class."""
 
     # find player coordinates
-    if (player_move := self.game.get(Move, self.player)) is not None:
+    if (player_move := ctl.game.get(Move, ctl.player)) is not None:
         # if we don't have a player, we simply don't draw the map
-        self.view.draw_map(
-            self.game, player_move.x, player_move.y, player_move.dungeon_level, screen
+        ctl.view.draw_map(
+            ctl.game, player_move.x, player_move.y, player_move.dungeon_level, screen, focus=ctl.focus
         )
-    self.view.draw_status(self.game, self.player, screen)
-    self.view.draw_messages(self.messages, screen)
+    ctl.view.draw_status(ctl.game, ctl.player, screen)
+    ctl.view.draw_messages(ctl.messages, screen)
 
-def handle_accessibility_focus(self: Controller, old_focus: FocusObject, new_focus: FocusObject) -> None:
+def handle_accessibility_focus(ctl: Controller, old_focus: FocusObject, new_focus: FocusObject) -> None:
     """Speaks whatever is appropriate to a certain focus change context."""
     match new_focus:
         case FocusTile(which_tile_x=x, which_tile_y=y, which_tile_dungeon_level=lvl):
             # we don't need to say the dlvl every time
             position = f"at {x}, {y}"
-            if (tile_pair := find_floor_tile(self.game, x, y, lvl)) is None:
-                self.speak("Nothing" + position)
+            if (tile_pair := find_floor_tile(ctl.game, x, y, lvl)) is None:
+                ctl.speak("Nothing" + position)
                 return
             tile_id, tile_component = tile_pair
-            if (tile_name_component := self.game.get(Name, tile_id)) is None:
-                self.speak("Unknown tile" + position)
+            if (tile_name_component := ctl.game.get(Name, tile_id)) is None:
+                ctl.speak("Unknown tile" + position)
                 return
 
             # ok it's a real tile, now it gets a little more involved
             tile_name = tile_name_component.name
             
             # what else is here?
-            entities = find_all_sorted(self.game, x, y, lvl)
+            entities = find_all_sorted(ctl.game, x, y, lvl)
             # we know entities has at least 1 member (the tile)
             # if there are more things, we will speak only one
             # and of those things, we will speak whatever is solid (like a monster)
             if (first := entities[0]) == tile_id:
                 things_msg = ""
             else:
-                if (name_component := self.game.get(Name, first)) is not None:
+                if (name_component := ctl.game.get(Name, first)) is not None:
                     things_msg = f" with {name_component.name} "
 
             # ok now we got everything
-            self.speak(tile_name + things_msg + position)
+            ctl.speak(tile_name + things_msg + position)
             return
         case FocusEntity(which_entity=which_entity):
             # for now we just speak some basic info about entity
-            if (name_component := self.game.get(Name, which_entity)) is None:
-                self.speak("A strange, bewildering thing.")
+            if (name_component := ctl.game.get(Name, which_entity)) is None:
+                ctl.speak("A strange, bewildering thing.")
                 return
             description = "" if name_component.description is None else ": " + name_component.description
-            self.speak(f"{name_component.name}" + description)
+            ctl.speak(f"{name_component.name}" + description)
             return
         case FocusMessages(which_msg=which_msg):
             # for now we just speak the latest message
-            if self.messages == []:
-                self.speak("No messages yet.")
+            if ctl.messages == []:
+                ctl.speak("No messages yet.")
                 return
-            msg = self.messages[-1]
-            self.speak(msg)
+            msg = ctl.messages[-1]
+            ctl.speak(msg)
             return
         case FocusStatus():
             # not implemented yet
             pass
-            
-def change_focus(self: Controller, new_focus: FocusObject) -> None:
+
+def reset_focus(ctl: Controller) -> None:
+    ctl.focus = None
+    if (move_component := ctl.game.get(Move, ctl.player)) is None:
+        # very weird, which is why we get to do weird things
+        ctl.last_tile_focused = FocusTile()
+        return
+    ctl.last_tile_focused = FocusTile(which_tile_x=move_component.x, which_tile_y=move_component.y, which_tile_dungeon_level=move_component.dungeon_level)
+
+
+    
+def change_focus(ctl: Controller, new_focus: FocusObject) -> None:
     """Changes the focus selection in the itnerface and procs appropriate side effects."""
-    if type(self.focus) == FocusTile:
-        self.last_tile_focused = self.focus
+    if type(ctl.focus) == FocusTile:
+        ctl.last_tile_focused = ctl.focus
 
-    handle_accessibility_focus(self, self.focus, new_focus)
-    self.focus = new_focus
+    handle_accessibility_focus(ctl, ctl.focus, new_focus)
+    ctl.focus = new_focus
         
-def move_player_left(self: Controller) -> None:
-    self.push_input_instructions([MoveEntity(entity=self.player, dx=-1, dy=0)])
+def move_player_left(ctl: Controller) -> None:
+    reset_focus(ctl)        
+    ctl.push_input_instructions([MoveEntity(entity=ctl.player, dx=-1, dy=0)])
 
 
-def move_player_right(self: Controller) -> None:
-    self.push_input_instructions([MoveEntity(entity=self.player, dx=1, dy=0)])
+def move_player_right(ctl: Controller) -> None:
+    reset_focus(ctl)        
+    ctl.push_input_instructions([MoveEntity(entity=ctl.player, dx=1, dy=0)])
 
 
-def move_player_up(self: Controller) -> None:
-    self.push_input_instructions([MoveEntity(entity=self.player, dx=0, dy=-1)])
+def move_player_up(ctl: Controller) -> None:
+    reset_focus(ctl)
+    ctl.push_input_instructions([MoveEntity(entity=ctl.player, dx=0, dy=-1)])
 
 
-def move_player_down(self: Controller) -> None:
-    self.push_input_instructions([MoveEntity(entity=self.player, dx=0, dy=1)])
+def move_player_down(ctl: Controller) -> None:
+    reset_focus(ctl)    
+    ctl.push_input_instructions([MoveEntity(entity=ctl.player, dx=0, dy=1)])
 
 
-def move_player_up_right(self: Controller) -> None:
-    self.push_input_instructions([MoveEntity(entity=self.player, dx=1, dy=-1)])
+def move_player_up_right(ctl: Controller) -> None:
+    reset_focus(ctl)    
+    ctl.push_input_instructions([MoveEntity(entity=ctl.player, dx=1, dy=-1)])
 
 
-def move_player_up_left(self: Controller) -> None:
-    self.push_input_instructions([MoveEntity(entity=self.player, dx=-1, dy=-1)])
+def move_player_up_left(ctl: Controller) -> None:
+    reset_focus(ctl)    
+    ctl.push_input_instructions([MoveEntity(entity=ctl.player, dx=-1, dy=-1)])
 
 
-def move_player_down_left(self: Controller) -> None:
-    self.push_input_instructions([MoveEntity(entity=self.player, dx=-1, dy=1)])
+def move_player_down_left(ctl: Controller) -> None:
+    reset_focus(ctl)    
+    ctl.push_input_instructions([MoveEntity(entity=ctl.player, dx=-1, dy=1)])
 
 
-def move_player_down_right(self: Controller) -> None:
-    self.push_input_instructions([MoveEntity(entity=self.player, dx=1, dy=1)])
+def move_player_down_right(ctl: Controller) -> None:
+    reset_focus(ctl)    
+    ctl.push_input_instructions([MoveEntity(entity=ctl.player, dx=1, dy=1)])
 
 
-def move_player_up_level(self: Controller) -> None:
-    self.push_input_instructions([MoveEntity(entity=self.player, dx=0, dy=0, dungeon_level_delta=-1)])
+def move_player_up_level(ctl: Controller) -> None:
+    reset_focus(ctl)    
+    ctl.push_input_instructions([MoveEntity(entity=ctl.player, dx=0, dy=0, dungeon_level_delta=-1)])
 
 
-def move_player_down_level(self: Controller) -> None:
-    self.push_input_instructions([MoveEntity(entity=self.player, dx=0, dy=0, dungeon_level_delta=1)])
+def move_player_down_level(ctl: Controller) -> None:
+    reset_focus(ctl)    
+    ctl.push_input_instructions([MoveEntity(entity=ctl.player, dx=0, dy=0, dungeon_level_delta=1)])
 
 
-def player_wait(self: Controller) -> None:
-    self.push_input_instructions([DoNothing()])
+def player_wait(ctl: Controller) -> None:
+    reset_focus(ctl)    
+    ctl.push_input_instructions([DoNothing()])
 
-def player_confirm(self: Controller) -> None:
-    self.confirm()
+def player_confirm(ctl: Controller) -> None:
+    ctl.confirm()
+
+def move_focus_left(ctl: Controller) -> None:
+    if isinstance(ctl.focus, FocusTile):
+        focus_origin = ctl.focus
+    else:
+        focus_origin = ctl.last_tile_focused
+    new_focus = FocusTile(
+        which_tile_x=focus_origin.which_tile_x - 1,
+        which_tile_y=focus_origin.which_tile_y,
+        which_tile_dungeon_level=focus_origin.which_tile_dungeon_level
+    )
+    change_focus(ctl, new_focus)
+
+def move_focus_right(ctl: Controller) -> None:
+    if isinstance(ctl.focus, FocusTile):
+        focus_origin = ctl.focus
+    else:
+        focus_origin = ctl.last_tile_focused        
+    new_focus = FocusTile(
+        which_tile_x=focus_origin.which_tile_x + 1,
+        which_tile_y=focus_origin.which_tile_y,
+        which_tile_dungeon_level=focus_origin.which_tile_dungeon_level
+    )
+    change_focus(ctl, new_focus)
+
+def move_focus_up(ctl: Controller) -> None:
+    if isinstance(ctl.focus, FocusTile):
+        focus_origin = ctl.focus
+    else:
+        focus_origin = ctl.last_tile_focused        
+    new_focus = FocusTile(
+        which_tile_x=focus_origin.which_tile_x,
+        which_tile_y=focus_origin.which_tile_y - 1,
+        which_tile_dungeon_level=focus_origin.which_tile_dungeon_level
+    )
+    change_focus(ctl, new_focus)
+
+def move_focus_down(ctl: Controller) -> None:
+    if isinstance(ctl.focus, FocusTile):
+        focus_origin = ctl.focus
+    else:
+        focus_origin = ctl.last_tile_focused
+
+    new_focus = FocusTile(
+        which_tile_x=focus_origin.which_tile_x,
+        which_tile_y=focus_origin.which_tile_y + 1,
+        which_tile_dungeon_level=focus_origin.which_tile_dungeon_level
+    )
+    change_focus(ctl, new_focus)
+
+def select_entity_at_focus(ctl: Controller) -> None:
+    if isinstance(ctl.focus, FocusTile):
+        x, y, lvl = ctl.focus.which_tile_x, ctl.focus.which_tile_y, ctl.focus.which_tile_dungeon_level
+        entities = find_all_sorted(ctl.game, x, y, lvl)
+        if entities:
+            change_focus(ctl, FocusEntity(which_entity=entities[0]))
+def help_dump_model(ctl: Controller) -> None:
+    import json
+    print(json.dumps(ctl.game.model_dump(), indent=4))
     
 default_keybindings = {
     pygame.K_LEFT: move_player_left,
@@ -178,7 +259,13 @@ default_keybindings = {
     pygame.K_PERIOD: player_wait,
     pygame.K_LESS: move_player_up_level,
     pygame.K_GREATER: move_player_down_level,
-    pygame.K_SPACE: player_confirm,   
+    pygame.K_SPACE: player_confirm,
+    pygame.K_a: move_focus_left,
+    pygame.K_d: move_focus_right,
+    pygame.K_w: move_focus_up,
+    pygame.K_s: move_focus_down,
+    pygame.K_e: select_entity_at_focus,
+    pygame.K_h: help_dump_model
 }
 
 

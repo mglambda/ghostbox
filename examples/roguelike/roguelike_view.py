@@ -26,6 +26,7 @@ class PyGameView(ViewInterface):
         self._status_width = int(self.screen_width * 0.2)
         self._messages_height = int(self.screen_height * 0.2)
 
+
     def draw_map(
         self,
         game: GameState,
@@ -33,6 +34,7 @@ class PyGameView(ViewInterface):
         center_y: int,
         dungeon_level: int,
         screen: pygame.Surface,
+            focus: Optional[FocusObject] = None
     ):
         # Calculate the top-left corner of the map to draw
         map_start_x = max(0, center_x - self._map_width // (2 * self._grid_size))
@@ -71,25 +73,43 @@ class PyGameView(ViewInterface):
                             ),
                         )
 
-    def draw_status(
-        self, game: GameState, player_uid: UID, screen: pygame.Surface
-    ):
+
+        if focus is not None:
+            # Draw a white border around the focused tile
+            if isinstance(focus, FocusTile):
+                fx, fy, _ = (
+                    focus.which_tile_x,
+                    focus.which_tile_y,
+                    focus.which_tile_dungeon_level,
+                )
+                if map_start_x <= fx < map_end_x and map_start_y <= fy < map_end_y:
+                    pygame.draw.rect(
+                        screen,
+                        pygame.Color("white"),
+                        pygame.Rect(
+                            (fx - map_start_x) * self._grid_size,
+                            (fy - map_start_y) * self._grid_size,
+                            self._grid_size,
+                            self._grid_size,
+                        ),
+                        2,  # Border width
+                    )
+
+    def draw_status(self, game: GameState, player_uid: UID, screen: pygame.Surface):
         # Draw player status on the right side of the screen
         if (name_comp := game.get(Name, player_uid)) is None:
             player_name = "Unknown"
         else:
             player_name = name_comp.name
-            
+
         if (damage_comp := game.get(Damage, player_uid)) is None:
             player_health = 0
         else:
             player_health = damage_comp.health
-                
+
         if (player_attributes := game.get(Attributes, player_uid)) is None:
             player_attributes = default_attributes
 
-
-            
         status_text = [
             f"Name: {player_name}",
             f"Health: {player_health}",

@@ -11,7 +11,7 @@ def make_minimal_gamestate(player_name: str) -> GameState:
 
     # Create player entity
     player_uid = game.new()
-    game.enable(Move, player_uid, Move(x=5, y=5, dungeon_level=0))
+    game.enable(Move, player_uid, Move(x=2, y=2, dungeon_level=0))
     game.enable(Display, player_uid, Display(unicode_character="@", color="white"))
     game.enable(Name, player_uid, Name(name=player_name))
     game.enable(Inventory, player_uid, Inventory(items=[], capacity=10))
@@ -37,20 +37,23 @@ def make_minimal_gamestate(player_name: str) -> GameState:
             if x == 0 or x == 4 or y == 0 or y == 4:
                 # Create walls
                 wall_uid = game.new()
+                game.enable(Name, wall_uid, Name(name="Wall"))
                 game.enable(Move, wall_uid, Move(x=x, y=y, dungeon_level=0))
                 game.enable(
                     Display, wall_uid, Display(unicode_character="#", color="grey")
                 )
                 game.enable(Matter, wall_uid, Matter(material=Material.Stone))
                 game.enable(Solid, wall_uid, Solid())
-            else:
-                # Create floor tiles
-                tile_uid = game.new()
-                game.enable(Move, tile_uid, Move(x=x, y=y, dungeon_level=0))
-                game.enable(
-                    Display, tile_uid, Display(unicode_character=".", color="grey")
-                )
-                game.enable(Matter, tile_uid, Matter(material=Material.Stone))
+
+            # Create floor tiles
+            tile_uid = game.new()
+            game.enable(MapTile, tile_uid, MapTile())
+            game.enable(Name, tile_uid, Name(name="Floor"))
+            game.enable(Move, tile_uid, Move(x=x, y=y, dungeon_level=0))
+            game.enable(
+                Display, tile_uid, Display(unicode_character=".", color="grey")
+            )
+            game.enable(Matter, tile_uid, Matter(material=Material.Stone))
 
     return game
 

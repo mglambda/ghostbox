@@ -40,6 +40,6 @@ class DestroyEntity(GameInstruction):
     entity: UID
 
     def delta(self, game: GameState) -> DeltaResultType:
-        for component_type in game.stores.keys():
+        for component_type in game.components():
             game.disable(component_type, self.entity)
         return EntityDestroyed(entity=self.entity), []

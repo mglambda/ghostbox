@@ -69,19 +69,25 @@ class ComponentStore[A](BaseModel):
 
 class GameState(BaseModel):
     next_entity_id: UID = UID(0)
-    stores: Dict[type, ComponentStore] = {}
+
+    # these contain various component systems
+    # the key would be nice to be 'type', but we make it str so it serializes to json 
+    stores: Dict[str, ComponentStore] = {}
+
+    # this is just a set containing all components that are in the stores
+    _components: Set[type] = set()
 
     def enable(self, component_name: type, entity: UID, component: Any) -> UID:
-        if component_name not in self.stores:
-            self.stores[component_name] = ComponentStore(name=component_name.__name__)
+        self._components.add(component_name)
+        if component_name.__name__ not in self.stores:
+            self.stores[component_name.__name__] = ComponentStore(name=component_name.__name__)
 
-            # so what we want to express here (at compile time) is
 
-        self.stores[component_name].data[entity] = component
+        self.stores[component_name.__name__].data[entity] = component
         return entity
 
     def disable(self, component_name: type, entity: UID) -> UID:
-        if (store := self.stores.get(component_name, None)) is None:
+        if (store := self.stores.get(component_name.__name__, None)) is None:
             return entity
 
         if entity in store.data:
@@ -89,7 +95,7 @@ class GameState(BaseModel):
         return entity
 
     def get(self, component_name: type, entity: UID) -> Optional[Any]:
-        if (store := self.stores.get(component_name, None)) is None:
+        if (store := self.stores.get(component_name.__name__, None)) is None:
             return None
 
         return store.data.get(entity, None)
@@ -102,25 +108,29 @@ class GameState(BaseModel):
     def entities(self) -> Set[UID]:
         return set(
             reduce(
-                lambda a, b: a + b, # type: ignore
+                lambda a, b: a + b,  # type: ignore
                 [list(store.data.keys()) for store in self.stores.values()],
                 [],
             )
         )
 
+    def components(self) -> Set[type]:
+        return self._components
+    
     def at(self, x: int, y: int, dungeon_level: int) -> Set[UID]:
         """Returns all entities with a Move component at the given coordinates"""
-        if (move_components := self.stores.get(Move, None)) is None:
+        if (move_components := self.stores.get(Move.__name__, None)) is None:
             return set()
+
         return set(
             [
-                entity
-                for entity, move in move_components.data.items()
-                if (move.x == x)
-                and (move.y == y)
-                and (move.dungeon_level == dungeon_level)
-            ]
-        )
+            entity
+            for entity, move in move_components.data.items()
+            if (move.x == x) and (move.y == y) and (move.dungeon_level == dungeon_level)
+        ]
+)
+
+
 
     def has(self, component: type, entity: UID) -> bool:
         """This is a shorthand to check wether an entity has a particular component enabled or not."""
@@ -138,6 +148,7 @@ class ViewInterface(Protocol):
         center_y: int,
         dungeon_level: int,
         screen: pygame.Surface,
+        focus: Optional["FocusObject"] = None,
     ) -> None:
         pass
 
@@ -171,7 +182,7 @@ class FocusMessages(BaseModel):
     which_msg: int
 
 
-FocusObject = FocusMessages | FocusStatus | FocusEntity | FocusTile
+FocusObject = FocusMessages | FocusStatus | FocusEntity | FocusTile | None
 
 
 @dataclass

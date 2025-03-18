@@ -9,6 +9,9 @@ class EntityMoved(GameResult):
     
     def handle(self, ctl: Controller) -> None:
         ctl.print(f"Entity {self.entity} moved to ({self.new_x}, {self.new_y})")
+        if self.entity == ctl.player:
+            from roguelike_controller import reset_focus
+            reset_focus(ctl)
 
 class EntityCreated(GameResult):
     """Game Result representing an entity being created."""
