@@ -43,3 +43,45 @@ class DestroyEntity(GameInstruction):
         for component_type in game.components():
             game.disable(component_type, self.entity)
         return EntityDestroyed(entity=self.entity), []
+
+
+
+class EnableSolid(GameInstruction):
+    """Instruction to enable the Solid component for an entity."""
+    entity: UID
+
+    def delta(self, game: GameState) -> DeltaResultType:
+        game.enable(Solid, self.entity, Solid())
+        return EnabledSolid(entity=self.entity), []
+
+class DisableSolid(GameInstruction):
+    """Instruction to disable the Solid component for an entity."""
+    entity: UID
+
+    def delta(self, game: GameState) -> DeltaResultType:
+        game.disable(Solid, self.entity)
+        return DisabledSolid(entity=self.entity), []
+
+class EnableDoor(GameInstruction):
+    """Instruction to enable the Door component for an entity."""
+    entity: UID
+    closed: bool
+    locked: bool
+    on_open: Optional[Script]
+    on_close: Optional[Script]
+    on_break: Optional[Script]
+
+    def delta(self, game: GameState) -> DeltaResultType:
+        game.enable(Door, self.entity, Door(closed=self.closed, locked=self.locked, on_open=self.on_open, on_close=self.on_close, on_break=self.on_break))
+        return EnabledDoor(entity=self.entity), []
+
+class DisableDoor(GameInstruction):
+    """Instruction to disable the Door component for an entity."""
+    entity: UID
+
+    def delta(self, game: GameState) -> DeltaResultType:
+        game.disable(Door, self.entity)
+        return DisabledDoor(entity=self.entity), []
+
+
+    

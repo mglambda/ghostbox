@@ -36,3 +36,34 @@ class EntityDestroyed(GameResult):
 
     def handle(self, ctl: Controller) -> None:
         ctl.print(f"Entity {self.entity} destroyed")
+
+
+class EnabledSolid(GameResult):
+    """Game Result representing an entity having its Solid component enabled."""
+    entity: UID
+
+    def handle(self, ctl: Controller) -> None:
+        ctl.log(f"Solid component enabled for entity {self.entity}")
+
+class DisabledSolid(GameResult):
+    """Game Result representing an entity having its Solid component disabled."""
+    entity: UID
+
+    def handle(self, ctl: Controller) -> None:
+        ctl.log(f"Solid component disabled for entity {self.entity}")
+
+class EnabledDoor(GameResult):
+    """Game Result representing an entity having its Door component enabled."""
+    entity: UID
+
+    def handle(self, ctl: Controller) -> None:
+        ctl.log(f"Door component enabled for entity {self.entity}")
+
+class DisabledDoor(GameResult):
+    """Game Result representing an entity having its Door component disabled."""
+    entity: UID
+
+    def handle(self, ctl: Controller) -> None:
+        ctl.log(f"Door component disabled for entity {self.entity}")
+
+        

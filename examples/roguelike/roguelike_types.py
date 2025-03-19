@@ -201,6 +201,7 @@ class Controller:
 
     messages: List[str] = field(default_factory=list)
     accessibility_messages: List[str] = field(default_factory=list)
+    system_log: List[str] = field(default_factory=list)
 
     # these are instructions that come in from the player through keypresses
     input_instruction_queue: Queue = field(default_factory=Queue)
@@ -244,6 +245,10 @@ class Controller:
         # for now we rely on the console TTS
         print(text)
 
+    def log(self, text: str) -> None:
+        """For events that happen in the game that don't need to be advertized to the user."""
+        self.system_log.append(text)
+        
     def handle_key_event(self, key: int) -> None:
         if key in self.keybindings:
             self.keybindings[key](self)
@@ -562,6 +567,30 @@ class Downstairs(BaseModel):
     """Component for entities that serve as downstair tiles."""
     pass
 
+
+class Door(BaseModel):
+    """Component for entities that can be opened and closed to pass through."""
+    closed: bool = True
+    locked: bool = False
+
+    on_open: Optional[Script]
+    on_close: Optional[Script]
+    on_break: Optional[Script]
+    
+class InteractOption(BaseModel):
+    name: str
+    description: Optional[str] = None
+    script: Script
+    
+class Interact(BaseModel):
+    """Component for entities that can be interacted with.
+    This is more general than the use component. The differences between use and interact are:
+    - use/apply is for inventory items.
+    - Use/apply doesn't advertise it's use in the interface
+    - interact may be on any entity. If the entity is selected, the interactible options are displayed in the interface."""
+    options: List[InteractOption]
+    
+    
 class Display(BaseModel):
     """Components for entities that can be shown by the graphics engine.
     This is technically not part of the game model, we just keep it here for convenience.

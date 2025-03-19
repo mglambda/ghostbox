@@ -1,6 +1,8 @@
 import random
-from typing import Callable, Optional
+from typing import *
 from roguelike_types import *
+from roguelike_instructions import *
+from roguelike_results import *
 
 
 def make_wall(
@@ -112,6 +114,53 @@ def make_downstairs(
     return downstairs_uid
 
 
+def make_door(
+    game: GameState,
+    x: int,
+    y: int,
+    dungeon_level: int,
+    material: Material = Material.Wood,
+    name: str = "Door",
+    display: str = "+",
+    closed: bool = True,
+    locked: bool = False,
+    **kwargs
+) -> UID:
+    door_uid = game.new()
+    game.enable(Name, door_uid, Name(name=name))
+    game.enable(Move, door_uid, Move(x=x, y=y, dungeon_level=dungeon_level))
+    game.enable(Display, door_uid, Display(unicode_character=display, color="brown"))
+    game.enable(Matter, door_uid, Matter(material=material))
+    if closed:
+        game.enable(Solid, door_uid, Solid())
+
+    # Define scripts for opening and closing the door
+    open_script = Script(
+        name="Open Door",
+        instructions=[
+            DisableSolid(entity=door_uid),
+            EnableDoor(entity=door_uid, closed=False, locked=locked, on_open=None, on_close=None, on_break=None)
+        ]
+    )
+    close_script = Script(
+        name="Close Door",
+        instructions=[
+            EnableSolid(entity=door_uid),
+            EnableDoor(entity=door_uid, closed=True, locked=locked, on_open=None, on_close=None, on_break=None)
+        ]
+    )
+
+    game.enable(Interact, door_uid, Interact(options=[
+        InteractOption(name="Open", script=open_script),
+        InteractOption(name="Close", script=close_script)
+    ]))
+
+    game.enable(Door, door_uid, Door(closed=closed, locked=locked, on_open=open_script, on_close=close_script, on_break=None))
+    return door_uid
+
+
+
+
 def mapgen_generic(game: GameState, dungeon_level: int) -> GameState:
     # Constants for room generation
     MIN_ROOM_WIDTH = 3
@@ -181,24 +230,51 @@ def mapgen_generic(game: GameState, dungeon_level: int) -> GameState:
         # Randomly choose to start horizontal or vertical
         if random.choice([True, False]):
             # Horizontal then vertical
+            # Find the edge of the room
+            corridor_end_x = x1 + w1 // 2
+            corridor_end_y = y1 + h1 // 2
             for x in range(x1 + w1 // 2, x2 + w2 // 2):
-                make_floor(
-                    game, x, y1 + h1 // 2, dungeon_level, name="Corridor", display=","
-                )
+                if x == corridor_end_x:
+                    make_floor(game, x, corridor_end_y, dungeon_level, name="Corridor", display=",")
+                else:
+                    make_floor(game, x, corridor_end_y, dungeon_level, name="Corridor", display=",")
+            corridor_end_x = x2 + w2 // 2
             for y in range(y1 + h1 // 2, y2 + h2 // 2):
-                make_floor(
-                    game, x2 + w2 // 2, y, dungeon_level, name="Corridor", display=","
-                )
+                if y == corridor_end_y:
+                    make_floor(game, corridor_end_x, y, dungeon_level, name="Corridor", display=",")
+                else:
+                    make_floor(game, corridor_end_x, y, dungeon_level, name="Corridor", display=",")
+            # Place an open space, open door, or closed door at the end of the corridor
+            choice = random.choice(['open_space', 'open_door', 'closed_door'])
+            if choice == 'open_space':
+                make_floor(game, corridor_end_x, corridor_end_y, dungeon_level, name="Open Space", display=".")
+            elif choice == 'open_door':
+                make_door(game, corridor_end_x, corridor_end_y, dungeon_level, closed=False)
+            elif choice == 'closed_door':
+                make_door(game, corridor_end_x, corridor_end_y, dungeon_level, closed=True)
         else:
             # Vertical then horizontal
+            corridor_end_x = x1 + w1 // 2
+            corridor_end_y = y1 + h1 // 2
             for y in range(y1 + h1 // 2, y2 + h2 // 2):
-                make_floor(
-                    game, x1 + w1 // 2, y, dungeon_level, name="Corridor", display=","
-                )
+                if y == corridor_end_y:
+                    make_floor(game, corridor_end_x, y, dungeon_level, name="Corridor", display=",")
+                else:
+                    make_floor(game, corridor_end_x, y, dungeon_level, name="Corridor", display=",")
+            corridor_end_y = y2 + h2 // 2
             for x in range(x1 + w1 // 2, x2 + w2 // 2):
-                make_floor(
-                    game, x, y2 + h2 // 2, dungeon_level, name="Corridor", display=","
-                )
+                if x == corridor_end_x:
+                    make_floor(game, x, corridor_end_y, dungeon_level, name="Corridor", display=",")
+                else:
+                    make_floor(game, x, corridor_end_y, dungeon_level, name="Corridor", display=",")
+            # Place an open space, open door, or closed door at the end of the corridor
+            choice = random.choice(['open_space', 'open_door', 'closed_door'])
+            if choice == 'open_space':
+                make_floor(game, corridor_end_x, corridor_end_y, dungeon_level, name="Open Space", display=".")
+            elif choice == 'open_door':
+                make_door(game, corridor_end_x, corridor_end_y, dungeon_level, closed=False)
+            elif choice == 'closed_door':
+                make_door(game, corridor_end_x, corridor_end_y, dungeon_level, closed=True)
 
     # Step 4: Place a downstairs in a random room, but not the one with the upstairs
     if rooms:
@@ -216,3 +292,4 @@ def mapgen_generic(game: GameState, dungeon_level: int) -> GameState:
             make_downstairs(game, x + w // 2, y + h // 2, dungeon_level)
 
     return game
+
