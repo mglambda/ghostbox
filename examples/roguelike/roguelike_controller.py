@@ -64,7 +64,6 @@ def draw(ctl: Controller, screen: pygame.Surface) -> None:
             focus=ctl.focus,
         )
 
-
         # what status shows depends on focus
         match ctl.focus:
             case FocusEntity(which_entity=which_entity):
@@ -280,6 +279,26 @@ def help_dump_model(ctl: Controller) -> None:
     print(json.dumps(ctl.game.model_dump(), indent=4))
 
 
+def interact_with_entity(ctl: Controller, option_index: int) -> None:
+    if isinstance(ctl.focus, FocusEntity):
+        entity = ctl.focus.which_entity
+        if (interact_comp := ctl.game.get(Interact, entity)) is not None:
+            if 0 <= option_index < len(interact_comp.options):
+                option = interact_comp.options[option_index]
+                ctl.messages.append(f"Used {option.name} on {name_for(ctl.game, entity)}")
+                ctl.push_input_instructions(option.script.instructions)
+            else:
+                ctl.print("Invalid interaction option.")
+        else:
+            ctl.print("Entity has no interaction options.")
+    else:
+        ctl.print("No entity in focus.")
+
+
+# Generate keybindings for numbers 1-9
+#for i in range(1, 10):
+#    default_keybindings[getattr(pygame, f"K_{i}")] = lambda ctl, i=i: interact_with_entity(ctl, i - 1)
+
 default_keybindings = {
     pygame.K_LEFT: move_player_left,
     pygame.K_RIGHT: move_player_right,
@@ -303,4 +322,6 @@ default_keybindings = {
     pygame.K_s: move_focus_down,
     pygame.K_e: select_entity_at_focus,
     pygame.K_h: help_dump_model,
+    **{getattr(pygame, f"K_{i}"): lambda ctl, i=i: interact_with_entity(ctl, i - 1) for i in range(1, 10)}
 }
+

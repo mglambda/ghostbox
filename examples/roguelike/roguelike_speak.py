@@ -12,11 +12,11 @@ def speak_entity_status(ctl: Controller, which_entity: UID) -> None:
     )
 
     material_w, group_w, interaction_w = "", "", ""
-    if (material_comp := ctl.game.get(Material, which_entity)) is not None:
+    if (material_comp := ctl.game.get(Matter, which_entity)) is not None:
         material_w = material_comp.material
 
-    if (group_comp := ctl.game.get(Group, which_entity)) is not None:
-        group_w = group_comp.group
+    if (group_comp := ctl.game.get(GroupMember, which_entity)) is not None:
+        group_w = group_comp.group_name
 
     if ctl.game.has(Interact, which_entity):
         interaction_w = "*interactions*"
