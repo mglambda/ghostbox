@@ -1,4 +1,35 @@
+# roguelike_systems.py
+# This file contains systems that work with various entity components.
+# In general a system is cahracterized by not being confined to a single component.
+# In particular, all functions in this file take a GameState as a first argument and may return arbitrary files, while having side effects on the GameState.
+# In this sense, you could say that systems operate within the GameState monad.
+
 from roguelike_types import *
+
+
+def name_for(game: GameState, entity: UID) -> str:
+    """Returns an entity's name or empty string."""
+    if (name_component := game.get(Name, entity)) is None:
+        return ""
+    return name_component.name
+
+
+def is_walkable(game: GameState, x: int, y: int, dungeon_level: int) -> bool:
+    """Checks if a given position is walkable.
+    A walkable position
+    - has a MapTile enabled.
+    - has a move component
+    - move and maptile components are on the same entity
+    - has nothing solid in it"""
+    entities = find_all_sorted(game, x, y, dungeon_level)
+
+    for entity in entities:
+        if game.has(Solid, entity):
+            return False
+        if game.has(Move, entity) and game.has(MapTile, entity):
+            return True
+
+    return False
 
 
 def find_floor_tile(

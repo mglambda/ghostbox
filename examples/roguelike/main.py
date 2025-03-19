@@ -63,17 +63,10 @@ def make_minimal_room(game: GameState) -> GameState:
 def ensure_player_on_floor(game: GameState, player: UID) -> GameState:
     for x in range(1, 200):
         for y in range(1, 200):
-            entities_here = game.at(x, y, 0)
-            bad = False
-            for entity in entities_here: 
-                if game.get(Solid, entity):
-                    break
-            if not(bad):
-                for entity in entities_here:
-                    if game.get(MapTile, entity):
-                        game.enable(Move, player, Move(x=x, y=y, dungeon_level=0))
-                        return game
-
+            if is_walkable(game, x, y, 0):
+                game.enable(Move, player, Move(x=x, y=y, dungeon_level=0))
+                return game
+            
     raise RuntimeError("No place to put player!")
                     
                             

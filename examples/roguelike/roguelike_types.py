@@ -134,7 +134,7 @@ class GameState(BaseModel):
 
     def has(self, component: type, entity: UID) -> bool:
         """This is a shorthand to check wether an entity has a particular component enabled or not."""
-        return self.get(component, entity) is None
+        return self.get(component, entity) is not None
 
 
 class ViewInterface(Protocol):
@@ -554,6 +554,13 @@ class MapTile(BaseModel):
     # when an entity leaves the tile
     on_leave: Optional[Script] = None
 
+class Upstairs(BaseModel):
+    """Component for entities that serve as upstair tiles."""
+    pass
+
+class Downstairs(BaseModel):
+    """Component for entities that serve as downstair tiles."""
+    pass
 
 class Display(BaseModel):
     """Components for entities that can be shown by the graphics engine.
