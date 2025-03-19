@@ -26,7 +26,6 @@ class PyGameView(ViewInterface):
         self._status_width = int(self.screen_width * 0.2)
         self._messages_height = int(self.screen_height * 0.2)
 
-
     def draw_map(
         self,
         game: GameState,
@@ -34,7 +33,7 @@ class PyGameView(ViewInterface):
         center_y: int,
         dungeon_level: int,
         screen: pygame.Surface,
-            focus: Optional[FocusObject] = None
+        focus: Optional[FocusObject] = None
     ):
         # Calculate the top-left corner of the map to draw
         map_start_x = max(0, center_x - self._map_width // (2 * self._grid_size))
@@ -73,7 +72,6 @@ class PyGameView(ViewInterface):
                             ),
                         )
 
-
         if focus is not None:
             # Draw a white border around the focused tile
             if isinstance(focus, FocusTile):
@@ -95,7 +93,7 @@ class PyGameView(ViewInterface):
                         2,  # Border width
                     )
 
-    def draw_status(self, game: GameState, player_uid: UID, screen: pygame.Surface):
+    def draw_player_status(self, game: GameState, player_uid: UID, screen: pygame.Surface):
         # Draw player status on the right side of the screen
         if (name_comp := game.get(Name, player_uid)) is None:
             player_name = "Unknown"
@@ -132,6 +130,52 @@ class PyGameView(ViewInterface):
                 ),
             )
 
+    def draw_entity_status(self, game: GameState, entity_uid: UID, screen: pygame.Surface):
+        # Draw entity status on the right side of the screen
+        status_text = []
+
+        # Entity name
+        if (name_comp := game.get(Name, entity_uid)) is not None:
+            status_text.append(f"Name: {name_comp.name}")
+
+        # Material
+        if (matter_comp := game.get(Matter, entity_uid)) is not None:
+            status_text.append(f"Material: {matter_comp.material}")
+
+        # Group
+        if (group_comp := game.get(GroupMember, entity_uid)) is not None:
+            status_text.append(f"Group: {group_comp.group_name}")
+
+        # Damage status
+        if (damage_comp := game.get(Damage, entity_uid)) is not None:
+            status_text.append(f"Status: {damage_comp.short_description()}")
+
+        # Description
+        if name_comp and name_comp.description:
+            status_text.append(f"Description: {name_comp.description}")
+
+        # Interact options
+        if (interact_comp := game.get(Interact, entity_uid)) is not None:
+            status_text.append("Interact Options:")
+            for i, option in enumerate(interact_comp.options, start=1):
+                option_description = f"{i}. {option.name}"
+                if option.description:
+                    option_description += f" - {option.description}"
+                status_text.append(option_description)
+
+        # Render the status text
+        for i, line in enumerate(status_text):
+            text_surface = pygame.font.SysFont(
+                "monospace", self._grid_size // 2
+            ).render(line, True, pygame.Color("white"))
+            screen.blit(
+                text_surface,
+                (
+                    self.screen_width - self._status_width + 10,
+                    i * (self._grid_size // 2) + 10,
+                ),
+            )
+
     def draw_messages(self, messages: List[str], screen: pygame.Surface):
         # Draw messages at the bottom of the screen
         for i, message in enumerate(messages):
@@ -148,3 +192,5 @@ class PyGameView(ViewInterface):
                     + 10,
                 ),
             )
+
+

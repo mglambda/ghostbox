@@ -153,11 +153,17 @@ class ViewInterface(Protocol):
         pass
 
     @abstractmethod
-    def draw_status(
+    def draw_player_status(
         self, game: GameState, player_uid: UID, screen: pygame.Surface
     ) -> None:
         pass
 
+    @abstractmethod
+    def draw_entity_status(
+        self, game: GameState, entity_uid: UID, screen: pygame.Surface
+    ) -> None:
+        pass
+    
     @abstractmethod
     def draw_messages(self, messages: List[str], screen: pygame.Surface):
         pass
@@ -304,10 +310,20 @@ class Damage(BaseModel):
     """Component for entities that can be damaged and destroyed or killed."""
 
     health: int
+    max_health: int = 10
     leaves_corpse: bool = False
 
-    # uid1 = subject so whoever is dieing
+
     on_death: Optional[Script] = None
+
+    def short_description(self) -> str:
+        if self.health < 10:
+            return "Near death"
+        elif self.health < self.max_health // 2:
+            return "Hurt"
+        elif self.health < self.max_health:
+            return "Lightly wounded"
+        return "Healthy"
 
 
 class MeleeWeapon(BaseModel):
