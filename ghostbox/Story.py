@@ -2,7 +2,7 @@ from typing import *
 from pydantic import BaseModel
 from ghostbox.definitions import *
 
-class Story(object):
+class Story(BaseModel):
     """A story is a thin wrapper around a list of ChatMessages."""
     
     data: List[ChatMessage] = [] 

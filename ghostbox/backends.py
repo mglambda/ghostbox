@@ -388,7 +388,8 @@ class LlamaCPPBackend(AIBackend):
         return -1
 
     def generate(self, payload):
-        super().generate(payload)
+        # FIXME: why is this here?
+        #super().generate(payload)
         # adjust slightly for our renames
         llama_payload = payload | {"n_predict": payload["max_length"]}
 
@@ -714,7 +715,7 @@ class OpenAIBackend(AIBackend):
             "Content-Type": "application/json",
         }
 
-        data = payload | {"stream": True, "stream_options": {"include_usage": True}}
+        data = payload | {"max_tokens": payload["max_length"], "stream": True, "stream_options": {"include_usage": True}}
         self._last_request = data
 
         def one_line_lambdas_for_python(r):
