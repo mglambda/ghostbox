@@ -250,6 +250,13 @@ class MapTilePrefab(BaseModel, arbitrary_types_allowed=True):
 # so if a room has a door on the right wall at position x,y, it would have a connector tile at position x+1,y with type right to left, since you come from the right and go left to enter the room
 ConnectorType = StrEnum("ConnectorType", "RightToLeft LeftToRight TopToBottom BottomToTop")
 
+def connectors_match(a: ConnectorType, b: ConnectorType) -> bool:
+    """Returns true if connectors a and b match.
+    Matching connectors are e.g. LeftToRight and RightToLeft."""
+    matches = [(ConnectorType.RightToLeft, ConnectorType.LeftToRight), (ConnectorType.TopToBottom, ConnectorType.BottomToTop)]
+    more_matches = matches + [(b, a) for a,b in matches]
+    return (a,b) in more_matches
+
 class MapPrefab(BaseModel):
     """Preliminary representation of a dungeon map."""
 
@@ -303,6 +310,19 @@ class MapPrefab(BaseModel):
             )
             offset_tile.fill(game)
 
+    def max_bounds(self) -> Tuple[int,int,int]:
+        return self._bounds(True)
+
+    def min_bounds(self) -> Tuple[int,int,int]:
+        return self._bounds(False)
+    
+
+    def _bounds(self, reverse: bool):
+        keys = self.data.keys()
+        x_bound = sorted([x for x,y,z in keys], reverse=reverse)[0]
+        y_bound = sorted([y for x,y,z in keys], reverse=reverse)[0]
+        z_bound = sorted([z for x,y,z in keys], reverse=reverse)[0]
+        return x_bound, y_bound, z_bound
 
 class MapGenerator(Protocol):
     """Generates areas or volumes of map tiles and dungeon features in a preliminary representation.
@@ -393,6 +413,67 @@ class VerticalComposeGenerator(MapGenerator, ABC):
         cls = type(self)
         return cls(_generate=combined_generate, **self._kwargs)
 
+class ConnectorComposeGenerator(MapGenerator, ABC):
+    """Composes with other maps by attaching to their connectors according to the type of its own and the other maps connector."""
+    def __init__(self, _generate: Optional[Callable[[], MapPrefab]] = None, **kwargs):
+        self._kwargs = kwargs
+        self._generate = _generate
+
+    @abstractmethod
+    def generate(self) -> MapPrefab:
+        pass
+
+    def compose(self, other: "MapGenerator") -> "MapGenerator":
+        def combined_generate():
+            map1 = self.generate()
+            map2 = other.generate()
+            failure = True
+            for coords1, c1 in map1.connectors.items():
+                for coords2, c2 in map2.connectors.items():
+                    if connectors_match(c1, c2):
+                        # Calculate the offset needed to connect map2 to map1
+                        if c1 == ConnectorType.RightToLeft:
+                            offset_x = coords1[0] - coords2[0] - 1
+                            offset_y = coords1[1] - coords2[1]
+                        elif c1 == ConnectorType.LeftToRight:
+                            offset_x = coords1[0] - coords2[0] + 1
+                            offset_y = coords1[1] - coords2[1]
+                        elif c1 == ConnectorType.TopToBottom:
+                            offset_x = coords1[0] - coords2[0]
+                            offset_y = coords1[1] - coords2[1] - 1
+                        elif c1 == ConnectorType.BottomToTop:
+                            offset_x = coords1[0] - coords2[0]
+                            offset_y = coords1[1] - coords2[1] + 1
+
+                        # Apply the offset to all tiles in map2
+                        for (x, y, z), tile in map2.data.items():
+                            map1.data[(x + offset_x, y + offset_y, z)] = tile
+
+                        # Remove the used connectors
+                        del map1.connectors[coords1]
+                        del map2.connectors[coords2]
+
+                        failure = False
+                        break
+                if not failure:
+                    break
+
+            if failure:
+                raise ValueError("No matching connectors found between the two maps.")
+
+            return map1
+
+        #cls = type(self)
+        #return cls(**({k:v for k,v in self.__dict__.items() if not(k.startswith("__"))} | self._kwargs | {"_generate":combined_generate}))
+        class AnonymousGenerator(ConnectorComposeGenerator):
+            def __init__(self, **kwargs):
+                self._kwargs = kwargs
+
+            def generate(self):
+                return combined_generate()
+            
+        return AnonymousGenerator()
+    
 
 class RowGenerator(VerticalComposeGenerator):
     def __init__(self, generators: List[MapGenerator]):
@@ -512,7 +593,7 @@ class DownstairsGenerator(HorizontalComposeGenerator):
         )
 
 
-class SimpleRoomGenerator(HorizontalComposeGenerator):
+class SimpleRoomGenerator(ConnectorComposeGenerator):
     def __init__(
             self,
             width: int,
@@ -522,7 +603,9 @@ class SimpleRoomGenerator(HorizontalComposeGenerator):
             ensure_exit: bool = True,
             wall_kwargs: Optional[Dict[str, Any]] = None,
             floor_kwargs: Optional[Dict[str, Any]] = None,
+            **kwargs
     ):
+        super().__init__(**kwargs)
         self.width = width
         self.height = height
         self.exit_chance = exit_chance
@@ -708,7 +791,7 @@ class SimpleRoomGenerator(HorizontalComposeGenerator):
         
             
             
-class CorridorGenerator(HorizontalComposeGenerator):
+class CorridorGenerator(ConnectorComposeGenerator):
     def __init__(
         self,
         x1: int,
@@ -830,3 +913,8 @@ class CorridorGenerator(HorizontalComposeGenerator):
 
         return points
 
+
+r1 = SimpleRoomGenerator(5, 10)
+r2 = SimpleRoomGenerator(12, 4)
+r = r1 + r2
+c = CorridorGenerator(0,0,5,6, diagonal_moves=False, has_walls=False)
