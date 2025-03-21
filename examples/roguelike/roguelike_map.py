@@ -5,6 +5,8 @@ from roguelike_types import *
 from roguelike_instructions import *
 from roguelike_results import *
 from abc import ABC, abstractmethod
+from enum import StrEnum
+
 
 # some simple helpers
 
@@ -214,7 +216,7 @@ class MapTilePrefab(BaseModel, arbitrary_types_allowed=True):
 
     # these don't have any corresponding components
     # they are only used as helpers during map generation
-    is_exit: bool = False
+    is_entry: bool = False
     is_in_room: bool = False
     is_in_corridor: bool = False
     
@@ -236,12 +238,26 @@ class MapTilePrefab(BaseModel, arbitrary_types_allowed=True):
         if self.entity_callback:
             self.entity_callback(game, tile_uid)
 
+    def apply_some_kwargs(self, kwargs: Dict[str, Any]) -> None:
+        """Applies a dictionary of keyword arguments to update some aspects of the tile.
+        In particular, this will flat out ignore all x, y, and dungeon level parameters."""
+        forbidden = "x y dungeon_level".split(" ")
+        for k, v in kwargs.items():
+            if k in forbidden:
+                continue
+            self.__dict__[k] = v
+
+# so if a room has a door on the right wall at position x,y, it would have a connector tile at position x+1,y with type right to left, since you come from the right and go left to enter the room
+ConnectorType = StrEnum("ConnectorType", "RightToLeft LeftToRight TopToBottom BottomToTop")
 
 class MapPrefab(BaseModel):
     """Preliminary representation of a dungeon map."""
 
     # carries x, y, and z (dungeon_level) coordinates as keys
     data: Dict[Tuple[int, int, int], MapTilePrefab] = {}
+
+    # carries information about tiles that aren't technically part of the map, but are locations where other maps may connect
+    connectors: Dict[Tuple[int, int, int], ConnectorType] = {}    
 
     def preview(self) -> str:
         """Gives a string representation of the map as an ASCII image."""
@@ -637,9 +653,14 @@ class SimpleRoomGenerator(HorizontalComposeGenerator):
                     x=x,
                     y=y,
                     dungeon_level=0,
-                    **(self.default_floor_kwargs | self.floor_kwargs),
+                    **(self.default_floor_kwargs | self.floor_kwargs),                    
                 )
-            room_map.data[(x, y, 0)].is_exit = True 
+                
+            room_map.data[(x, y, 0)].is_entry = True
+            x_con, y_con, con_type = self._determine_connector(room_map, x, y, 0)
+            if con_type and x_con and y_con:
+                room_map.connectors[(x_con, y_con, 0)] = con_type
+            
                 
             # ok we added an exit
             self._has_exit
@@ -648,7 +669,45 @@ class SimpleRoomGenerator(HorizontalComposeGenerator):
             forbidden.append([(x + 1, y), (x - 1, y), (x, y + 1), (x, y - 1)])
             positions = [p for p in positions if p not in forbidden]
 
+    def _determine_connector(self, room_map: MapPrefab, x, y, dungeon_level) -> Tuple[Optional[int], Optional[int], Optional[ConnectorType]]:
+        # FIXME: I realize this method could have been written more simply (with width, height)
+        # but this is a candidate to be generalized and put into MapPrefab later
+        tile = room_map.data[(x,y,dungeon_level)]
+        failure = (None, None, None)
+        if not(tile.is_entry):
+            return failure
 
+        # find the bounds
+        xs = sorted([x for x,y,z in room_map.data.keys()])
+        ys = sorted([y for x, y, z in room_map.data.keys()])
+        if xs == [] or ys == []:
+            return failure
+        
+        x_max, x_min = xs[-1], xs[0]
+        y_max, y_min = ys[-1], ys[0]
+
+        # this should work since the rooms are guaranteed to be rectangular
+        if x == x_max:
+            # it's on the right wall
+            # no need to consider y since corners are excluded anyway
+            return x+1, y, ConnectorType.RightToLeft
+        elif x == x_min:
+            # left
+            return x-1, y, ConnectorType.LeftToRight
+        elif y == y_max:
+            # bottom
+            return x, y+1, ConnectorType.BottomToTop
+        elif y == y_min:
+            return x, y-1, ConnectorType.TopToBottom
+
+        # not sure what happened here
+        return failure
+
+
+
+        
+            
+            
 class CorridorGenerator(HorizontalComposeGenerator):
     def __init__(
         self,
@@ -657,8 +716,8 @@ class CorridorGenerator(HorizontalComposeGenerator):
         x2: int,
         y2: int,
         dungeon_level: int = 0,
-        width: int = 1,
         has_walls: bool = True,
+        diagonal_moves: bool = True,
         wall_kwargs: Dict[str, Any] = {},
         floor_kwargs: Dict[str, Any] = {},
     ):
@@ -668,28 +727,60 @@ class CorridorGenerator(HorizontalComposeGenerator):
         self.x2 = x2
         self.y2 = y2
         self.dungeon_level = dungeon_level
-        self.width = width
         self.has_walls = has_walls
+        self.diagonal_moves = diagonal_moves
         self.wall_kwargs = wall_kwargs
         self.floor_kwargs = floor_kwargs
 
     def generate(self) -> MapPrefab:
         map_prefab = MapPrefab(data={})
 
-        # Generate the floor tiles using Bresenham's line algorithm
-        for x, y in self.bresenham_line(self.x1, self.y1, self.x2, self.y2):
-            map_prefab.data[(x, y, self.dungeon_level)] = MapTilePrefab(
-                x=x,
-                y=y,
-                dungeon_level=self.dungeon_level,
-                name="Floor",
-                material=Material.Stone,
-                display=".",
-                color="grey",
-                solid=False,
-                is_exit=True if (x == self.x1 and y == self.y1) or (x == self.x2 and y == self.y2) else False,
-                **self.floor_kwargs,
-            )
+        # Generate the floor tiles
+        if self.diagonal_moves:
+            # Use Bresenham's line algorithm for diagonal corridors
+            for x, y in self.bresenham_line(self.x1, self.y1, self.x2, self.y2):
+                map_prefab.data[(x, y, self.dungeon_level)] = MapTilePrefab(
+                    x=x,
+                    y=y,
+                    dungeon_level=self.dungeon_level,
+                    name="Floor",
+                    material=Material.Stone,
+                    display=".",
+                    color="grey",
+                    solid=False,
+                    is_entry=True if (x == self.x1 and y == self.y1) or (x == self.x2 and y == self.y2) else False,
+                    **self.floor_kwargs,
+                )
+        else:
+            # Generate a corridor with only horizontal and vertical segments
+            # First, move horizontally from (x1, y1) to (x2, y1)
+            for x in range(min(self.x1, self.x2), max(self.x1, self.x2) + 1):
+                map_prefab.data[(x, self.y1, self.dungeon_level)] = MapTilePrefab(
+                    x=x,
+                    y=self.y1,
+                    dungeon_level=self.dungeon_level,
+                    name="Floor",
+                    material=Material.Stone,
+                    display=".",
+                    color="grey",
+                    solid=False,
+                    is_entry=True if (x == self.x1 and self.y1 == self.y1) or (x == self.x2 and self.y1 == self.y1) else False,
+                    **self.floor_kwargs,
+                )
+            # Then, move vertically from (x2, y1) to (x2, y2)
+            for y in range(min(self.y1, self.y2), max(self.y1, self.y2) + 1):
+                map_prefab.data[(self.x2, y, self.dungeon_level)] = MapTilePrefab(
+                    x=self.x2,
+                    y=y,
+                    dungeon_level=self.dungeon_level,
+                    name="Floor",
+                    material=Material.Stone,
+                    display=".",
+                    color="grey",
+                    solid=False,
+                    is_entry=True if (self.x2 == self.x2 and y == self.y1) or (self.x2 == self.x2 and y == self.y2) else False,
+                )
+                map_prefab.data[(self.x2, y, self.dungeon_level)].apply_some_kwargs(self.floor_kwargs)                
 
         # Generate the walls if needed
         if self.has_walls:
@@ -711,8 +802,8 @@ class CorridorGenerator(HorizontalComposeGenerator):
                             display="#",
                             color="grey",
                             solid=True,
-                            **self.wall_kwargs,
                         )
+                        map_prefab.data[(x, y, self.dungeon_level)].apply_some_kwargs(self.wall_kwargs)
 
         return map_prefab
 
@@ -738,4 +829,4 @@ class CorridorGenerator(HorizontalComposeGenerator):
                 y0 += sy
 
         return points
-            
+
