@@ -433,6 +433,7 @@ class ConnectorComposeGenerator(MapGenerator, ABC):
                     if connectors_match(c1, c2):
                         # Calculate the offset needed to connect map2 to map1
                         if c1 == ConnectorType.RightToLeft:
+                            # map2 shifts to right
                             offset_x = coords1[0] - coords2[0] - 1
                             offset_y = coords1[1] - coords2[1]
                         elif c1 == ConnectorType.LeftToRight:
@@ -440,10 +441,10 @@ class ConnectorComposeGenerator(MapGenerator, ABC):
                             offset_y = coords1[1] - coords2[1]
                         elif c1 == ConnectorType.TopToBottom:
                             offset_x = coords1[0] - coords2[0]
-                            offset_y = coords1[1] - coords2[1] - 1
+                            offset_y = coords1[1] - coords2[1] + 1
                         elif c1 == ConnectorType.BottomToTop:
                             offset_x = coords1[0] - coords2[0]
-                            offset_y = coords1[1] - coords2[1] + 1
+                            offset_y = coords1[1] - coords2[1] - 1
 
                         # Apply the offset to all tiles in map2
                         for (x, y, z), tile in map2.data.items():
@@ -452,6 +453,11 @@ class ConnectorComposeGenerator(MapGenerator, ABC):
                         # Remove the used connectors
                         del map1.connectors[coords1]
                         del map2.connectors[coords2]
+
+                        # offset the other connectors and add them to us
+                        for (x, y, z), con in map2.connectors.items():
+                            map1.connectors[(x+offset_x,y+offset_y,z)] = con
+                        
 
                         failure = False
                         break
@@ -488,7 +494,7 @@ class FloorGenerator(HorizontalComposeGenerator):
         self.kwargs = kwargs
 
     def generate(self) -> MapPrefab:
-        return MapPrefab(
+        map = MapPrefab(
             data={
                 (0, 0, 0): MapTilePrefab(
                     x=0,
@@ -499,10 +505,12 @@ class FloorGenerator(HorizontalComposeGenerator):
                     display=".",
                     color="grey",
                     solid=False,
-                    **self.kwargs,
                 )
             }
         )
+        map.data[(0,0,0)].apply_some_kwargs(self.kwargs)
+        return map
+    
 
 
 class WallGenerator(HorizontalComposeGenerator):
@@ -598,7 +606,7 @@ class SimpleRoomGenerator(ConnectorComposeGenerator):
             self,
             width: int,
             height: int,
-            exit_chance: float = 0.25,
+            exit_chance: float = 0.15,
             exit_is_door_chance: float = 0.33,
             ensure_exit: bool = True,
             wall_kwargs: Optional[Dict[str, Any]] = None,
@@ -705,8 +713,9 @@ class SimpleRoomGenerator(ConnectorComposeGenerator):
         self, room_map: MapPrefab, positions: List[Tuple[int, int]]
     ) -> None:
         forbidden = []
+        decay = 0.00
         while positions:
-            if random.random() > self.exit_chance:
+            if random.random() > self.exit_chance + decay:
                 # no exit
                 break
 
@@ -749,8 +758,11 @@ class SimpleRoomGenerator(ConnectorComposeGenerator):
             self._has_exit
             # we go back through while loop, but with some positions removed
             # because we don't want openings right next to each other
-            forbidden.append([(x + 1, y), (x - 1, y), (x, y + 1), (x, y - 1)])
+            forbidden.extend([(x + 1, y), (x - 1, y), (x, y + 1), (x, y - 1)])
             positions = [p for p in positions if p not in forbidden]
+            # exits get less likely the more we place
+            decay += 0.05
+            
 
     def _determine_connector(self, room_map: MapPrefab, x, y, dungeon_level) -> Tuple[Optional[int], Optional[int], Optional[ConnectorType]]:
         # FIXME: I realize this method could have been written more simply (with width, height)
@@ -799,7 +811,7 @@ class CorridorGenerator(ConnectorComposeGenerator):
         x2: int,
         y2: int,
         dungeon_level: int = 0,
-        has_walls: bool = True,
+        has_walls: bool = False,
         diagonal_moves: bool = True,
         wall_kwargs: Dict[str, Any] = {},
         floor_kwargs: Dict[str, Any] = {},
@@ -814,6 +826,25 @@ class CorridorGenerator(ConnectorComposeGenerator):
         self.diagonal_moves = diagonal_moves
         self.wall_kwargs = wall_kwargs
         self.floor_kwargs = floor_kwargs
+
+        # we can already tell the connectors
+        #let's consider the far end of the corridor (x2,y2)
+        if x1 <= x2:
+            if y1 <= y2:
+                # far end is bottom right
+                self.connectors = [(x1-1,y1,ConnectorType.LeftToRight),(x1,y1-1,ConnectorType.TopToBottom),(x2+1,y2,ConnectorType.RightToLeft),(x2,y2+1,ConnectorType.BottomToTop)]                
+            else:
+                # far end is top right
+                self.connectors = [(x1-1,y1, ConnectorType.LeftToRight),(x1,y1+1, ConnectorType.BottomToTop),(x2+1,y2, ConnectorType.RightToLeft),(x2,y2-1, ConnectorType.TopToBottom)]                
+
+        else:
+            # x1 > x2
+            if y1 < y2:
+                # far corner is top left
+                self.connectors = [(x1+1,y1,ConnectorType.RightToLeft),(x1,y1+1,ConnectorType.BottomToTop),(x2-1,y2,ConnectorType.LeftToRight),(x2,y2-1,ConnectorType.TopToBottom)]
+            else:
+                # far corner is bottom left
+                self.connectors = [(x1+1,y1,ConnectorType.RightToLeft),(x1,y1-1,ConnectorType.TopToBottom),(x2-1,y2,ConnectorType.LeftToRight),(x2,y2+1,ConnectorType.BottomToTop)]
 
     def generate(self) -> MapPrefab:
         map_prefab = MapPrefab(data={})
@@ -888,6 +919,9 @@ class CorridorGenerator(ConnectorComposeGenerator):
                         )
                         map_prefab.data[(x, y, self.dungeon_level)].apply_some_kwargs(self.wall_kwargs)
 
+        # connectors were calculated in __init__
+        for (x, y, con) in self.connectors:
+            map_prefab.connectors[(x, y, self.dungeon_level)] = con
         return map_prefab
 
     def bresenham_line(self, x0: int, y0: int, x1: int, y1: int) -> List[Tuple[int, int]]:
@@ -913,8 +947,70 @@ class CorridorGenerator(ConnectorComposeGenerator):
 
         return points
 
+class TestGenerator(ConnectorComposeGenerator):
+    def __init__(self, con: ConnectorType, **kwargs):
+        self.con = con
 
-r1 = SimpleRoomGenerator(5, 10)
-r2 = SimpleRoomGenerator(12, 4)
-r = r1 + r2
-c = CorridorGenerator(0,0,5,6, diagonal_moves=False, has_walls=False)
+    def generate(self):
+        f = FloorGenerator(display=self.con.name[0])
+        x = f.generate()
+        if self.con == ConnectorType.LeftToRight:
+            x.connectors[(-1,0, 0)] = self.con
+        elif self.con == ConnectorType.RightToLeft:
+            x.connectors[(1,0, 0)] = self.con
+        elif self.con == ConnectorType.TopToBottom:
+            x.connectors[(0,-1, 0)] = self.con
+        elif self.con == ConnectorType.BottomToTop:
+            x.connectors[(0,1, 0)] = self.con            
+        return x
+    
+def test():
+    r1 = SimpleRoomGenerator(5, 10)
+    r2 = SimpleRoomGenerator(12, 4)
+    r = r1 + r2
+    c = CorridorGenerator(0,0,5,6, diagonal_moves=False, has_walls=False)
+    right = TestGenerator(ConnectorType.RightToLeft)
+    left = TestGenerator(ConnectorType.LeftToRight)
+    bottom = TestGenerator(ConnectorType.BottomToTop)
+    top = TestGenerator(ConnectorType.TopToBottom)
+    x = c + left + right + top + bottom
+
+def room_range(min_v, max_v):
+    return SimpleRoomGenerator(width=random.randint(max(2,min_v), max_v),
+                               height=random.randint(max(2,min_v),max_v))
+
+
+def small_room():
+    return room_range(2, 5)
+
+
+def medium_room():
+    return room_range(5, 12)
+
+def big_room():
+    return room_range(10, 15)
+
+def corridor_range(min_v, max_v, diagonal_moves=False):
+    sign_x = random.choice([1,-1])
+    sign_y = random.choice([1,-1])
+    x = random.randint(max(3,min_v), max_v)
+    y = random.randint(max(3, min_v), max_v)
+    
+    return CorridorGenerator(0,0, sign_x * x, sign_y * y, diagonal_moves=diagonal_moves)
+
+def small_corridor():
+    return corridor_range(5, 10)
+
+def long_corridor():
+    return corridor_range(10, 20)
+
+def mapgen_small(game: GameState, dungeon_level=0) -> None:
+    """Fills a given dungeon level with a small map, in a given game state."""
+    a = small_room() + small_corridor() + small_room()
+    b = medium_room() + small_corridor() + small_room()
+    c = big_room()
+    l1, l2 = long_corridor(), long_corridor()
+    map = ((c + l1 + a) + l2 + b).generate()
+    map.fill_all_at(game, 0, 0, dungeon_level)
+    
+    

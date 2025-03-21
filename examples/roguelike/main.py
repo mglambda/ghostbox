@@ -91,8 +91,7 @@ def main():
     game = make_minimal_gamestate("Tav")
 
     # Generate dungeon levels
-    for level in range(3):  # Generate 3 levels for testing
-        mapgen_generic(game, dungeon_level=level)
+    mapgen_small(game, 0)
 
     ensure_player_on_floor(game, 0)
     # initialize the controller
