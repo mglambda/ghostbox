@@ -605,6 +605,7 @@ class SimpleRoomGenerator(HorizontalComposeGenerator):
     def _place_exits(
         self, room_map: MapPrefab, positions: List[Tuple[int, int]]
     ) -> None:
+        forbidden = []
         while positions:
             if random.random() > self.exit_chance:
                 # no exit
@@ -613,7 +614,6 @@ class SimpleRoomGenerator(HorizontalComposeGenerator):
             # ok we add an exit
             random.shuffle(positions)
             x, y = positions.pop()
-            print(f"{x},{y}")
             if random.random() < self.exit_is_door_chance:
                 # Place a door
                 room_map.data[(x, y, 0)] = MapTilePrefab(
@@ -645,5 +645,97 @@ class SimpleRoomGenerator(HorizontalComposeGenerator):
             self._has_exit
             # we go back through while loop, but with some positions removed
             # because we don't want openings right next to each other
-            forbidden = [(x + 1, y), (x - 1, y), (x, y + 1), (x, y - 1)]
+            forbidden.append([(x + 1, y), (x - 1, y), (x, y + 1), (x, y - 1)])
             positions = [p for p in positions if p not in forbidden]
+
+
+class CorridorGenerator(HorizontalComposeGenerator):
+    def __init__(
+        self,
+        x1: int,
+        y1: int,
+        x2: int,
+        y2: int,
+        dungeon_level: int = 0,
+        width: int = 1,
+        has_walls: bool = True,
+        wall_kwargs: Dict[str, Any] = {},
+        floor_kwargs: Dict[str, Any] = {},
+    ):
+        super().__init__()
+        self.x1 = x1
+        self.y1 = y1
+        self.x2 = x2
+        self.y2 = y2
+        self.dungeon_level = dungeon_level
+        self.width = width
+        self.has_walls = has_walls
+        self.wall_kwargs = wall_kwargs
+        self.floor_kwargs = floor_kwargs
+
+    def generate(self) -> MapPrefab:
+        map_prefab = MapPrefab(data={})
+
+        # Generate the floor tiles using Bresenham's line algorithm
+        for x, y in self.bresenham_line(self.x1, self.y1, self.x2, self.y2):
+            map_prefab.data[(x, y, self.dungeon_level)] = MapTilePrefab(
+                x=x,
+                y=y,
+                dungeon_level=self.dungeon_level,
+                name="Floor",
+                material=Material.Stone,
+                display=".",
+                color="grey",
+                solid=False,
+                is_exit=True if (x == self.x1 and y == self.y1) or (x == self.x2 and y == self.y2) else False,
+                **self.floor_kwargs,
+            )
+
+        # Generate the walls if needed
+        if self.has_walls:
+            # Determine the bounding box for the walls
+            wall_x1 = min(self.x1, self.x2) - 1
+            wall_x2 = max(self.x1, self.x2) + 1
+            wall_y1 = min(self.y1, self.y2) - 1
+            wall_y2 = max(self.y1, self.y2) + 1
+
+            for x in range(wall_x1, wall_x2 + 1):
+                for y in range(wall_y1, wall_y2 + 1):
+                    if (x, y, self.dungeon_level) not in map_prefab.data:
+                        map_prefab.data[(x, y, self.dungeon_level)] = MapTilePrefab(
+                            x=x,
+                            y=y,
+                            dungeon_level=self.dungeon_level,
+                            name="Wall",
+                            material=Material.Stone,
+                            display="#",
+                            color="grey",
+                            solid=True,
+                            **self.wall_kwargs,
+                        )
+
+        return map_prefab
+
+    def bresenham_line(self, x0: int, y0: int, x1: int, y1: int) -> List[Tuple[int, int]]:
+        """Generate a list of (x, y) tuples for a line from (x0, y0) to (x1, y1) using Bresenham's line algorithm."""
+        points = []
+        dx = abs(x1 - x0)
+        dy = abs(y1 - y0)
+        sx = 1 if x0 < x1 else -1
+        sy = 1 if y0 < y1 else -1
+        err = dx - dy
+
+        while True:
+            points.append((x0, y0))
+            if x0 == x1 and y0 == y1:
+                break
+            e2 = 2 * err
+            if e2 > -dy:
+                err -= dy
+                x0 += sx
+            if e2 < dx:
+                err += dx
+                y0 += sy
+
+        return points
+            
