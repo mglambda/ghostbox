@@ -1,4 +1,4 @@
-import pygame
+import pygame, sys
 from roguelike_types import *
 from roguelike_results import *
 from roguelike_instructions import *
@@ -13,7 +13,7 @@ def make_minimal_gamestate(player_name: str) -> GameState:
     # Create player entity
     player_uid = game.new()
     game.enable(Move, player_uid, Move(x=2, y=2, dungeon_level=0))
-    game.enable(Display, player_uid, Display(unicode_character="@", color="white"))
+    game.enable(Display, player_uid, Display(unicode_character="@", color="white", image="mon/deep_elf_blademaster.png"))
     game.enable(Name, player_uid, Name(name=player_name))
     game.enable(Inventory, player_uid, Inventory(items=[], capacity=10))
     game.enable(Solid, player_uid, Solid())
@@ -69,7 +69,17 @@ def ensure_player_on_floor(game: GameState, player: UID) -> GameState:
             
     raise RuntimeError("No place to put player!")
                     
-                            
+def check_for_images(game: GameState) -> None:
+    """Prints warning messages for tiles and features with missing images."""
+    for entity in game.entities():
+        if (display_component := game.get(Display, entity)) is not None:
+            if display_component.image is None:
+                name = name_for(game, entity)
+                move_component = game.get(Move, entity)
+                coords = "???" if move_component is None else f"{move_component.x}, {move_component.y} on lvl {move_component.dungeon_level}"
+                print(f"No image on {name} at {coords}", file=sys.stderr)
+        
+
 def main():
     # Initialize Pygame
     pygame.init()
@@ -94,6 +104,7 @@ def main():
     mapgen_small(game, 0)
 
     ensure_player_on_floor(game, 0)
+    check_for_images(game)
     # initialize the controller
     # by convention, the player is UID 0
     ctl = Controller(

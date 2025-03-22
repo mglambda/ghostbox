@@ -1,8 +1,8 @@
 import pygame
 from dataclasses import dataclass
 from roguelike_types import *
-from typing import List, Tuple
-
+from typing import List, Tuple, Optional
+import os
 
 @dataclass
 class PyGameView(ViewInterface):
@@ -15,6 +15,7 @@ class PyGameView(ViewInterface):
     _map_height: int = 0
     _status_width: int = 0
     _messages_height: int = 0
+    _image_cache: dict = field(default_factory=dict)
 
     def __post_init__(self):
         # Calculate grid size based on screen dimensions
@@ -25,6 +26,12 @@ class PyGameView(ViewInterface):
         self._map_height = int(self.screen_height * 0.8)
         self._status_width = int(self.screen_width * 0.2)
         self._messages_height = int(self.screen_height * 0.2)
+
+    def _load_image(self, path: str) -> pygame.Surface:
+        if path not in self._image_cache:
+            full_path = os.path.join("img", path)
+            self._image_cache[path] = pygame.image.load(full_path).convert_alpha()
+        return self._image_cache[path]
 
     def draw_map(
         self,
@@ -59,18 +66,28 @@ class PyGameView(ViewInterface):
                 for entity in entities:
                     display = game.get(Display, entity)
                     if display:
-                        text_surface = pygame.font.SysFont(
-                            "monospace", self._grid_size
-                        ).render(
-                            display.unicode_character, True, pygame.Color(display.color)
-                        )
-                        screen.blit(
-                            text_surface,
-                            (
-                                (x - map_start_x) * self._grid_size,
-                                (y - map_start_y) * self._grid_size,
-                            ),
-                        )
+                        if display.image:
+                            image = self._load_image(display.image)
+                            screen.blit(
+                                pygame.transform.scale(image, (self._grid_size, self._grid_size)),
+                                (
+                                    (x - map_start_x) * self._grid_size,
+                                    (y - map_start_y) * self._grid_size,
+                                ),
+                            )
+                        else:
+                            text_surface = pygame.font.SysFont(
+                                "monospace", self._grid_size
+                            ).render(
+                                display.unicode_character, True, pygame.Color(display.color)
+                            )
+                            screen.blit(
+                                text_surface,
+                                (
+                                    (x - map_start_x) * self._grid_size,
+                                    (y - map_start_y) * self._grid_size,
+                                ),
+                            )
 
         if focus is not None:
             # Draw a white border around the focused tile

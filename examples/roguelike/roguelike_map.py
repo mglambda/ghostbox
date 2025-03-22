@@ -1,4 +1,4 @@
-import random
+import random, re, os
 from typing import *
 from pydantic import BaseModel, Field
 from roguelike_types import *
@@ -7,118 +7,33 @@ from roguelike_results import *
 from abc import ABC, abstractmethod
 from enum import StrEnum
 
+def find_matching_files(directory, regex_pattern):
+    """
+    Find all files in the given directory and its subdirectories that match the regex pattern.
 
-# some simple helpers
+    :param directory: Path to the directory to search in.
+    :param regex_pattern: Regular expression pattern to match filenames.
+    :return: List of filenames that match the pattern.
+    """
+    # Compile the regex pattern for better performance
+    pattern = re.compile(regex_pattern)
+    
+    # List to hold matching filenames
+    matching_files = []
+    
+    # Walk through the directory and its subdirectories
+    for root, dirs, files in os.walk(directory):
+        for filename in files:
+            # Check if the filename matches the regex pattern
+            if pattern.match(filename):
+                # Append the full path of the file to the list
+                matching_files.append(os.path.join(root, filename))
+    
+    return matching_files
 
-
-def make_wall(
-    game: GameState,
-    x: int,
-    y: int,
-    dungeon_level: int,
-    name: str = "Wall",
-    display: str = "#",
-    color: str = "grey",
-) -> UID:
-    wall_uid = game.new()
-    game.enable(Name, wall_uid, Name(name=name))
-    game.enable(Move, wall_uid, Move(x=x, y=y, dungeon_level=dungeon_level))
-    game.enable(Display, wall_uid, Display(unicode_character=display, color=color))
-    game.enable(Matter, wall_uid, Matter(material=Material.Stone))
-    game.enable(Solid, wall_uid, Solid())
-    return wall_uid
-
-
-def make_floor(
-    game: GameState,
-    x: int,
-    y: int,
-    dungeon_level: int,
-    name: str = "Floor",
-    display: str = ".",
-    color: str = "grey",
-) -> UID:
-    floor_uid = game.new()
-    game.enable(MapTile, floor_uid, MapTile())
-    game.enable(Name, floor_uid, Name(name=name))
-    game.enable(Move, floor_uid, Move(x=x, y=y, dungeon_level=dungeon_level))
-    game.enable(Display, floor_uid, Display(unicode_character=display, color=color))
-    game.enable(Matter, floor_uid, Matter(material=Material.Stone))
-    return floor_uid
-
-
-def make_room(
-    game: GameState,
-    x_left: int,
-    y_top: int,
-    dungeon_level: int,
-    width: int,
-    height: int,
-    floor_display: str = ".",
-    wall_display: str = "#",
-    floor_color: str = "grey",
-    wall_color: str = "grey",
-    floor_callback: Optional[Callable[[GameState, UID], None]] = None,
-    wall_callback: Optional[Callable[[GameState, UID], None]] = None,
-) -> None:
-    for x in range(x_left, x_left + width):
-        for y in range(y_top, y_top + height):
-            if (
-                x == x_left
-                or x == x_left + width - 1
-                or y == y_top
-                or y == y_top + height - 1
-            ):
-                wall_uid = make_wall(
-                    game, x, y, dungeon_level, display=wall_display, color=wall_color
-                )
-                if wall_callback:
-                    wall_callback(game, wall_uid)
-
-            floor_uid = make_floor(
-                game, x, y, dungeon_level, display=floor_display, color=floor_color
-            )
-            if floor_callback:
-                floor_callback(game, floor_uid)
-
-
-def make_upstairs(
-    game: GameState,
-    x: int,
-    y: int,
-    dungeon_level: int,
-    name: str = "Upstairs",
-    display: str = "<",
-    color: str = "white",
-) -> UID:
-    upstairs_uid = game.new()
-    game.enable(Name, upstairs_uid, Name(name=name))
-    game.enable(Move, upstairs_uid, Move(x=x, y=y, dungeon_level=dungeon_level))
-    game.enable(Display, upstairs_uid, Display(unicode_character=display, color=color))
-    game.enable(Matter, upstairs_uid, Matter(material=Material.Stone))
-    game.enable(Upstairs, upstairs_uid, Upstairs())
-    return upstairs_uid
-
-
-def make_downstairs(
-    game: GameState,
-    x: int,
-    y: int,
-    dungeon_level: int,
-    name: str = "Downstairs",
-    display: str = ">",
-    color: str = "white",
-) -> UID:
-    downstairs_uid = game.new()
-    game.enable(Name, downstairs_uid, Name(name=name))
-    game.enable(Move, downstairs_uid, Move(x=x, y=y, dungeon_level=dungeon_level))
-    game.enable(
-        Display, downstairs_uid, Display(unicode_character=display, color=color)
-    )
-    game.enable(Matter, downstairs_uid, Matter(material=Material.Stone))
-    game.enable(Downstairs, downstairs_uid, Downstairs())
-    return downstairs_uid
-
+def find_dungeon_images(pattern, subdir="") -> List[str]:
+    dir = "img/dngn/"
+    return [w.replace("img/","") for w in find_matching_files(dir + subdir, pattern)]
 
 def make_door(
     game: GameState,
@@ -208,6 +123,7 @@ class MapTilePrefab(BaseModel, arbitrary_types_allowed=True):
     description: Optional[str] = None
     material: Material
     display: str
+    images: List[str] = []
     color: str
     solid: bool
 
@@ -229,7 +145,7 @@ class MapTilePrefab(BaseModel, arbitrary_types_allowed=True):
             Move, tile_uid, Move(x=self.x, y=self.y, dungeon_level=self.dungeon_level)
         )
         game.enable(
-            Display, tile_uid, Display(unicode_character=self.display, color=self.color)
+            Display, tile_uid, Display(unicode_character=self.display, color=self.color, image= random.choice(self.images) if self.images else None)
         )
         game.enable(Matter, tile_uid, Matter(material=self.material))
         game.enable(MapTile, tile_uid, MapTile())
@@ -504,6 +420,7 @@ class FloorGenerator(HorizontalComposeGenerator):
                     material=Material.Stone,
                     display=".",
                     color="grey",
+                    images=[f"dngn/floor/limestone{n}.png" for n in range(10)],
                     solid=False,
                 )
             }
@@ -528,6 +445,7 @@ class WallGenerator(HorizontalComposeGenerator):
                     material=Material.Stone,
                     display="#",
                     color="grey",
+                    images=find_dungeon_images(r"brick.*gray"),
                     solid=True,
                     **self.kwargs,
                 )
@@ -550,6 +468,7 @@ class DoorGenerator(HorizontalComposeGenerator):
                     material=Material.Wood,
                     display="+",
                     color="brown",
+                    images=find_dungeon_images(r"closed_door"),
                     solid=True,
                     **self.kwargs,
                 )
@@ -572,6 +491,7 @@ class UpstairsGenerator(HorizontalComposeGenerator):
                     material=Material.Stone,
                     display="<",
                     color="white",
+                    images=find_dungeon_images(r".*return_hell.*"),
                     solid=False,
                     **self.kwargs,
                 )
@@ -594,6 +514,7 @@ class DownstairsGenerator(HorizontalComposeGenerator):
                     material=Material.Stone,
                     display=">",
                     color="white",
+                    images=find_dungeon_images(r".*enter_hell.*"),
                     solid=False,
                     **self.kwargs,
                 )
@@ -857,14 +778,15 @@ class CorridorGenerator(ConnectorComposeGenerator):
                     x=x,
                     y=y,
                     dungeon_level=self.dungeon_level,
-                    name="Floor",
+                    name="Corridor",
                     material=Material.Stone,
                     display=".",
                     color="grey",
+                    images=find_dungeon_images(".*grey_dirt.*", subdir="floor/"),
                     solid=False,
                     is_entry=True if (x == self.x1 and y == self.y1) or (x == self.x2 and y == self.y2) else False,
-                    **self.floor_kwargs,
                 )
+                map_prefab.data[(x, y, self.dungeon_level)].apply_some_kwargs(self.floor_kwargs)
         else:
             # Generate a corridor with only horizontal and vertical segments
             # First, move horizontally from (x1, y1) to (x2, y1)
@@ -877,10 +799,11 @@ class CorridorGenerator(ConnectorComposeGenerator):
                     material=Material.Stone,
                     display=".",
                     color="grey",
+                    images=find_dungeon_images(".*grey_dirt.*", subdir="floor/"),                    
                     solid=False,
                     is_entry=True if (x == self.x1 and self.y1 == self.y1) or (x == self.x2 and self.y1 == self.y1) else False,
-                    **self.floor_kwargs,
                 )
+                map_prefab.data[(x, self.y1, self.dungeon_level)].apply_some_kwargs(self.floor_kwargs)
             # Then, move vertically from (x2, y1) to (x2, y2)
             for y in range(min(self.y1, self.y2), max(self.y1, self.y2) + 1):
                 map_prefab.data[(self.x2, y, self.dungeon_level)] = MapTilePrefab(
@@ -891,6 +814,7 @@ class CorridorGenerator(ConnectorComposeGenerator):
                     material=Material.Stone,
                     display=".",
                     color="grey",
+                    images=find_dungeon_images(".*grey_dirt.*", subdir="floor/"),                    
                     solid=False,
                     is_entry=True if (self.x2 == self.x2 and y == self.y1) or (self.x2 == self.x2 and y == self.y2) else False,
                 )
@@ -915,6 +839,7 @@ class CorridorGenerator(ConnectorComposeGenerator):
                             material=Material.Stone,
                             display="#",
                             color="grey",
+                            images=find_dungeon_images(".*cobalt_rock.*", subdir="wall/"),
                             solid=True,
                         )
                         map_prefab.data[(x, y, self.dungeon_level)].apply_some_kwargs(self.wall_kwargs)
@@ -1019,4 +944,6 @@ def mapgen_small(game: GameState, dungeon_level=0) -> None:
         except ValueError as e:
             continue
         return
+
+
 

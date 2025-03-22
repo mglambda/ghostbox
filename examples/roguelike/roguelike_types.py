@@ -100,6 +100,8 @@ class GameState(BaseModel):
 
         return store.data.get(entity, None)
 
+        
+    
     def new(self) -> UID:
         id = int(self.next_entity_id)
         self.next_entity_id = UID(id + 1)
@@ -622,3 +624,4 @@ class Display(BaseModel):
 
     unicode_character: str
     color: str
+    image: Optional[str] = None
