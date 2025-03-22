@@ -1006,11 +1006,17 @@ def long_corridor():
 
 def mapgen_small(game: GameState, dungeon_level=0) -> None:
     """Fills a given dungeon level with a small map, in a given game state."""
-    a = small_room() + small_corridor() + small_room()
-    b = medium_room() + small_corridor() + small_room()
-    c = big_room()
-    l1, l2 = long_corridor(), long_corridor()
-    map = ((c + l1 + a) + l2 + b).generate()
-    map.fill_all_at(game, 0, 0, dungeon_level)
-    
-    
+    while True:
+        try:
+            # this can fail due to connector mismatch
+            # we just retry in that case
+            a = small_room() + small_corridor() + small_room()
+            b = medium_room() + small_corridor() + small_room()
+            c = big_room()
+            l1, l2 = long_corridor(), long_corridor()
+            map = ((c + l1 + a) + l2 + b).generate()
+            map.fill_all_at(game, 0, 0, dungeon_level)
+        except ValueError as e:
+            continue
+        return
+

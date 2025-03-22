@@ -67,3 +67,27 @@ class DisabledDoor(GameResult):
         ctl.log(f"Door component disabled for entity {self.entity}")
 
         
+
+
+class Invalid(GameResult):
+    """Result for generally representing invalid moves."""
+
+    invalid_verb: str
+    reason: str
+    entity: Optional[UID] = None    
+    msg: bool = False
+    log: bool = False
+    
+    def handle(self, ctl: Controller) -> None:
+        w = f"Can't {self.invalid_verb}: {self.reason}"
+        if self.log:
+            ctl.log(w)
+
+        # we log everything but we print/speak only stuff about player
+        if self.entity != ctl.player:
+            return
+            
+        ctl.speak(w)
+        if self.msg:
+            ctl.print(w)
+        

@@ -132,6 +132,13 @@ class GameState(BaseModel):
 
 
 
+    def is_at(self, component: type, x:int, y:int, dungeon_level: int) -> bool:
+        """Returns true if component is found at coordinates."""
+        for entity in self.at(x, y, dungeon_level):
+            if self.get(component, entity) is not None:
+                return True
+        return False
+        
     def has(self, component: type, entity: UID) -> bool:
         """This is a shorthand to check wether an entity has a particular component enabled or not."""
         return self.get(component, entity) is not None

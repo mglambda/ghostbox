@@ -19,8 +19,16 @@ class MoveEntity(GameInstruction):
         new_dungeon_level = move_component.dungeon_level + self.dungeon_level_delta
         # Check for collisions with solid entities
         if check_collision(game, new_x, new_y, move_component.dungeon_level, self.entity):
-            return NothingHappened(), []
+            try:
+                obstacle_name = name_for(game, find_all_sorted(game, new_x, new_y, new_dungeon_level)[0])
+            except:
+                obstacle_name = "Unkown object"
+            return Invalid(invalid_verb="move there", reason=f"{obstacle_name} is in the way.", entity=self.entity), []
 
+        # check for nothingness
+        if not(game.is_at(MapTile, new_x, new_y, new_dungeon_level)):
+            return Invalid(invalid_verb="move there", reason="That's not part of the map.", entity=self.entity), []
+        
         # Update the entity's position
         game.enable(Move, self.entity, Move(x=new_x, y=new_y, dungeon_level=new_dungeon_level))
         return EntityMoved(entity=self.entity, new_x=new_x, new_y=new_y), []
