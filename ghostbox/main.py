@@ -264,7 +264,7 @@ class Plumbing(object):
         self.continue_with = ""
         self.tts = None
         self.multiline_buffer = ""
-        if self.getOption("json"):
+        if self.getOption("json_grammar"):
             self.setOption("grammar", getJSONGrammar())
             del self.options["json"]
         elif self.getOption("grammar_file"):
@@ -622,6 +622,8 @@ class Plumbing(object):
     def getOption(self, key):
         return self.options.get(key, None)
 
+
+
     def optionDiffers(self, name, newValue):
         if name not in self.options:
             return True
@@ -822,7 +824,8 @@ class Plumbing(object):
             self.setMode(value)
             return
 
-        oldValue = self.getOption(name)
+
+        oldValue = self.options.get(name, None)
         differs = self.optionDiffers(name, value)
         self.options[name] = value
         # for some options we do extra stuff
@@ -925,7 +928,7 @@ class Plumbing(object):
             return
 
         # self.print("\n\r" + (" " * len(self.showCLIPrompt())) + "\r", end="", tts=False)
-        if not (self.getOption("stream")):
+        if not (self.getOption("stream")) and self.getOption("stdout"):
             self.print(
                 self.getAIFormatter(with_color=self.getOption("color")).format(
                     result_str
@@ -1250,6 +1253,9 @@ class Plumbing(object):
             if not (self.getOption("tts_subtitles")):
                 return
 
+        if not(self.getOption("stdout")):
+            return
+                   
         if not (color) and not (style):
             print(
                 self._ringbuffer(self.getDisplayFormatter().format(w)),

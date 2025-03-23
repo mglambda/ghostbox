@@ -111,7 +111,7 @@ def makeTaggedParser(default_params) -> TaggedArgumentParser:
                         tag=mktag(type=AT.Plumbing, group=AG.Audio))
     parser.add_argument("--warn_hint", action=argparse.BooleanOptionalAction, default=True, help="Warn if you have a hint set.",
                         tag=mktag(type=AT.Plumbing, group=AG.Generation))
-    parser.add_argument("--json", action=argparse.BooleanOptionalAction, default=False, help="Force generation output to be in JSON format. This is equivalent to using -g with a json.gbnf grammar file, but this option is provided for convenience.",
+    parser.add_argument("--json_grammar", action=argparse.BooleanOptionalAction, default=False, help="Force generation output to be in JSON format. This is equivalent to using -g with a json.gbnf grammar file, but this option is provided for convenience.",
                         tag=mktag(type=AT.Porcelain, group=AG.Generation, motd=True)) 
     parser.add_argument("--stream_flush", type=str, default="token", help="When to flush the streaming buffer. When set to 'token', will print each token immediately. When set to 'sentence', it will wait for a complete sentence before printing. This can be useful for TTS software. Default is 'token'.",
                         tag=mktag(type=AT.Plumbing, group=AG.Generation, motd=True))
@@ -202,7 +202,9 @@ def makeTaggedParser(default_params) -> TaggedArgumentParser:
     parser.add_argument("-q", "--quiet", action=argparse.BooleanOptionalAction, default=False, help="Prevents printing and TTS vocalization of generations. Often used with the API when you want to handle generation results yourself and don't want printing to console.",
                         tag=mktag(type=AT.Porcelain, group=AG.Interface))
     parser.add_argument("--stderr", action=argparse.BooleanOptionalAction, default=True, help="Wether printing to stderr is enabled. You may want to disable this when building terminal applications using the API.",
-                        tag=mktag(type=AT.Plumbing, group=AG.Interface))    
+                        tag=mktag(type=AT.Plumbing, group=AG.Interface))
+    parser.add_argument("--stdout", action=argparse.BooleanOptionalAction, default=True, help="Wether printing to stdout is enabled. You may want to disable this when building terminal applications using the API.",
+                        tag=mktag(type=AT.Plumbing, group=AG.Interface))        
     parser.add_argument("--expand_user_input", action=argparse.BooleanOptionalAction, default=True, help="Expand variables in user input. E.g. {$var} will be replaced with content of var. Variables are initialized from character folders (i.e. file 'memory' will be {$memory}), or can be set manually with the /varfile command or --varfile option. See also --dynamic_file_vars.",
                         tag=mktag(type=AT.Plumbing, group=AG.Interface))
     parser.add_argument("--tools_unprotected_shell_access", action=argparse.BooleanOptionalAction, default=False, help="Allow an AI to run shell commands, even if not logged in to their own account. The safe way of doing this is to create an account on your system with the same name as the AI, and then run this program under their account. If you don't want to do that, and you are ok with an AI deleting your files through accident or malice, set this flag to true.",

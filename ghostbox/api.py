@@ -115,7 +115,8 @@ class Ghostbox:
         return self
 
     def __getattr__(self, k):
-        return self.__dict__["_plumbing"].getOption(k)
+        # we intentionally avoid getOption because we want the api to crash if k not found
+        return self.__dict__["_plumbing"].options[k]
 
     def __setattr__(self, k, v):
         if k == "_plumbing":
@@ -483,7 +484,7 @@ class Ghostbox:
         :return: This function always returns True"""
         begin = time.time()
         time.sleep(minimum)
-        
+
         # we have to do it this way because we poll the process in plumbing
         while self.tts_is_speaking():
             if timeout is not None:
@@ -531,8 +532,6 @@ class Ghostbox:
                     )
                     printerr(traceback.format_exc())
                     continue
-
-        return self
 
         return self
 
