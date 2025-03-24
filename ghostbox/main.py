@@ -710,10 +710,12 @@ class Plumbing(object):
         nothing = ([], {})
 
         if not (self.getOption("use_tools")):
+            self.verbose("Not applying tools because use_tools=False.")
             return nothing
 
         try:
             if json["choices"][0]["finish_reason"] != "tool_calls":
+                self.verbose(f"Not using tools: finish_reason={json["choices"][0]["finish_reason"]}")
                 return nothing
             tool_request = json["choices"][0]["message"]
             tool_calls = tool_request["tool_calls"]
@@ -723,6 +725,7 @@ class Plumbing(object):
         # FIXME: add heuristic for scanning w for possible tool request
         # ...
         # here, we know it was a tool request and we have tool_calls
+        self.verbose(f"Using tools with calls: {tool_calls}")
         if tool_calls == []:
             # either none requested or something went wrong. anyhow.
             return nothing
@@ -896,6 +899,14 @@ class Plumbing(object):
                 self.stopAudioTranscription()
         elif name == "stderr":
             util.printerr_disabled = not (value)
+        elif name == "use_tools":
+            printerr("warning: Streaming is currently not supported with tool use. Setting stream = False.")
+            self.setOption("stream", False)
+        elif name == "stream":
+            if value and self.getOption("tool_use"):
+                printerr("warning: Streaming is currently not supported with tool use. Setting stream = False.")
+                self.setOption("stream", False)
+                printerr
         return ""
 
     def _ctPauseHandler(self, sig, frame):
@@ -927,7 +938,6 @@ class Plumbing(object):
         if result_str == "":
             return
 
-        # self.print("\n\r" + (" " * len(self.showCLIPrompt())) + "\r", end="", tts=False)
         if not (self.getOption("stream")) and self.getOption("stdout"):
             self.print(
                 self.getAIFormatter(with_color=self.getOption("color")).format(
@@ -1487,7 +1497,7 @@ class Plumbing(object):
                 )
 
         # FIXME: this is only necessary until llamacpp implements streaming tool calls
-        if self.getOption("stream") and not ("tools" in payload.keys()):
+        if self.getOption("stream"):
             # FIXME: this is the last hacky bit about formatting
             if self.getOption("chat_show_ai_prompt") and self.getMode().startswith(
                 "chat"
@@ -1577,6 +1587,7 @@ class Plumbing(object):
                 else:
                     if self.getMode() != "chat":
                         output = self.addAIText(generated_w)
+                        print(str(output))                        
                     else:
                         # formatting is a bit broken in chat mode. Actually chat mode is a bit broken
                         output = generated_w
