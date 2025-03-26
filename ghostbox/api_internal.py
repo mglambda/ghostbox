@@ -1,7 +1,7 @@
 import os, datetime, glob, sys, requests, traceback, random, json
 from typing import *
 from ghostbox.session import Session
-from ghostbox.util import ultraglob
+from ghostbox.util import ultraglob, printerr
 
 def start_session(plumbing, filepath: str, keep=False) -> str:
     

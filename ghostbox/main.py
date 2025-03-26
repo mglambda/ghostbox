@@ -308,8 +308,9 @@ class Plumbing(object):
 
     def initializeBackend(self, backend, endpoint):
         api_key = self.getOption("api_key")
+        kwargs = {"logger": self.verbose}
         if backend == LLMBackend.llamacpp.name:
-            self.backend = LlamaCPPBackend(endpoint)
+            self.backend = LlamaCPPBackend(endpoint, **kwargs)
         elif backend == LLMBackend.openai.name:
             if not api_key:
                 printerr(
@@ -317,13 +318,13 @@ class Plumbing(object):
                 )
                 # this is rough but we are in init phase so it's ok
                 sys.exit()
-            self.backend = OpenAIBackend(api_key)
+            self.backend = OpenAIBackend(api_key, **kwargs)
             self.setOption("prompt_format", "auto")
         elif backend == LLMBackend.generic.name:
-            self.backend = OpenAIBackend(api_key, endpoint=endpoint)
+            self.backend = OpenAIBackend(api_key, endpoint=endpoint, **kwargs)
             self.setOption("prompt_format", "auto")
         elif backend == LLMBackend.legacy.name:
-            self.backend = OpenAILegacyBackend(api_key, endpoint=endpoint)
+            self.backend = OpenAILegacyBackend(api_key, endpoint=endpoint, **kwargs)
         else:
             # Handle other backends...
             pass
@@ -899,7 +900,7 @@ class Plumbing(object):
                 self.stopAudioTranscription()
         elif name == "stderr":
             util.printerr_disabled = not (value)
-        elif name == "use_tools":
+        elif name == "use_tools" and value:
             printerr("warning: Streaming is currently not supported with tool use. Setting stream = False.")
             self.setOption("stream", False)
         elif name == "stream":
@@ -1210,7 +1211,7 @@ class Plumbing(object):
         self.tts.write_line(w)
         return w
 
-    def verbose(self, w):
+    def verbose(self, w: str):
         """Prints to stderr but only in verbose mode."""
         if self.getOption("verbose"):
             printerr(w)
@@ -1815,7 +1816,7 @@ class Plumbing(object):
         """Checks wether we are busy. If we are busy and then aren't, we print the CLI prompt."""
         # we don't want to use the self.print, nor printerr for this as both of them have side effects
         # this really is just for terminal users
-        print_cli = lambda prefix: print(
+        print_cli = lambda prefix="": print(
             prefix + self.showCLIPrompt(), file=sys.stderr, end="", flush=True
         )
 

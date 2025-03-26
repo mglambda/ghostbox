@@ -28,7 +28,7 @@ def from_generic(endpoint="http://localhost:8080", **kwargs):
 
 def from_openai_legacy(endpoint="http://localhost:8080", **kwargs):
     """Returns a Ghostbox instance that connects to an OpenAI API compatible endpoint using the legacy /v1/completions interface.
-    This generic backend adapter works with many backends, including llama.cpp, llama-box, ollama, as well as online providers, like OpenAI, Anthropic, etc. However, to use features specific to a given backend, that are not part of the OpenAI API, you may need to use a more specific backend.
+    This generic backend adapter works with many backends, including llama.cpp, llama-box, ollama, as well as online providers, like OpenAI, etc. However, to use features specific to a given backend, that are not part of the OpenAI API, you may need to use a more specific backend.
     Note: There is usually no reason to use this over the generic variant."""
     return Ghostbox(backend=LLMBackend.legacy, endpoint=endpoint, **kwargs)
 

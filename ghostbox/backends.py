@@ -1,4 +1,4 @@
-import time, requests, threading
+import time, requests, threading, json
 from abc import ABC, abstractmethod
 from functools import *
 from pydantic import BaseModel
@@ -278,13 +278,18 @@ class AIBackend(ABC):
     """Abstract interface to a backend server, like llama.cpp or openai etc. Use the Program.make*Payload methods to make corresponding payloads. All backends must handle those dictionaries, but not all backends may support all features."""
 
     @abstractmethod
-    def __init__(self, endpoint):
+    def __init__(self, endpoint: str, logger: Optional[Callable[[str], None]] = None):
         self.endpoint = endpoint
         self.stream_done = threading.Event()
         self.last_error = ""
         self._last_request = {}
         self._last_result = {}
         self._config = {}
+        self.logger = logger
+
+    def log(self, msg: str) -> None:
+        if self.logger is not None:
+            self.logger(f"[{self.getName()}] " + msg)
 
     def configure(self, config: Dict[str, Any] = {}) -> Dict[str, Any]:
         """Configure backend specific options thourhg a key -> value dictionary. Returns the current config of a backend.
@@ -373,14 +378,15 @@ class AIBackend(ABC):
 class LlamaCPPBackend(AIBackend):
     """Bindings for the formidable Llama.cpp based llama-server program."""
 
-    def __init__(self, endpoint="http://localhost:8080"):
-        super().__init__(endpoint)
+    def __init__(self, endpoint: str ="http://localhost:8080", **kwargs):
+        super().__init__(endpoint, **kwargs)
         self._config |= {
             # this means we will use /chat/completions, which applies the jinja templates etc. This is most often what we want.
             # if this option is false, the generate methods will use the /completions endpoint, which requires us to apply our own templates, which is great for experimentation.
             "llamacpp_use_chat_completion_endpoint": True
         }
-
+        self.log(f"Initialized llama.cpp backend with config : {json.dumps(self._config)}")
+        
     def getName(self):
         return LLMBackend.llamacpp.name
 
@@ -388,8 +394,6 @@ class LlamaCPPBackend(AIBackend):
         return -1
 
     def generate(self, payload):
-        # FIXME: why is this here?
-        #super().generate(payload)
         # adjust slightly for our renames
         llama_payload = payload | {"n_predict": payload["max_length"]}
 
@@ -408,6 +412,7 @@ class LlamaCPPBackend(AIBackend):
             # however this will still suck for multi-turn tool use
             llama_payload |= {"cache_prompt": False}
         self._last_request = llama_payload
+        self.log(f"generate to {endpoint+endpoint_suffix}")
         return requests.post(self.endpoint + endpoint_suffix, json=llama_payload)
 
     def handleGenerateResult(self, result):
@@ -455,6 +460,7 @@ class LlamaCPPBackend(AIBackend):
 
         self._last_request = llama_payload
 
+        self.log(f"generateStreaming to {endpoint+endpoint_suffix}")
         r = streamPrompt(
             final_callback,
             self.stream_done,
@@ -470,12 +476,14 @@ class LlamaCPPBackend(AIBackend):
         return False
 
     def tokenize(self, w):
+        self.log(f"tokenize {len(w)} tokens.")
         r = requests.post(self.endpoint + "/tokenize", json={"content": w})
         if r.status_code == 200:
             return r.json()["tokens"]
         return []
 
     def detokenize(self, ts):
+        self.log("detokenize with {len(ts)} tokens.")
         r = requests.post(self.endpoint + "/detokenize", json={"tokens": ts})
         if r.status_code == 200:
             return r.json()["content"]
@@ -526,8 +534,8 @@ class LlamaCPPBackend(AIBackend):
 class OpenAILegacyBackend(AIBackend):
     """Backend for the official OpenAI API. The legacy version routes to /v1/completions, instead of the regular /v1/chat/completion."""
 
-    def __init__(self, api_key, endpoint="https://api.openai.com"):
-        super().__init__(endpoint)
+    def __init__(self, api_key: str, endpoint:str="https://api.openai.com", **kwargs):
+        super().__init__(endpoint, **kwargs)
         self.api_key = api_key
 
     def getName(self):
@@ -542,7 +550,7 @@ class OpenAILegacyBackend(AIBackend):
             "Content-Type": "application/json",
         }
 
-        data = payload | {"stream": False}
+        data = payload | {"max_tokens": payload["max_length"], "stream": False}
         self._last_request = data
         response = requests.post(
             self.endpoint + "/v1/completions", headers=headers, json=data
@@ -572,7 +580,7 @@ class OpenAILegacyBackend(AIBackend):
             "Content-Type": "application/json",
         }
 
-        data = payload | {"stream": True, "stream_options": {"include_usage": True}}
+        data = payload | {"max_tokens": "max_length", "stream": True, "stream_options": {"include_usage": True}}
         self._last_request = data
 
         def openaiCallback(d):
@@ -639,8 +647,8 @@ class OpenAILegacyBackend(AIBackend):
 class OpenAIBackend(AIBackend):
     """Backend for the official OpenAI API. This is used for the company of Altman et al, but also serves as a general purpose API suported by various backends, including llama.cpp, llama-box, and many others."""
 
-    def __init__(self, api_key, endpoint="https://api.openai.com"):
-        super().__init__(endpoint)
+    def __init__(self, api_key, endpoint:str="https://api.openai.com", **kwargs):
+        super().__init__(endpoint, **kwargs)
         self.api_key = api_key
         self._memoized_params = None
 
