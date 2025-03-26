@@ -4,7 +4,7 @@ from typing import *
 import feedwater
 from functools import *
 from colorama import just_fix_windows_console, Fore, Back, Style
-from lazy_object_proxy import Proxy
+from lazy_object_proxy import Proxy #type: ignore
 import argparse
 from argparse import Namespace
 from ghostbox.commands import *
@@ -505,7 +505,7 @@ class Plumbing(object):
         )
 
         # special cases
-        if name == "auto":
+        if name == PromptFormatTemplateSpecialValue.auto.name:
             if startup and (self.template is not None):
                 # don't set this twice
                 return
@@ -1444,15 +1444,9 @@ class Plumbing(object):
         """Takes an input string w and returns the full history (including system msg) + w, but adjusted to fit into the context given by max_context_length. This is done in a complicated but very smart way.
         returns - A string ready to be sent to the backend, including the full conversation history, and guaranteed to carry the system msg.
         """
-        # problem: the llm can only process text equal to or smaller than the context window
-        # dumb solution (ds): make a ringbuffer, append at end, throw away the beginning until it fits into context window
-        # problem with dumb solution: the system msg gets thrown out and the AI forgets the basics of who it is
-        # slightly less dumb solution (slds): keep the system_msg at all costs, throw first half of the rest away when context is exceeded this is llama.cpp solution, but only if you supply n_keep = tokens of system_msg koboldcpp does this too, but they seem to be a bit smarter about it and make it more convenient. Advantage of this approach is that you will make better use of the cache, since at least half of the prompt after the system msg is guaranteed to be in cache.
-        # problem with slds: This can cut off the story at awkward moments, especially if it's in the middle of sentence or prompt format relevant tokens, which can really throw some models off, especially in chat mode where we rely on proper formatting a lot
-        # ghostbox (brilliant) solution (gbs): use metadata in the story history to semantically determine good cut-off points. usually, this is after an AI message, since those are more often closing-the-action than otherwise. Use template files to ensure syntactic correctness (e.g. no split prompt format tokens).
-        # The problem with this (gbs) is that it is not making as good use of the cache, since if an earlier part of the prompt changed everything after it gets invalidated. However prompt eval is the easy part. Clearly though, there is a trade off. Maybe give user a choice between slds and gbs as trade off between efficiency vs quality?
-        # Also: this is currently still quite dumb, actually, since we don't take any semantics into account
-        # honorable mention of degenerate cases: If the system_msg is longer than the context itself, or users pull similar jokes, it is ok to shit the bed and let the backend truncate the prompt.
+        # FIXME: this is not smart. and it needs to be reworked badly. IIRC a lot of this was useful in the early days, now (march 2025) this kind of stuff is more obsolete because contexts are bigger and templates are handled server side
+        # FIXME: it also just doesn't work since we changed how chat msgs are stored
+        # another FIXME: also tokenizing needs to be fixed in the backends
         self._smartShifted = False  # debugging
         backend = self.getBackend()
 

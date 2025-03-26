@@ -115,7 +115,7 @@ class RawTemplate(PFTemplate):
 
 
     def body(self, story, append_hint=True, **kwargs):
-        return "\n".join([item.content for item in story.getData()
+        return "".join([item.content for item in story.getData()
                           if type(item.content) == str])
             
     def stops(self):

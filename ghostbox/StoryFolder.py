@@ -1,4 +1,5 @@
-import jsonpickle, copy
+import jsonpickle #type:ignore
+import copy 
 from ghostbox.Story import *
 
 class StoryFolder(object):

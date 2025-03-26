@@ -540,3 +540,13 @@ class Ghostbox:
         :return: The chat history.
         """
         return self._plumbing.session.stories.get().getData()
+
+    # debug
+
+    def get_last_request(self) -> Dict[str, Any]:
+        """Returns the last request send to the backend server. The dict may be empty if no request was sent yet."""
+        return self._plumbing.getBackend().getLastRequest()        
+
+    def get_last_result(self) -> Dict[str, Any]:
+        """Returns the last result that was retrieved from the server. The dict may be empty if no result was received yet."""
+        return self._plumbing.getBackend().getLastJSON()

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "ghostbox"
-version = '0.21.7'
+version = '0.21.8'
 description = "Ghostbox is a command line interface to local LLM (large language model) server applications, such as koboldcpp or llama.cpp. It's primary purpose is to give a simple, stripped-down way to engage with AI chat bots."
 authors = [
     { name = "Marius Gerdes", email = "integr@gmail.com" }

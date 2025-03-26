@@ -113,7 +113,8 @@ def all_chars(prog) -> List[str]:
     allchars = []
     for dir in prog.getOption("include"):
         if not(os.path.isdir(dir)):
-            printerr("warning: Include path '" + dir + "' is not a directory.")
+            if prog.getOption("verbose"):
+                printerr("warning: Include path '" + dir + "' is not a directory.")
             continue
         for charpath in glob.glob(dir + "/*"):
             if os.path.isfile(charpath):
