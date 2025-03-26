@@ -324,6 +324,11 @@ class Plumbing(object):
             self.backend = OpenAIBackend(api_key, endpoint=endpoint, **kwargs)
             self.setOption("prompt_format", "auto")
         elif backend == LLMBackend.legacy.name:
+            if self.getOption("prompt_format") == PromptFormatTemplateSpecialValue.auto.name:
+                printerr("warning: Setting prompt_format to 'raw' as using 'auto' as prompt_format with the legacy backend will yield server errors. This backend exists specifically to *not* apply templates server side. You can manually reset this if you want.")
+                # doing it without setOption as backend isn't fully initialized yet
+                self.options["prompt_format"] = PromptFormatTemplateSpecialValue.raw.name
+                
             self.backend = OpenAILegacyBackend(api_key, endpoint=endpoint, **kwargs)
         else:
             # Handle other backends...

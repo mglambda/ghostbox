@@ -412,8 +412,9 @@ class LlamaCPPBackend(AIBackend):
             # however this will still suck for multi-turn tool use
             llama_payload |= {"cache_prompt": False}
         self._last_request = llama_payload
-        self.log(f"generate to {endpoint+endpoint_suffix}")
-        return requests.post(self.endpoint + endpoint_suffix, json=llama_payload)
+        final_endpoint = self.endpoint + endpoint_suffix
+        self.log(f"generate to {final_endpoint}")
+        return requests.post(final_endpoint, json=llama_payload)
 
     def handleGenerateResult(self, result):
         if result.status_code != 200:
@@ -460,11 +461,12 @@ class LlamaCPPBackend(AIBackend):
 
         self._last_request = llama_payload
 
-        self.log(f"generateStreaming to {endpoint+endpoint_suffix}")
+        final_endpoint = self.endpoint + endpoint_suffix
+        self.log(f"generateStreaming to {final_endpoint}")
         r = streamPrompt(
             final_callback,
             self.stream_done,
-            self.endpoint + endpoint_suffix,
+            final_endpoint,
             llama_payload,
         )
         if r.status_code != 200:
@@ -476,7 +478,7 @@ class LlamaCPPBackend(AIBackend):
         return False
 
     def tokenize(self, w):
-        self.log(f"tokenize {len(w)} tokens.")
+        self.log(f"tokenize {len(w)} characters.")
         r = requests.post(self.endpoint + "/tokenize", json={"content": w})
         if r.status_code == 200:
             return r.json()["tokens"]
@@ -537,9 +539,10 @@ class OpenAILegacyBackend(AIBackend):
     def __init__(self, api_key: str, endpoint:str="https://api.openai.com", **kwargs):
         super().__init__(endpoint, **kwargs)
         self.api_key = api_key
-
+        self.log(f"Initialized legacy OpenAI backend. This routes to /v1/completion and will not apply the chat template. Using config : {json.dumps(self._config)}")
+        
     def getName(self):
-        return LLMBackend.openai.name
+        return LLMBackend.legacy.name
 
     def getMaxContextLength(self):
         return -1
@@ -552,8 +555,10 @@ class OpenAILegacyBackend(AIBackend):
 
         data = payload | {"max_tokens": payload["max_length"], "stream": False}
         self._last_request = data
+        final_endpoint = self.endpoint + "/v1/completions"
+        self.log(f"generate to {final_endpoint}")
         response = requests.post(
-            self.endpoint + "/v1/completions", headers=headers, json=data
+            final_endpoint, headers=headers, json=data
         )
         if response.status_code != 200:
             self.last_error = (
@@ -580,16 +585,19 @@ class OpenAILegacyBackend(AIBackend):
             "Content-Type": "application/json",
         }
 
-        data = payload | {"max_tokens": "max_length", "stream": True, "stream_options": {"include_usage": True}}
+        data = payload | {"max_tokens": payload["max_length"], "stream": True, "stream_options": {"include_usage": True}}
         self._last_request = data
 
         def openaiCallback(d):
             callback(d["choices"][0]["text"])
 
+
+        final_endpoint = self.endpoint + "/v1/completions"
+        self.log(f"generateStreaming to {final_endpoint}.")
         response = streamPrompt(
             openaiCallback,
             self.stream_done,
-            self.endpoint + "/v1/completions",
+            final_endpoint,
             json=data,
             headers=headers,
         )
@@ -607,6 +615,7 @@ class OpenAILegacyBackend(AIBackend):
             "Content-Type": "application/json",
         }
         data = {"prompt": w}
+        self.log(f"tokenize with {len(w)} characters.")
         response = requests.post(
             self.endpoint + "/v1/tokenize", headers=headers, json=data
         )
@@ -620,6 +629,7 @@ class OpenAILegacyBackend(AIBackend):
             "Content-Type": "application/json",
         }
         data = {"tokens": ts}
+        self.log(f"detokenize with {len(ts)} tokens.")
         response = requests.post(
             self.endpoint + "/v1/detokenize", headers=headers, json=data
         )
@@ -647,11 +657,13 @@ class OpenAILegacyBackend(AIBackend):
 class OpenAIBackend(AIBackend):
     """Backend for the official OpenAI API. This is used for the company of Altman et al, but also serves as a general purpose API suported by various backends, including llama.cpp, llama-box, and many others."""
 
-    def __init__(self, api_key, endpoint:str="https://api.openai.com", **kwargs):
+    def __init__(self, api_key: str, endpoint:str="https://api.openai.com", **kwargs):
         super().__init__(endpoint, **kwargs)
         self.api_key = api_key
         self._memoized_params = None
-
+        api_str = "" if not(api_key) else " with api key " + api_key[:4] + ("x" * len(api_key[4:]))
+        self.log(f"Initialized OpenAI compatible backend {api_str}. Routing to {endpoint}. Config is {self._config}")
+                                                                            
     def getName(self):
         return LLMBackend.openai.name
 
@@ -671,8 +683,10 @@ class OpenAIBackend(AIBackend):
             data |= {"cache_prompt": False}
 
         self._last_request = data
+        final_endpoint = self.endpoint + "/v1/chat/completions"
+        self.log(f"generate to {final_endpoint}.")
         response = requests.post(
-            self.endpoint + "/v1/chat/completions", headers=headers, json=data
+            final_endpoint, headers=headers, json=data
         )
         if response.status_code != 200:
             self.last_error = (
@@ -729,12 +743,15 @@ class OpenAIBackend(AIBackend):
         def one_line_lambdas_for_python(r):
             self._last_result = r
 
+
+        final_endpoint = self.endpoint + "/v1/chat/completions"
+        self.log(f"generateStreaming to {final_endpoint}.")
         response = streamPrompt(
             self.makeOpenAICallback(
                 callback, last_result_callback=one_line_lambdas_for_python
             ),
             self.stream_done,
-            self.endpoint + "/v1/chat/completions",
+            final_endpoint,
             json=data,
             headers=headers,
         )
@@ -752,6 +769,7 @@ class OpenAIBackend(AIBackend):
             "Content-Type": "application/json",
         }
         data = {"prompt": w}
+        self.log(f"tokenize with {len(w)} characters.")
         response = requests.post(
             self.endpoint + "/v1/tokenize", headers=headers, json=data
         )
@@ -765,6 +783,7 @@ class OpenAIBackend(AIBackend):
             "Content-Type": "application/json",
         }
         data = {"tokens": ts}
+        self.log(f"detokenize with {len(ts)} tokens.")
         response = requests.post(
             self.endpoint + "/v1/detokenize", headers=headers, json=data
         )
