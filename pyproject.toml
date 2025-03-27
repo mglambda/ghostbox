@@ -32,6 +32,7 @@ dependencies = [
     "duckduckgo-search",
     "markdownify",
     "h2",
+    "snac",
     "pyperclip"
 ]
 classifiers = [

@@ -25,6 +25,10 @@ def main():
     parser.add_argument("--websock-port", type=int, default=5052, help="The port to listen on for connections when using websock as output method.")
     # zonos specific
     parser.add_argument("--zonos_model", type=str, default=ZonosTTSModel.hybrid.name, help="The pretrained checkpoint to use with the Zonos TTS engine. Hybrid seems to get the best results. This argument is ignored unless you use the Zonos model. Options: " + ", ".join([m.name for m in ZonosTTSModel]))
+    parser.add_argument("--orpheus_quantization", type=str, default="Q4_K_M", help="Quantization method to use for the orpheus model. Options currently supported are 'Q4_M_K', 'Q8_0'. Using lower quants may degrade performance, but will lower vram requirements significantly. This option makes ghostbox figure out the exact model to use. If you want a quant that's not supported, set bta custom model or huggingface repo with the --orpheus_model option, which will cause this option to be ignored.")
+    parser.add_argument("--orpheus_model", type=str, default="", help="The exact orpheus model to use. By default, ghostbox-tts will figure this out on its own based on the value of orpheus_quantization. Setting this option will override orpheus_quantization. You may set this option to either a filepath pointing to a model (e.g. a gguf file), or to a huggingface repo like 'https://huggingface.co/lex-au/Orpheus-3b-FT-Q8_0.gguf'.")
+    parser.add_argument("--llm_server", type=str, default="", help="Hostname and port of LLM server to query for models that need it. Currently this is used only by Orpheus. Any OpenAI compatible backend can be used. If this is set, ghostbox-tts will not spawn its own server and options like orpheus_model or orpheus_quantization are ignored.")
+    parser.add_argument("--llm_server_executable", type=str, default="llama-server", help="Path to an executable of a server capable of loading LLM models. This is only relevant when ghostbox-tts attempts to spawn its own llm server. Note: only tested with llama.cpp.")
     args = parser.parse_args()
 
 

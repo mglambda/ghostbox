@@ -691,4 +691,11 @@ Setting some options to `True` has side effects, and may start services that run
 
 Thanks to the excellent [r/localllama](https://www.reddit.com/r/locallama/), and to all those who have contributed there, either through code or expertise. Thanks to the people at [llama.cpp](https://github.com/ggml-org/llama.cpp) for making local LLMs a reality, and thanks to [KoboldCPP](https://github.com/LostRuins/koboldcpp) for also making them accessible. Speaking of kobolds, you should also check out their [Kobold AI horde](https://horde.koboldai.net/).
 
+Thanks to
+
+https://github.com/isaiahbjork/orpheus-tts-local
+
+for figuring out decoding of orpheus tts tokens.
+
+
 The number one way to contribut to ghostbox is to test it out and give me feedback. Either by opening github issues or just telling me what kind of features you actually use or want to see in the future. I wrote this in order to build cool stuff with LLMs, and then published in partly in hopes of inspiring others to do the same, so seeing people build stuff with it is always great.

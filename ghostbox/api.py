@@ -535,6 +535,10 @@ class Ghostbox:
 
         return self
 
+    def clear_history(self) -> None:
+        """Resets the chat history."""
+        self.set_char(self.character_folder, [])
+    
     def history(self) -> List[ChatMessage]:
         """Returns the current chat history for this ghostbox instance.
         :return: The chat history.
