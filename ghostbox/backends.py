@@ -414,6 +414,7 @@ class LlamaCPPBackend(AIBackend):
         self._last_request = llama_payload
         final_endpoint = self.endpoint + endpoint_suffix
         self.log(f"generate to {final_endpoint}")
+        self.log(f"Payload: {json.dumps(llama_payload, indent=4)}")        
         return requests.post(final_endpoint, json=llama_payload)
 
     def handleGenerateResult(self, result):
@@ -463,6 +464,7 @@ class LlamaCPPBackend(AIBackend):
 
         final_endpoint = self.endpoint + endpoint_suffix
         self.log(f"generateStreaming to {final_endpoint}")
+        self.log(f"Payload: {json.dumps(llama_payload, indent=4)}")        
         r = streamPrompt(
             final_callback,
             self.stream_done,
@@ -557,6 +559,7 @@ class OpenAILegacyBackend(AIBackend):
         self._last_request = data
         final_endpoint = self.endpoint + "/v1/completions"
         self.log(f"generate to {final_endpoint}")
+        self.log(f"Payload: {json.dumps(data, indent=4)}")        
         response = requests.post(
             final_endpoint, headers=headers, json=data
         )
@@ -594,6 +597,7 @@ class OpenAILegacyBackend(AIBackend):
 
         final_endpoint = self.endpoint + "/v1/completions"
         self.log(f"generateStreaming to {final_endpoint}.")
+        self.log(f"Payload: {json.dumps(data, indent=4)}")
         response = streamPrompt(
             openaiCallback,
             self.stream_done,
@@ -685,6 +689,7 @@ class OpenAIBackend(AIBackend):
         self._last_request = data
         final_endpoint = self.endpoint + "/v1/chat/completions"
         self.log(f"generate to {final_endpoint}.")
+        self.log(f"Payload: {json.dumps(data, indent=4)}")        
         response = requests.post(
             final_endpoint, headers=headers, json=data
         )
@@ -746,6 +751,7 @@ class OpenAIBackend(AIBackend):
 
         final_endpoint = self.endpoint + "/v1/chat/completions"
         self.log(f"generateStreaming to {final_endpoint}.")
+        self.log(f"Payload: {json.dumps(data, indent=4)}")        
         response = streamPrompt(
             self.makeOpenAICallback(
                 callback, last_result_callback=one_line_lambdas_for_python

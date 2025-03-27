@@ -57,7 +57,7 @@ class TTSState(object):
         
         
     def getVoiceSampleFile(self):
-        return self.args.voice_sample
+        return self.args.voice
         
     def processMsg(self, msg):
         # returns (newMsg, continue_bool, errormsg)

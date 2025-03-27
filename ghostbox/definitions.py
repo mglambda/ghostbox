@@ -107,7 +107,7 @@ class ChatMessage(BaseModel):
 LLMBackend = Enum("LLMBackend", "generic legacy llamacpp koboldcpp openai dummy")
 
 # these are the models supported by ghostbox-tts
-TTSModel = Enum("TTSModel", "zonos kokoro xtts polly")
+TTSModel = Enum("TTSModel", "zonos kokoro xtts polly orpheus")
 ZonosTTSModel = Enum("ZonosTTSModel", "hybrid transformer")
 
 # these are ways of playing sound that are supported by ghostbox-tts

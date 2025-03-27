@@ -4,6 +4,7 @@ from ghostbox.definitions import TTSOutputMethod, TTSModel
 from ghostbox.tts_util import *
 from ghostbox.tts_state import *
 from ghostbox.tts_backends import *
+from ghostbox.tts_backends_orpheus import OrpheusBackend
 from ghostbox.tts_output import *
     
 def main():
@@ -12,9 +13,9 @@ def main():
     #parser.add_argument("-f", '--filepath', type=str, default="", help="Filename to save accumulated spoken lines in. Output is in wav format.")
     parser.add_argument("--voices", action=argparse.BooleanOptionalAction, default=False, help="List all available voices for chosen model, then exit the program.")
     parser.add_argument("-q", "--quiet", action=argparse.BooleanOptionalAction, default=False, help="Do not play any audio.")
-    parser.add_argument("-l", "--language", type=str, default="en", help="Language for the TTS output. Not all TTS models support all language, and many don't need this option.")
+    parser.add_argument("-l", "--language", type=str, default="en", help="Language for the TTS output. Not all TTS models support all languages, and many don't need this option.")
     parser.add_argument("-p", "--pause_duration", type=int, default=1, help="Duration of pauses after newlines. A value of 0 means no or minimal-duration pause.")
-    parser.add_argument("-y", "--voice_sample", type=str, default="cloning.wav", help="Path to wav file used as a voice sample to clone.")
+    parser.add_argument("-y", "--voice", type=str, default="", help="Name of voice or path to wav file used as a voice sample to clone for models that support cloning.")
     parser.add_argument("-i", "--volume", type=float, default=1.0, help="Volume for the voice playback.")
     parser.add_argument("-s", "--seed", type=int, default=420, help="Random seed for voice models that use it.")
     parser.add_argument("--sound_dir", type=str, default="sounds", help="Directory where sound files are located to be played with #sound <SNDNAME>")
@@ -36,6 +37,8 @@ def main():
             return ZonosBackend(config=config)
         elif model == TTSModel.kokoro.name:
             return KokoroBackend(config=config)
+        elif model == TTSModel.orpheus.name:
+            return OrpheusBackend(config=config)        
         raise ValueError("Not a valid TTS model: " + model + ". Valid choices are " + "\n  ".join([tm.name for tm in TTSModel]))
 
     def initOutputMethod(method: str, args) -> TTSOutput:
