@@ -15,9 +15,10 @@ class TTSOutput(ABC):
         pass
 
     @abstractmethod
-    def enqueue(self, filename: str, volume: float = 1.0) -> None:
-        """Enqeueu a wave file for playback. Start playback immediately if nothing is playing.
-        This function is non-blocking."""
+    def enqueue(self, payload: str | Iterator[float], volume: float = 1.0) -> None:
+        """Enqeueu a wave file or generator for playback. Start playback immediately if nothing is playing.
+        This function is non-blocking.
+        :param payload: Either a string denoting the filename of a wave file, or a generator yielding wave audio data."""
         pass
 
     def stop(self) -> None:
@@ -53,28 +54,33 @@ class DefaultTTSOutput(TTSOutput):
             while self.running or not (self._queue.empty()):
                 # don't remove the loop or timeout or else thread will not be terminated through signals
                 try:
-                    filename = self._queue.get(timeout=1)
+                    payload = self._queue.get(timeout=1)
                 except Empty:
                     continue
 
                 # _play will block until stop is called or playback finishes
                 self.stop_flag.clear()                
-                self._play(filename)
+                self._play(payload)
 
         self.running = True
         self.worker = threading.Thread(target=play_worker)
         self.worker.start()
 
-    def enqueue(self, filename, volume: float = 1.0) -> None:
+    def enqueue(self, payload, volume: float = 1.0) -> None:
         self.volume = volume
 
-        self._queue.put(filename)
+        self._queue.put(payload)
 
-    def _play(self, filename: str, volume: float = 1.0) -> None:
+    def _play(self, payload: str | Iterator[float], **kwargs) -> None:
+        if type(payload) == str:
+            self._play_file(payload, **kwargs)
+        else:
+            self._play_stream(payload, **kwargs)
+            
+    def _play_file(self, filename: str | Iterator[float], volume: float = 1.0) -> None:
         import pyaudio
-
         wf = wave.open(filename, "rb")
-        chunk = 1024
+        chunk = 4096
         p = self.pyaudio
         stream = p.open(
             format=p.get_format_from_width(wf.getsampwidth()),
@@ -88,12 +94,40 @@ class DefaultTTSOutput(TTSOutput):
         while data := wf.readframes(chunk):
             if self.stop_flag.isSet():
                 break
+
+            print(type(data))
+            print(f"{len(data)}")
             stream.write(data)
 
         stream.stop_stream()
         stream.close()
         self.stop_flag.set()
 
+
+
+    def _play_stream(self, audio_stream: Iterator[float], volume: float = 1.0) -> None:
+        import pyaudio
+        chunk = 512
+        # FIXME: hardcoded some stuff as we are trying out streaming with orpheus first
+        p = self.pyaudio
+        stream = p.open(
+            format=p.get_format_from_width(2),
+            channels=1,
+            rate=24000,
+            output=True,
+            frames_per_buffer=chunk,
+        )
+
+        # Play the audio data
+        for data in audio_stream:
+            if self.stop_flag.isSet():
+                break
+            stream.write(data)
+
+        stream.stop_stream()
+        stream.close()
+        self.stop_flag.set()
+        
     def stop(self) -> None:
         """Instantly interrupts and stops all playback."""
         self.stop_flag.set()

@@ -176,9 +176,14 @@ def main():
         if cont:
             continue
 
+
         output_file = prog.temp_wav_file()
         try:
-            tts.tts_to_file(text=msg, speaker_file=prog.getVoiceSampleFile(), file_path=output_file.name)
+            if tts.can_stream():
+                payload = tts.tts_to_generator(msg)
+            else:
+                tts.tts_to_file(text=msg, speaker_file=prog.getVoiceSampleFile(), file_path=output_file.name)
+                payload = output_file
         except IgnoreValueError as e:
             # this happens on some bad values that are hard to filter but harmless.
             # e.g. "---" for text in kokoro
@@ -196,16 +201,17 @@ def main():
         if prog.args.quiet:
             continue
 
-        # this filecopy is horrible but it is necessary because
-        # even with ful program synchronization, the filesystem might not play ball
-        # in any case without this, the wavefile created on this thread wouldn't show up on the other one
-        newfilename = tempfile.mkstemp(suffix=".wav")[1]
-        shutil.copy(output_file.name, newfilename)
+
+        if not(tts.can_stream()):
+            # this filecopy is horrible but it is necessary because
+            # even with ful program synchronization, the filesystem might not play ball
+            # in any case without this, the wavefile created on this thread wouldn't show up on the other one
+            newfilename = tempfile.mkstemp(suffix=".wav")[1]
+            shutil.copy(output_file.name, newfilename)
+            payload = newfilename
 
         # queue and play
-        output_module.enqueue(newfilename, volume=prog.args.volume)
-
-
+        output_module.enqueue(payload, volume=prog.args.volume)
 
 
     # this will let all enqueued files finish playing

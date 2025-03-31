@@ -1,6 +1,6 @@
 import os, subprocess, tempfile
-from moviepy.editor import *
 import ghostbox
+#from moviepy.editor import *
 from ghostbox.tts_util import *
 from queue import Queue
 
@@ -65,7 +65,8 @@ class TTSState(object):
         if msg == "":
             return ("", True, "")
 
-        msg = fixDivZero(msg)
+        if self.args.model == "xtts":
+            msg = fixDivZero(msg)
         
         (tag, tagArgs) = maybeGetTag(msg)
         if tag in self.tagFunctions:

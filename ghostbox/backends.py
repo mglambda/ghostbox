@@ -593,6 +593,7 @@ class OpenAILegacyBackend(AIBackend):
 
         def openaiCallback(d):
             callback(d["choices"][0]["text"])
+            self._last_result = d            
 
 
         final_endpoint = self.endpoint + "/v1/completions"
@@ -646,8 +647,8 @@ class OpenAILegacyBackend(AIBackend):
         return "OpenAI API is assumed to be healthy."
 
     def timings(self, result_json=None) -> Optional[Timings]:
-        # FIXME: not implemented yet
-        return None
+        return OpenAIBackend.timings(self, result_json)
+
 
     def sampling_parameters(self) -> Dict[str, SamplingParameterSpec]:
         # restricted set
@@ -801,6 +802,7 @@ class OpenAIBackend(AIBackend):
         # OpenAI API does not have a direct health check endpoint
         return "OpenAI API is assumed to be healthy."
 
+    @staticmethod
     def timings(self, result_json=None) -> Optional[Timings]:
         if result_json is None:
             if (json := self._last_result) is None:

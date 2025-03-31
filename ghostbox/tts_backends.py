@@ -42,6 +42,12 @@ class TTSBackend(ABC):
         """Given a message, writes the message spoken as audio to a wav file."""
         pass
 
+    def can_stream(self) -> bool:
+        return False
+
+    def tts_to_generator(self, text:str) -> Iterator[float]:
+        printerr("error: Streaming not supported by this backend.")
+    
     @abstractmethod
     def split_into_sentences(self, text: str) -> List[str]:
         """Returns a list of sentences, where a 'sentence' is any string the TTS backend wants to process as a chunk.
