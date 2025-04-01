@@ -4,7 +4,7 @@ from typing import *
 import feedwater
 from functools import *
 from colorama import just_fix_windows_console, Fore, Back, Style
-from lazy_object_proxy import Proxy #type: ignore
+from lazy_object_proxy import Proxy  # type: ignore
 import argparse
 from argparse import Namespace
 from ghostbox.commands import *
@@ -44,9 +44,10 @@ def showHelpCommands(prog, argv):
         return "Command not found. See /help for more."
     return ""
 
-def show_help_option_tag(prog, tag, markdown: bool=False) -> str:
+
+def show_help_option_tag(prog, tag, markdown: bool = False) -> str:
     w = ""
-    if not(markdown):
+    if not (markdown):
         cv = str(prog.getOption(tag.name))
         w += (
             tag.name
@@ -71,17 +72,18 @@ def show_help_option_tag(prog, tag, markdown: bool=False) -> str:
             + tag.help
             + "\n\n```\n"
             + "\n".join(textwrap.wrap(tag.show_description()))
-            )
+        )
         if tag.default_value is not None:
             dv = str(tag.default_value)
             w += "\nIts default value is " + (dv if dv else '""')
         if tag.service:
-            w += "\nSetting it to True will start the corresponding service."            # this is for the docs
+            w += "\nSetting it to True will start the corresponding service."  # this is for the docs
         w += "\n```\n"
         # avoid printerr prefix
         print(w)
         return ""
     return w
+
 
 def showHelp(prog, argv):
     """[TOPIC] [-v|--verbose] [--markdown]
@@ -92,8 +94,7 @@ def showHelp(prog, argv):
         del argv[-1]
     else:
         markdown = False
-        
-        
+
     if argv == []:
         # list topics
         w += "[Commands]\nUse these with a preceding slash like e.g. '/retry'. Do /help COMMANDNAME for more information on an individual command.\n\n"
@@ -136,11 +137,20 @@ def showHelp(prog, argv):
         if tag.is_option:
             return show_help_option_tag(prog, tag, markdown=markdown)
     elif topic == "commands":
-                # list all commands with help        
+        # list all commands with help
         return showHelpCommands(prog, [])
     elif topic == "options":
-            # list full options with description
-        return "\n\n".join(filter(lambda w: w != "", [show_help_option_tag(prog, tag, markdown=markdown) for tag in sorted(prog.getTags().values(), key=lambda t: t.name) if tag.is_option]))
+        # list full options with description
+        return "\n\n".join(
+            filter(
+                lambda w: w != "",
+                [
+                    show_help_option_tag(prog, tag, markdown=markdown)
+                    for tag in sorted(prog.getTags().values(), key=lambda t: t.name)
+                    if tag.is_option
+                ],
+            )
+        )
     else:
         # fix it's a command
         return showHelpCommands(prog, [topic])
@@ -325,11 +335,18 @@ class Plumbing(object):
             self.backend = OpenAIBackend(api_key, endpoint=endpoint, **kwargs)
             self.setOption("prompt_format", "auto")
         elif backend == LLMBackend.legacy.name:
-            if self.getOption("prompt_format") == PromptFormatTemplateSpecialValue.auto.name:
-                printerr("warning: Setting prompt_format to 'raw' as using 'auto' as prompt_format with the legacy backend will yield server errors. This backend exists specifically to *not* apply templates server side. You can manually reset this if you want.")
+            if (
+                self.getOption("prompt_format")
+                == PromptFormatTemplateSpecialValue.auto.name
+            ):
+                printerr(
+                    "warning: Setting prompt_format to 'raw' as using 'auto' as prompt_format with the legacy backend will yield server errors. This backend exists specifically to *not* apply templates server side. You can manually reset this if you want."
+                )
                 # doing it without setOption as backend isn't fully initialized yet
-                self.options["prompt_format"] = PromptFormatTemplateSpecialValue.raw.name
-                
+                self.options["prompt_format"] = (
+                    PromptFormatTemplateSpecialValue.raw.name
+                )
+
             self.backend = OpenAILegacyBackend(api_key, endpoint=endpoint, **kwargs)
         else:
             # Handle other backends...
@@ -352,7 +369,18 @@ class Plumbing(object):
         except:
             printerr("warning: Tried to check for tools use with empty history.")
         return False
+    
+    def _getTTSSpecialMsg(self) -> str:
+        """Returns special tags for the TTS or empty string."""
+        w = ""
+        tags = self.tryGetTTSSpecialTags()
+        if tags != []:
+            w += "\nUse the following tags in conversation when appropriate (they will be translated into audio by a TTS model): " + ", ".join(tags)
 
+        return w
+        
+
+    
     def makeGeneratePayload(self, text):
         d = {}
 
@@ -403,6 +431,10 @@ class Plumbing(object):
             # openai chat/completion needs the 'messages' key
             # we also do this for llama in "auto" template mode
             d["system"] = self.session.getSystem()
+            if self.getOption("tts_modify_system_msg"):
+                d["system"] += self._getTTSSpecialMsg()
+
+            
             d["messages"] = [
                 {"role": "system", "content": d["system"]}
             ] + copy.deepcopy(self.session.stories.get().to_json())
@@ -554,7 +586,7 @@ class Plumbing(object):
         self.options["prompt_format"] = name
         printerr("Using '" + name + "' as prompt format template.")
 
-    def loadConfig(self, json_data, override=True, protected_keys: List[str]=[]):
+    def loadConfig(self, json_data, override=True, protected_keys: List[str] = []):
         """Loads a config file provided as json into options. Override=False means that command line options that have been provided will not be overriden by the config file."""
         d = json.loads(json_data)
         if type(d) != type({}):
@@ -585,7 +617,7 @@ class Plumbing(object):
             d.items(), key=cmp_to_key(lambda a, b: -1 if a[0] == "mode" else 1)
         )
         for k, v in items:
-            if not(k in protected_keys):
+            if not (k in protected_keys):
                 self.setOption(k, v)
         return ""
 
@@ -628,8 +660,6 @@ class Plumbing(object):
 
     def getOption(self, key):
         return self.options.get(key, None)
-
-
 
     def optionDiffers(self, name, newValue):
         if name not in self.options:
@@ -722,7 +752,9 @@ class Plumbing(object):
 
         try:
             if json["choices"][0]["finish_reason"] != "tool_calls":
-                self.verbose(f"Not using tools: finish_reason={json["choices"][0]["finish_reason"]}")
+                self.verbose(
+                    f"Not using tools: finish_reason={json["choices"][0]["finish_reason"]}"
+                )
                 return nothing
             tool_request = json["choices"][0]["message"]
             tool_calls = tool_request["tool_calls"]
@@ -834,7 +866,6 @@ class Plumbing(object):
             self.setMode(value)
             return
 
-
         oldValue = self.options.get(name, None)
         differs = self.optionDiffers(name, value)
         self.options[name] = value
@@ -907,11 +938,15 @@ class Plumbing(object):
         elif name == "stderr":
             util.printerr_disabled = not (value)
         elif name == "use_tools" and value:
-            printerr("warning: Streaming is currently not supported with tool use. Setting stream = False.")
+            printerr(
+                "warning: Streaming is currently not supported with tool use. Setting stream = False."
+            )
             self.setOption("stream", False)
         elif name == "stream":
             if value and self.getOption("tool_use"):
-                printerr("warning: Streaming is currently not supported with tool use. Setting stream = False.")
+                printerr(
+                    "warning: Streaming is currently not supported with tool use. Setting stream = False."
+                )
                 self.setOption("stream", False)
                 printerr
         return ""
@@ -1072,10 +1107,12 @@ class Plumbing(object):
                     # not a complete sentence yet, let's keep building it
                     return
 
-                if method == "flex" and len(w) < self.getOption("stream_flush_flex_value"):
+                if method == "flex" and len(w) < self.getOption(
+                    "stream_flush_flex_value"
+                ):
                     # sentence isn't long enough yet
                     return
-                
+
             # w is a complete sentence, or a full line
             self.stream_sentence_queue = []
             f(w)
@@ -1167,7 +1204,6 @@ class Plumbing(object):
                 " Automatically set stream_flush to 'flex'. This is recommended with TTS. Manually reset it to 'token' if you really want."
             )
 
-
         # new
         # we try to get the tts config
         # it contains special options specific to a model
@@ -1176,12 +1212,12 @@ class Plumbing(object):
         self.spawnUpdateTTSConfig()
         return "TTS initialized."
 
-
     def spawnUpdateTTSConfig(self) -> None:
         """Spawns a small worker that tries to update the TTS config by communicating with the TTS backend.
         This may fail or simply go on forever. If the worker succeeds, the thread is terminated.
         Invoking this method is non-blocking, but will set self.tts_config to None."""
         self.tts_config = None
+
         def update_config():
             while self.tts_config is None:
                 time.sleep(3)
@@ -1189,7 +1225,7 @@ class Plumbing(object):
                     continue
                 self.tts.write_line("<dump_config>")
                 lines = self.tts.get()
-                for i in range(len(lines)-1, -1, -1):
+                for i in range(len(lines) - 1, -1, -1):
                     line = lines[i]
                     if line.startswith("config: "):
                         try:
@@ -1202,7 +1238,16 @@ class Plumbing(object):
 
         t = threading.Thread(target=update_config, daemon=True)
         t.start()
-        
+
+    def tryGetTTSSpecialTags(self) -> List[str]:
+        """Returns a list of special tags that the underlying tts model may or may not have defined.
+        These are things like <laugh> or <cough>, etc.
+        Returns empty list if no tags can be ascertained."""
+        if self.tts_config is None:
+            return []
+
+        return self.tts_config.get("special_tags", [])
+
     def tryGetAbsVoiceDir(self):
         # this is sort of a heuristic. The problem is that we allow multiple include dirs, but have only one voice dir. So right now we must pick the best from a number of candidates.
         if os.path.isabs(self.getOption("tts_voice_dir")) and os.path.isdir(
@@ -1310,9 +1355,9 @@ class Plumbing(object):
             if not (self.getOption("tts_subtitles")):
                 return
 
-        if not(self.getOption("stdout")):
+        if not (self.getOption("stdout")):
             return
-                   
+
         if not (color) and not (style):
             print(
                 self._ringbuffer(self.getDisplayFormatter().format(w)),
@@ -1628,7 +1673,7 @@ class Plumbing(object):
                 else:
                     if self.getMode() != "chat":
                         output = self.addAIText(generated_w)
-                        print(str(output))                        
+                        print(str(output))
                     else:
                         # formatting is a bit broken in chat mode. Actually chat mode is a bit broken
                         output = generated_w
@@ -1904,11 +1949,12 @@ class Plumbing(object):
 
     def ttsIsSpeaking(self) -> bool:
         """Returns true if the tts is currently speaking.
-        If querying this is not supported by the tts_program, this method will always return False."""
+        If querying this is not supported by the tts_program, this method will always return False.
+        """
         if self.getOption("tts_program") != "ghostbox-tts":
             return False
 
-        if not(self.getOption("tts")):
+        if not (self.getOption("tts")):
             return False
 
         # to figure out if ghostbox-tts is speaking, we send a '<is_speaking> message
@@ -1918,7 +1964,7 @@ class Plumbing(object):
         lines = self.tts.get()
         return "is_speaking: True\n" in lines
 
-        
+
 def main():
     just_fix_windows_console()
     tagged_parser = makeTaggedParser(backends.default_params)
@@ -1942,11 +1988,17 @@ def main():
         regpl(prog)
 
 
-def setup_plumbing(prog: Plumbing, args: Namespace = Namespace(), protected_keys: List[str]=[]) -> None:
+def setup_plumbing(
+    prog: Plumbing, args: Namespace = Namespace(), protected_keys: List[str] = []
+) -> None:
     # the following is setup, though it is subtly different from Plumbing.init, so beware
     if userConfigFile():
         prog.setOption("user_config", userConfigFile())
-        printerr(loadConfig(prog, [userConfigFile()], override=False, protected_keys=protected_keys))
+        printerr(
+            loadConfig(
+                prog, [userConfigFile()], override=False, protected_keys=protected_keys
+            )
+        )
 
     if prog.getOption("config_file"):
         printerr(loadConfig(prog, [prog.options["config_file"]]))
@@ -1976,7 +2028,7 @@ def setup_plumbing(prog: Plumbing, args: Namespace = Namespace(), protected_keys
         del prog.options["http"]
         prog.setOption("http", True)
 
-    if prog.getOption("websock") and not(prog.websock_server_running.is_set()):
+    if prog.getOption("websock") and not (prog.websock_server_running.is_set()):
         del prog.options["websock"]
         prog.setOption("websock", True)
 

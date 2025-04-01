@@ -468,6 +468,13 @@ def makeTaggedParser(default_params) -> TaggedArgumentParser:
         tag=mktag(type=AT.Plumbing, group=AG.TTS),
     )
     parser.add_argument(
+        "--tts_modify_system_msg",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="If enabled, instructions specific to the underlying TTS model will be appended to the system prompt. This may e.g. point out usage of tags like <laugh> and <cough> to the LLM. Support varies depending on model.",
+        tag=mktag(type=AT.Plumbing, group=AG.TTS),
+    )    
+    parser.add_argument(
         "--tts_rate",
         type=int,
         default=50,
