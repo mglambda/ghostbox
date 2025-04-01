@@ -321,9 +321,16 @@ def makeTaggedParser(default_params) -> TaggedArgumentParser:
         "--stream_flush",
         type=str,
         default="token",
-        help="When to flush the streaming buffer. When set to 'token', will print each token immediately. When set to 'sentence', it will wait for a complete sentence before printing. This can be useful for TTS software. Default is 'token'.",
+        help="When to flush the streaming buffer. When set to 'token', will print each token immediately. When set to 'sentence', it will wait for a complete sentence before printing. This can be useful for TTS software. When set to 'flex', will act like 'sentence', but prebuffer a minimum amount of characters before flushing, according to stream_flush_flex_value. Default is 'token'.",
         tag=mktag(type=AT.Plumbing, group=AG.Generation, motd=True),
     )
+    parser.add_argument(
+        "--stream_flush_flex_value",
+        type=int,
+        default=50,
+        help="How many characters (not tokens) at least to buffer before flushing the queue, when stream_flush is set to 'flex'.",
+        tag=mktag(type=AT.Plumbing, group=AG.Generation, motd=False),
+    )    
     parser.add_argument(
         "--cli_prompt",
         type=str,

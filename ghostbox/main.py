@@ -1059,7 +1059,7 @@ class Plumbing(object):
             f(token)
             user_callback(token)
 
-        elif method == "sentence":
+        elif method == "sentence" or method == "flex":
             self.stream_sentence_queue.append(token)
             if "\n" in token:
                 w = "".join(self.stream_sentence_queue)
@@ -1070,6 +1070,11 @@ class Plumbing(object):
                 if w.strip() == "":
                     # not a complete sentence yet, let's keep building it
                     return
+
+                if method == "flex" and len(w) < self.getOption("stream_flush_flex_value"):
+                    # sentence isn't long enough yet
+                    return
+                
             # w is a complete sentence, or a full line
             self.stream_sentence_queue = []
             f(w)
@@ -1155,10 +1160,10 @@ class Plumbing(object):
                 }
             ),
         )
-        self.setOption("stream_flush", "sentence")
+        self.setOption("stream_flush", "flex")
         if self.getOption("verbose"):
             printerr(
-                " Automatically set stream_flush to 'sentence'. This is recommended with TTS. Manually reset it to 'token' if you really want."
+                " Automatically set stream_flush to 'flex'. This is recommended with TTS. Manually reset it to 'token' if you really want."
             )
         return "TTS initialized."
 
