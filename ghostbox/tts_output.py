@@ -49,7 +49,19 @@ class DefaultTTSOutput(TTSOutput):
         self.stop_flag = threading.Event()
         self._queue = Queue()
         self.pyaudio = pyaudio.PyAudio()
+        self.running = True
+        ### streaming stuff
+        # used for streaming only, playing files opens its own pyaudio stream using the wav files parameters
 
+        # we use yet another queue and buffer
+        # that will contain the actual raw audio for streaming mode
+        self._audio_queue = Queue()
+        
+        # this is the actual stream object we will write to
+        # init_stream will start a worker
+        # and set self._stream
+        self._init_stream()
+        
         def play_worker():
             while self.running or not (self._queue.empty()):
                 # don't remove the loop or timeout or else thread will not be terminated through signals
@@ -62,10 +74,53 @@ class DefaultTTSOutput(TTSOutput):
                 self.stop_flag.clear()                
                 self._play(payload)
 
-        self.running = True
         self.worker = threading.Thread(target=play_worker)
         self.worker.start()
 
+
+    def _init_stream(self):
+        """Initializes a stream for streaming playback."""
+        chunk = 512
+        # FIXME: hardcoded some stuff as we are trying out streaming with orpheus first
+        p = self.pyaudio
+        self._stream = p.open(
+            format=p.get_format_from_width(2),
+            channels=1,
+            rate=24000,
+            output=True,
+            frames_per_buffer=chunk,
+        )
+        self._stream.start_stream()
+        # so atm we sometimes get buffer underruns
+        # this is on a rtx 3090 with let's say 150is t/s
+        # it tends to happen at the start of generation, so this is an experimental fix for that particular situation
+        # we don't start streaming until we have n number of audio chunks prebuffered
+        n_prebuffer = 3
+        
+        def stream_worker():
+            skip_prebuffer = False
+            while self.running:
+                if len(self._audio_queue.queue) < n_prebuffer and not(skip_prebuffer):
+                    time.sleep(0.1)
+                    continue
+                else:
+                    skip_prebuffer = True                    
+                    
+                try:
+                    chunk = self._audio_queue.get(timeout=1)
+                except Empty:
+                    skip_prebuffer = False
+                    continue
+                
+                self._stream.write(chunk)
+
+        self._stream_thread = threading.Thread(target=stream_worker, daemon=True)
+        self._stream_thread.start()
+
+    def _stream_write(self, audio_chunk) -> None:
+        """Small helper to play audio chunks in streaming mode."""
+        self._audio_queue.put(audio_chunk)
+        
     def enqueue(self, payload, volume: float = 1.0) -> None:
         self.volume = volume
 
@@ -106,37 +161,25 @@ class DefaultTTSOutput(TTSOutput):
 
 
     def _play_stream(self, audio_stream: Iterator[float], volume: float = 1.0) -> None:
-        import pyaudio
-        chunk = 512
-        # FIXME: hardcoded some stuff as we are trying out streaming with orpheus first
-        p = self.pyaudio
-        stream = p.open(
-            format=p.get_format_from_width(2),
-            channels=1,
-            rate=24000,
-            output=True,
-            frames_per_buffer=chunk,
-        )
-
         # Play the audio data
         for data in audio_stream:
             if self.stop_flag.isSet():
                 break
-            stream.write(data)
+            self._stream_write(data)
 
-        stream.stop_stream()
-        stream.close()
+        #self._stream.stop_stream()
         self.stop_flag.set()
         
     def stop(self) -> None:
         """Instantly interrupts and stops all playback."""
         self.stop_flag.set()
-        self._queue.queue.clear()  # yes
+        self._queue.queue.clear()
+        self._audio_queue.queue.clear()        
 
     def is_speaking(self) -> bool:
-        print(f"{self._queue.empty()=}")
-        print(f"{self.stop_flag.is_set()=}")
-        return not(self._queue.empty()) or not(self.stop_flag.is_set())
+        #print(f"{self._queue.empty()=}")
+        #print(f"{self.stop_flag.is_set()=}")
+        return not(self._queue.empty()) or not(self._audio_queue.empty()) or not(self.stop_flag.is_set())
 
     def shutdown(self) -> None:
         """Gracefully shut down output module, finishing playback of all enqueued files."""
