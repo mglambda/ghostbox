@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-import argparse, traceback, sys, tempfile, ast, shutil
+import argparse, traceback, sys, tempfile, ast, shutil, json
 from ghostbox.definitions import TTSOutputMethod, TTSModel
 from ghostbox.tts_util import *
 from ghostbox.tts_state import *
@@ -99,6 +99,9 @@ def main():
                 elif w == "<is_speaking>":
                     print("is_speaking: " + str(output_module.is_speaking()), flush=True)
                     continue
+                elif w == "<dump_config>":
+                    print("config: " + json.dumps(tts.config))
+                    continue
                 elif w.startswith("/"):
                     vs = w[1:].split(" ")
                     option = vs[0]
@@ -124,8 +127,8 @@ def main():
                 msg_queue.put(eof_token)
                 break
             except:
-                print("Exception caught while blocking. Shutting down gracefully. Below is the full exception.")
-                print(traceback.format_exc())                    
+                printerr("Exception caught while blocking. Shutting down gracefully. Below is the full exception.")
+                printerr(traceback.format_exc())                    
                 time.sleep(3)
                 done.set()
                 break
@@ -164,15 +167,14 @@ def main():
             # timeout was hit
             continue
         except: #EOFError as e:
-            print("Exception caught while blocking. Shutting down gracefully. Below is the full exception.")
-            print(traceback.format_exc())        
-            #prog.handleMixins()
-            #print("EOF encountered. Closing up.")
+            printerr("Exception caught while blocking. Shutting down gracefully. Below is the full exception.")
+            printerr(traceback.format_exc())        
             time.sleep(3)
             os._exit(1)
 
         (msg, cont, err) = prog.processMsg(rawmsg)
-        print(err)
+        if err:
+            printerr(err)
         if cont:
             continue
 
@@ -190,11 +192,11 @@ def main():
             printerr("Ignored `" + e.ignored_value + "`.")
             continue
         except ZeroDivisionError:
-            print("Caught zero division error. Ignoring.")
+            printerr("Caught zero division error. Ignoring.")
             # this happens when the tts is asked to process whitespace and produces a wav file in 0 seconds :) nothing to worry about
             continue
         except AssertionError as e:
-            print(str(e) + "\nwarning: Caught assertion error on msg: " + msg)
+            printerr(str(e) + "\nwarning: Caught assertion error on msg: " + msg)
             prog.retry(msg)
             continue # we retry the msg that was too long
 

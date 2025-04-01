@@ -263,6 +263,7 @@ class Plumbing(object):
         self._systemTokenCount = None
         self.continue_with = ""
         self.tts = None
+        self.tts_config = None
         self.multiline_buffer = ""
         if self.getOption("json_grammar"):
             self.setOption("grammar", getJSONGrammar())
@@ -1165,8 +1166,43 @@ class Plumbing(object):
             printerr(
                 " Automatically set stream_flush to 'flex'. This is recommended with TTS. Manually reset it to 'token' if you really want."
             )
+
+
+        # new
+        # we try to get the tts config
+        # it contains special options specific to a model
+        # unfortunately it will only be available after the model has finished initializing.
+        # so we do it on a seperate thread
+        self.spawnUpdateTTSConfig()
         return "TTS initialized."
 
+
+    def spawnUpdateTTSConfig(self) -> None:
+        """Spawns a small worker that tries to update the TTS config by communicating with the TTS backend.
+        This may fail or simply go on forever. If the worker succeeds, the thread is terminated.
+        Invoking this method is non-blocking, but will set self.tts_config to None."""
+        self.tts_config = None
+        def update_config():
+            while self.tts_config is None:
+                time.sleep(3)
+                if self.tts is None:
+                    continue
+                self.tts.write_line("<dump_config>")
+                lines = self.tts.get()
+                for i in range(len(lines)-1, -1, -1):
+                    line = lines[i]
+                    if line.startswith("config: "):
+                        try:
+                            self.tts_config = json.loads(line[8:])
+                        except:
+                            printerr("warning: Error while reading tts config.")
+                            self.verbose(traceback.format_exc())
+                            # give up and don't keep trying
+                            self.tts_config = {}
+
+        t = threading.Thread(target=update_config, daemon=True)
+        t.start()
+        
     def tryGetAbsVoiceDir(self):
         # this is sort of a heuristic. The problem is that we allow multiple include dirs, but have only one voice dir. So right now we must pick the best from a number of candidates.
         if os.path.isabs(self.getOption("tts_voice_dir")) and os.path.isdir(

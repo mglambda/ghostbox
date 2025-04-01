@@ -211,6 +211,11 @@ def ttsDebug(prog, argv):
 
     w = "tts_program: " + prog.getOption("tts_program")
     w += "\ntts exit code: " + str(prog.tts.exit_code())
+    w += "\ntts config: "
+    if prog.tts_config is None:
+        w += "unavailable"
+    else:
+        w += json.dumps(prog.tts_config, indent=4)
     printerr(w)
 
     w = "\n### STDOUT ###\n"
