@@ -45,7 +45,7 @@ class TTSBackend(ABC):
     def can_stream(self) -> bool:
         return False
 
-    def tts_to_generator(self, text:str) -> Iterator[float]:
+    def tts_to_generator(self, text:str) -> Iterator[bytes]:
         printerr("error: Streaming not supported by this backend.")
     
     @abstractmethod

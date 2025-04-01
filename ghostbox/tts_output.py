@@ -1,4 +1,5 @@
 import traceback, threading, wave, time
+import numpy
 from abc import ABC, abstractmethod
 from functools import *
 from typing import *
@@ -11,16 +12,23 @@ class TTSOutput(ABC):
     """Manages output of TTS sound."""
 
     @abstractmethod
-    def __init__(self, **kwargs):
-        pass
+    def __init__(self, volume: float= 1.0, **kwargs):
+        self.volume = volume
 
     @abstractmethod
-    def enqueue(self, payload: str | Iterator[float], volume: float = 1.0) -> None:
+    def enqueue(self, payload: str | Iterator[bytes]) -> None:
         """Enqeueu a wave file or generator for playback. Start playback immediately if nothing is playing.
         This function is non-blocking.
         :param payload: Either a string denoting the filename of a wave file, or a generator yielding wave audio data."""
         pass
 
+
+    def set_volume(factor: float = 1.0) -> None:
+        """Set the volume for the output module.
+        :param factor: A multiplier that will be applied to the base volume. 1.0 is no change to the base."""
+        self.volume = factor
+        
+    
     def stop(self) -> None:
         """Instantly interrups and stops any ongoing playback. This method is thread safe."""
         pass
@@ -111,7 +119,13 @@ class DefaultTTSOutput(TTSOutput):
                 except Empty:
                     skip_prebuffer = False
                     continue
-                
+
+
+                # FIXME: this doesn't work
+                #if self.volume != 1.0:
+                    #chunk_np = numpy.fromstring(chunk, numpy.int16) * self.volume
+                    #chunk = chunk_np.astype(numpy.int16)
+
                 self._stream.write(chunk)
 
         self._stream_thread = threading.Thread(target=stream_worker, daemon=True)
@@ -121,18 +135,16 @@ class DefaultTTSOutput(TTSOutput):
         """Small helper to play audio chunks in streaming mode."""
         self._audio_queue.put(audio_chunk)
         
-    def enqueue(self, payload, volume: float = 1.0) -> None:
-        self.volume = volume
-
+    def enqueue(self, payload) -> None:
         self._queue.put(payload)
 
-    def _play(self, payload: str | Iterator[float], **kwargs) -> None:
+    def _play(self, payload: str | Iterator[bytes], **kwargs) -> None:
         if type(payload) == str:
             self._play_file(payload, **kwargs)
         else:
             self._play_stream(payload, **kwargs)
             
-    def _play_file(self, filename: str | Iterator[float], volume: float = 1.0) -> None:
+    def _play_file(self, filename: str | Iterator[bytes]) -> None:
         import pyaudio
         wf = wave.open(filename, "rb")
         chunk = 4096
@@ -160,7 +172,7 @@ class DefaultTTSOutput(TTSOutput):
 
 
 
-    def _play_stream(self, audio_stream: Iterator[float], volume: float = 1.0) -> None:
+    def _play_stream(self, audio_stream: Iterator[bytes]) -> None:
         # Play the audio data
         for data in audio_stream:
             if self.stop_flag.isSet():
@@ -257,12 +269,12 @@ class WebsockTTSOutput(TTSOutput):
         self.server_running.clear()
         printerr("Halting websocket server.")
 
-    def enqueue(self, filename: str, volume: float = 1.0) -> None:
+    def enqueue(self, filename: str) -> None:
         """Send a wave file   over the network, or enqueue it to be sent if busy.
         This method is non-blocking."""
         self._queue.put(filename)
 
-    def _play(self, filename: str, volume: float = 1.0) -> None:
+    def _play(self, filename: str) -> None:
         """Sends a wave file ofer the network to all connected sockets."""
         from websockets import ConnectionClosedError
 

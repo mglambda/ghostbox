@@ -16,7 +16,7 @@ def main():
     parser.add_argument("-l", "--language", type=str, default="en", help="Language for the TTS output. Not all TTS models support all languages, and many don't need this option.")
     parser.add_argument("-p", "--pause_duration", type=int, default=1, help="Duration of pauses after newlines. A value of 0 means no or minimal-duration pause.")
     parser.add_argument("-y", "--voice", type=str, default="", help="Name of voice or path to wav file used as a voice sample to clone for models that support cloning.")
-    parser.add_argument("-i", "--volume", type=float, default=1.0, help="Volume for the voice playback.")
+    parser.add_argument("-i", "--volume", type=float, default=1.0, help="Volume for the voice playback. Not supported by all models in all modes (streaming vs file playback).")
     parser.add_argument("-s", "--seed", type=int, default=420, help="Random seed for voice models that use it.")
     parser.add_argument("--sound_dir", type=str, default="sounds", help="Directory where sound files are located to be played with #sound <SNDNAME>")
     parser.add_argument("-m", "--model", type=str, choices=[tm.name for tm in TTSModel], default=TTSModel.zonos.name, help="Text-to-speech model to use.")
@@ -47,9 +47,9 @@ def main():
 
     def initOutputMethod(method: str, args) -> TTSOutput:
         if method == TTSOutputMethod.default.name:
-            return DefaultTTSOutput()
+            return DefaultTTSOutput(volume=args.volume)
         elif method == TTSOutputMethod.websock.name:
-            return WebsockTTSOutput(host=args.websock_host, port=args.websock_port)
+            return WebsockTTSOutput(host=args.websock_host, port=args.websock_port, volume=args.volume)
         raise ValueError("Not a valid output method: " + method + ". Valid choices are " + "\n  ".join([om.name for om in TTSOutputMethod]))
 
     # initialization happens here
@@ -211,7 +211,7 @@ def main():
             payload = newfilename
 
         # queue and play
-        output_module.enqueue(payload, volume=prog.args.volume)
+        output_module.enqueue(payload)
 
 
     # this will let all enqueued files finish playing
