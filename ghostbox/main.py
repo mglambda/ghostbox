@@ -1652,6 +1652,7 @@ class Plumbing(object):
         if generation_callback is None:
             generation_callback = self._print_generation_callback
 
+        self._updateDatetime()
         self.freeze()
 
         def loop_interact(w):
@@ -1687,7 +1688,6 @@ class Plumbing(object):
                 else:
                     if self.getMode() != "chat":
                         output = self.addAIText(generated_w)
-                        print(str(output))
                     else:
                         # formatting is a bit broken in chat mode. Actually chat mode is a bit broken
                         output = generated_w
@@ -1753,7 +1753,10 @@ class Plumbing(object):
             current_tokens = "?"
 
         self.session.setVar("current_tokens", current_tokens)
-
+    def _updateDatetime(self) -> None:
+        """Sets the datetime special var in the current session."""
+        self.session.setVar("datetime", time.strftime("%c"))
+        
     def backup(self):
         """Returns a data structure that can be restored to return to a previous state of the program."""
         # copy strings etc., avoid copying high resource stuff or tricky things, like models and subprocesses
