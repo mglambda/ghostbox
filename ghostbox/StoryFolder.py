@@ -1,9 +1,11 @@
 import jsonpickle #type:ignore
+from pydantic import BaseModel
 import copy 
 from ghostbox.Story import *
 
 class StoryFolder(object):
     """Thin wrapper around a list of Story objects."""
+
     def __init__(self, json_data=None):
         self.stories = [Story()]
         self.index = 0 # points to where to append next

@@ -17,7 +17,7 @@ class Session(object):
             "chat_ai": chat_ai,
             "system_msg": "",
             "current_tokens": "0",
-            "datetime": time.strftime("%c"),
+            "datetime": getAITime(),
         }
         self.stories = StoryFolder()
         self.tools = []

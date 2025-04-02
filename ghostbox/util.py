@@ -10,6 +10,10 @@ import sys
 from functools import *
 
 
+
+def getAITime() -> str:
+    """Returns current time in a format that is unlikely to invalidate the cache when put into the system prompt of an AI."""
+    return time.strftime("%A, %B %d, %Y")
 def getErrorPrefix():
     return " # "
 

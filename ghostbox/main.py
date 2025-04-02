@@ -1775,7 +1775,7 @@ class Plumbing(object):
 
     def _updateDatetime(self) -> None:
         """Sets the datetime special var in the current session."""
-        self.session.setVar("datetime", time.strftime("%c"))
+        self.session.setVar("datetime", getAITime())
 
     def backup(self):
         """Returns a data structure that can be restored to return to a previous state of the program."""
