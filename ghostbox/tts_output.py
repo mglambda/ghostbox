@@ -144,10 +144,10 @@ class DefaultTTSOutput(TTSOutput):
         else:
             self._play_stream(payload, **kwargs)
             
-    def _play_file(self, filename: str | Iterator[bytes]) -> None:
+    def _play_file(self, filename: str) -> None:
         import pyaudio
         wf = wave.open(filename, "rb")
-        chunk = 4096
+        chunk = 1024
         p = self.pyaudio
         stream = p.open(
             format=p.get_format_from_width(wf.getsampwidth()),
@@ -162,8 +162,6 @@ class DefaultTTSOutput(TTSOutput):
             if self.stop_flag.isSet():
                 break
 
-            print(type(data))
-            print(f"{len(data)}")
             stream.write(data)
 
         stream.stop_stream()

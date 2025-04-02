@@ -3,7 +3,7 @@
 if [ -n "${tts_voice_abs_dir}" ]
 then
 # this case is for invocation of this script by ghostbox proper, which sets some environment vars
-    python -m ghostbox.tts -m "${tts_model}" --zonos_model "${tts_zonos_model}" -y "${tts_voice_abs_dir}/${tts_voice}" -o "${tts_output_method}" --volume $tts_volume --websock-host "${tts_websock_host}" --websock-port "${tts_websock_port}" --orpheus_model "$tts_orpheus_model" --llm_server "$tts_llm_server" $tts_additional_arguments		
+    python -m ghostbox.tts -m "${tts_model}" --zonos_model "${tts_zonos_model}" -y "${tts_voice}" --clone_dir "${tts_voice_abs_dir}" --clone "${tts_clone}" -o "${tts_output_method}" --volume $tts_volume --websock-host "${tts_websock_host}" --websock-port "${tts_websock_port}" --orpheus_model "$tts_orpheus_model" --llm_server "$tts_llm_server" $tts_additional_arguments		
 else
     python -m ghostbox.tts $@	
 fi

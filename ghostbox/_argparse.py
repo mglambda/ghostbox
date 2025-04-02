@@ -447,10 +447,10 @@ def makeTaggedParser(default_params) -> TaggedArgumentParser:
         tag=mktag(type=AT.Porcelain, group=AG.TTS),
     )
     parser.add_argument(
-        "--tts_voice_dir",
+        "--tts_clone_dir",
         type=str,
-        default="voices",
-        help="Directory to check first for voice file. Note: This doesn't currently work with all TTS engines, as some don't use files for voices.",
+        default="",
+        help="Directory to check first for wave files used in voice cloning. Note that voice cloning isn't supported by all tts models.",
         tag=mktag(type=AT.Plumbing, group=AG.TTS),
     )
     parser.add_argument(
@@ -528,7 +528,7 @@ def makeTaggedParser(default_params) -> TaggedArgumentParser:
         "--tts_voice",
         type=str,
         default="random",
-        help="Voice file to use for TTS. Default is 'random', which is a special value that picks a random available voice for your chosen tts_program. The value of tts_voice will be changed at startup if random is chosen, so when you find a voice you like you can find out its name with /lsoptions and checking tts_voice.",
+        help="Voice to use for TTS. Default is 'random', which is a special value that picks a random available voice for your chosen tts_program. The value of tts_voice will be changed at startup if random is chosen, so when you find a voice you like you can find out its name with /lsoptions and checking tts_voice. To get a list of voices, start ghostbox with your desired tts model and do /lsvoices.",
         tag=mktag(type=AT.Porcelain, group=AG.TTS),
     )
     parser.add_argument(

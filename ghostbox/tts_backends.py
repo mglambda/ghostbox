@@ -37,7 +37,7 @@ class TTSBackend(ABC):
 
     @abstractmethod
     def tts_to_file(
-        self, text: str, file_path: str, language: str = "en", speaker_file: str = ""
+            self, text: str, file_path: str
     ) -> None:
         """Given a message, writes the message spoken as audio to a wav file."""
         pass
@@ -59,6 +59,17 @@ class TTSBackend(ABC):
         """Set parameters specific to a TTS model."""
         pass
 
+    def clone_voice(self) -> str:
+        """Returns the full path to a voice to be cloned. If the model is not configued to clone a voice, returns empty string."""
+        if (clone := self.config.get("clone", None)) is None:
+            return ""
+
+        if (clone_dir := self.config.get("clone_dir", None)) is None:
+            return ""
+
+        return os.path.join(clone_dir, clone)
+    
+    
     @abstractmethod
     def get_voices(self) -> List[str]:
         """Returns a list of all voices supported by the model.
@@ -92,11 +103,11 @@ class XTTSBackend(TTSBackend):
         self.tts = TTS("tts_models/multilingual/multi-dataset/xtts_v2").to(device)
 
     def tts_to_file(
-        self, text: str, file_path: str, language: str = "en", speaker_file: str = ""
+            self, text: str, file_path: str
     ) -> None:
         printerr("`" + text + "`")
         self.tts.tts_to_file(
-            text=text, speaker_wav=speaker_file, language=language, file_path=file_path
+            text=text, speaker_wav=self.clone_path(), language=self.config.get("language", "en"), file_path=file_path
         )
 
     def split_into_sentences(self, text: str) -> List[str]:
@@ -178,8 +189,16 @@ class ZonosBackend(TTSBackend):
                 self.config[key] = value
 
     def tts_to_file(
-        self, text: str, file_path: str, language: str = "en-us", speaker_file: str = ""
+        self, text: str, file_path: str
     ) -> None:
+        language = self.config["language"]
+        if language == "":
+            language = "en_us"
+            
+        clone = self.clone_path()
+        if clone == "":
+            raise RuntimeError("fatal error: Zonos model currently requires you to specify a voice to clone.")
+        
         import torch
         import torchaudio
         from zonos.conditioning import make_cond_dict
@@ -193,9 +212,9 @@ class ZonosBackend(TTSBackend):
         if language == "en":
             language = "en-us"
 
-        if speaker_file not in self._speakers:
-            self._create_speaker(speaker_file)
-        speaker = self._speakers[speaker_file]
+        if clone not in self._speakers:
+            self._create_speaker(clone)
+        speaker = self._speakers[clone]
 
         torch.manual_seed(self.config["seed"])
         cond_dict = make_cond_dict(
@@ -244,8 +263,13 @@ class ZonosBackend(TTSBackend):
 class KokoroBackend(TTSBackend):
     """Bindings for the indomitable kokoro tts https://github.com/hexgrad/kokoro ."""
 
-    def __init__(self, config: Dict[str, Any] = {}) -> None:
-        super().__init__(config=config)
+    def __init__(self, config: Dict[str, Any] = {}, **kwargs) -> None:
+        super().__init__(config=config, **kwargs)
+        # set some defaults
+        if self.config["voice"] == "":
+            self.config["voice"] = "af_sky"
+            
+        
         self._default_onnx_file = "kokoro-v1.0.onnx"
         self._default_voice_file = "voices-v1.0.bin"
         self._init()
