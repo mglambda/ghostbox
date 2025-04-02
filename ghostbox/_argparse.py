@@ -386,7 +386,7 @@ def makeTaggedParser(default_params) -> TaggedArgumentParser:
         "--tts_orpheus_model",
         type=str,
         default="",
-        help="Filepath or huggingface repo name of the orpheus model you wish to use with the tts. This option is ignored unless you actually set tts_model to orpheus.",
+        help="Filepath to gguf file or huggingface repo name of the orpheus model you wish to use with the tts. Leave empty for some reasonable defaults. If you don't use the default, and set this to a repo, the underlying ghostbox-tts might silently download the snapshot, so check with /ttsdebug. This option is ignored unless you actually set tts_model to orpheus.",
         tag=mktag(type=AT.Plumbing, group=AG.TTS),
     )
     parser.add_argument(

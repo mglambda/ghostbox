@@ -26,6 +26,7 @@ dependencies = [
     "jsonpickle",
     "shutils",
     "nltk",
+    "huggingface-hub",
     "wget",
     "kokoro_onnx[gpu]",
     "websockets",

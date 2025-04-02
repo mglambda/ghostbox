@@ -2,6 +2,7 @@ from typing import *
 import traceback
 import subprocess
 import os
+from glob import glob
 import threading
 import sys
 import requests
@@ -12,6 +13,7 @@ import asyncio
 import numpy as np
 import torch
 import queue
+from huggingface_hub import snapshot_download
 from ghostbox.tts_backends import TTSBackend
 
 
@@ -187,12 +189,13 @@ class OrpheusBackend(TTSBackend):
                 )
 
         # assume model is a huggingface repo
-        # FIXME: llama-server can download it, for others we may have to invoke hfhub here
-        # FIXME FIXME: actually you have to build llama with libcurl to download from hf, which it doesn't do by default, this will give many users a hassle. let's crash for now
-        raise RuntimeError(
-            f"fatal error: Sorry, huggingface download isn't implement yet. You will have to download the model yourself for now at {model}"
-        )
-
+        repo_dir = snapshot_download(model)
+        try:
+            return glob(os.path.join(repo_dir, "*.gguf"))[0]
+        except:
+            raise RuntimeError(f"fatal error: Could not find gguf file in directory '{repo_dir}' after downloading snapshot for '{model}'.")
+            
+        
     def get_config(self) -> Dict[str, Any]:
         return self.config
 

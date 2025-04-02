@@ -4,6 +4,7 @@ from typing import *
 import feedwater
 from functools import *
 from colorama import just_fix_windows_console, Fore, Back, Style
+from huggingface_hub import snapshot_download, try_to_load_from_cache
 from lazy_object_proxy import Proxy  # type: ignore
 import argparse
 from argparse import Namespace
@@ -369,18 +370,19 @@ class Plumbing(object):
         except:
             printerr("warning: Tried to check for tools use with empty history.")
         return False
-    
+
     def _getTTSSpecialMsg(self) -> str:
         """Returns special tags for the TTS or empty string."""
         w = ""
         tags = self.tryGetTTSSpecialTags()
         if tags != []:
-            w += "\nUse the following tags in conversation when appropriate (they will be translated into audio by a TTS model): " + ", ".join(tags)
+            w += (
+                "\nUse the following tags in conversation when appropriate (they will be translated into audio by a TTS model): "
+                + ", ".join(tags)
+            )
 
         return w
-        
 
-    
     def makeGeneratePayload(self, text):
         d = {}
 
@@ -434,7 +436,6 @@ class Plumbing(object):
             if self.getOption("tts_modify_system_msg"):
                 d["system"] += self._getTTSSpecialMsg()
 
-            
             d["messages"] = [
                 {"role": "system", "content": d["system"]}
             ] + copy.deepcopy(self.session.stories.get().to_json())
@@ -1166,6 +1167,24 @@ class Plumbing(object):
         if not (tts_program):
             return "Cannot initialize TTS: No TTS program set."
 
+        # download models if need be
+        # ghostbox-tts does this as well, but it's stupidly tricky to get it's stderr to print to our stderr only for model download
+        # so we do it here to give user some feedback on dl
+        if tts_program == "ghostbox-tts":
+            if (
+                self.getOption("tts_model") == TTSModel.orpheus.name
+                and self.getOption("tts_orpheus_model") == ""
+            ):
+                # the default, which is reasonable for most people, is to use the 4bit quant
+                # if users want some more specific stuff they're going to have to work for it a little bit I guess
+                downloaded = False
+                if (gguf_file := try_to_load_from_cache("isaiahbjork/orpheus-3b-0.1-ft-Q4_K_M-GGUF", "orpheus-3b-0.1-ft-q4_k_m.gguf")) is not None:
+                    if os.path.isfile(gguf_file):
+                        downloaded = True
+
+                if not(downloaded):
+                    snapshot_download("isaiahbjork/orpheus-3b-0.1-ft-Q4_K_M-GGUF")
+
         # pick a voice in case of random
         if self.getOption("tts_voice") == "random":
             # no setOption to avoid recursion
@@ -1221,12 +1240,12 @@ class Plumbing(object):
         def update_config():
             retries = 0
             max_retries = 3
-            
+
             while self.tts_config is None:
                 time.sleep(3)
                 if self.tts is None:
                     continue
-                
+
                 try:
                     # this can fail e.g. if the tts isn't ready yet
                     # but will also fail with a broken pipe if the underlying process is already closed or the ghostbox deleted
@@ -1238,7 +1257,7 @@ class Plumbing(object):
                     if retries >= max_retries:
                         break
                     continue
-                
+
                 for i in range(len(lines) - 1, -1, -1):
                     line = lines[i]
                     if line.startswith("config: "):
@@ -1753,10 +1772,11 @@ class Plumbing(object):
             current_tokens = "?"
 
         self.session.setVar("current_tokens", current_tokens)
+
     def _updateDatetime(self) -> None:
         """Sets the datetime special var in the current session."""
         self.session.setVar("datetime", time.strftime("%c"))
-        
+
     def backup(self):
         """Returns a data structure that can be restored to return to a previous state of the program."""
         # copy strings etc., avoid copying high resource stuff or tricky things, like models and subprocesses
