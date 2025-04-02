@@ -186,7 +186,7 @@ def main():
             if tts.can_stream():
                 payload = tts.tts_to_generator(msg)
             else:
-                tts.tts_to_file(text=msg, speaker_file=prog.getVoiceSampleFile(), file_path=output_file.name)
+                tts.tts_to_file(text=msg, file_path=output_file.name)
                 payload = output_file
         except IgnoreValueError as e:
             # this happens on some bad values that are hard to filter but harmless.

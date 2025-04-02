@@ -552,7 +552,7 @@ class OrpheusBackend(TTSBackend):
         audio_np = detached_audio.numpy()
         # boost the volume as I find the default rather quiet
         # and also apply user volume
-        audio_np = audio_np * 1.5 * self.config["volume"]
+        audio_np = audio_np * 1.25 * self.config["volume"]
         audio_int16 = (audio_np * 32767).astype(np.int16)
         audio_bytes = audio_int16.tobytes()
         return audio_bytes

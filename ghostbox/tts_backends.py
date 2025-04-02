@@ -59,14 +59,15 @@ class TTSBackend(ABC):
         """Set parameters specific to a TTS model."""
         pass
 
-    def clone_voice(self) -> str:
+    def clone_path(self) -> str:
         """Returns the full path to a voice to be cloned. If the model is not configued to clone a voice, returns empty string."""
         if (clone := self.config.get("clone", None)) is None:
             return ""
 
         if (clone_dir := self.config.get("clone_dir", None)) is None:
-            return ""
-
+            # try the current directory
+            clone_dir = "."
+            
         return os.path.join(clone_dir, clone)
     
     
@@ -126,14 +127,15 @@ class XTTSBackend(TTSBackend):
 class ZonosBackend(TTSBackend):
     """Bindings for the zonos v0.1 model. See https://github.com/Zyphra/Zonos"""
 
-    def __init__(self, config: Dict[str, Any] = {}):
-        super().__init__(config=config)
+    def __init__(self, config: Dict[str, Any] = {}, **kwargs):
+        super().__init__(config=config, **kwargs)
         self._speakers = {}
         # default config
-        self.config = {
-            "zonos_model": "Zyphra/Zonos-v0.1-transformer",
+        self.config |= {
+            # we get this from command args
+            #"zonos_model": "Zyphra/Zonos-v0.1-transformer",
+            #"seed": 420,            
             "pitch_std": 200.0,
-            "seed": 420,
         }
         self.config |= self.get_default_emotions()
         self._model_fallback = self.config["zonos_model"]
@@ -193,7 +195,7 @@ class ZonosBackend(TTSBackend):
     ) -> None:
         language = self.config["language"]
         if language == "":
-            language = "en_us"
+            language = "en-us"
             
         clone = self.clone_path()
         if clone == "":
@@ -317,11 +319,13 @@ class KokoroBackend(TTSBackend):
         return voice_file
 
     def tts_to_file(
-        self, text: str, file_path: str, language: str = "en-us", speaker_file: str = ""
+        self, text: str, file_path: str
     ) -> None:
         """Given a message, writes the message spoken as audio to a wav file."""
         import soundfile as sf
-
+        language = self.config.get("language", "en-us")
+        voice = self.config.get("voice", "af_sky")
+        
         if text == "":
             return
 
@@ -329,12 +333,9 @@ class KokoroBackend(TTSBackend):
         if language == "en":
             language = "en-us"
 
-        # FIXME: bit of a hack that exists simply because ghostbox always passes the absolute path to voices, which is meaningless for kokoro
-        speaker_file = os.path.basename(speaker_file)
-
         try:
             samples, sample_rate = self._model.create(
-                text, voice=speaker_file, speed=1.0, lang=language
+                text, voice=voice, speed=1.0, lang=language
             )
             sf.write(file_path, samples, sample_rate)
         except ValueError as e:

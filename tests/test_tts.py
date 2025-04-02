@@ -94,6 +94,26 @@ class TTSTest(unittest.TestCase):
         box.tts_wait()
         box._plumbing.tts.close()
 
+    def test_a_zonos_stream(self):
+        time.sleep(10)
+        box = ghostbox.from_generic(character_folder="test_dolphin",
+                                     tts = True,
+                                    tts_model="zonos",
+                                    tts_clone="clone_me.wav",
+                                     verbose=True)
+        
+        # zonos is a bitch to load
+        time.sleep(15)
+        w = "Hey, can you give an example sentence saying that you are demonstrating the zonos TTS model, which is cloning marius' voice."
+        box.text_stream(w,
+                        chunk_callback= lambda w: None,
+                        generation_callback= lambda w: None)
+
+        box.tts_wait()
+        box._plumbing.tts.close()
+
+
+        
 
 
 def main():
