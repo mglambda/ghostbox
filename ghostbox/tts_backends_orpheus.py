@@ -81,11 +81,18 @@ class OrpheusBackend(TTSBackend):
         if self.config["voice"] == "":
             self.config["voice"] = "tara"
 
-        # FIXME: hack because ghostbox still passes the absolut epath as voice arg. orpheus doesn't need that
-        self.config["voice"] = os.path.basename(self.config["voice"])
+
+        # we boost the volume of all orpheus voices
+        # as I find them too quiet
+        # but tara is especially egregious
+        if self.config["voice"] == "tara":
+            self.volume_boost = 1.5
+        else:
+            # FIXME: keep experimenting, the other voices might not need a boost
+            self.volume_boost = 1.25
+                
             
         from ghostbox.util import printerr
-
         self._print_func = printerr
         # this is used for time stats when streaming, the default value below will be overriden
         self._start_time = time.time()
@@ -552,7 +559,7 @@ class OrpheusBackend(TTSBackend):
         audio_np = detached_audio.numpy()
         # boost the volume as I find the default rather quiet
         # and also apply user volume
-        audio_np = audio_np * 1.25 * self.config["volume"]
+        audio_np = audio_np * self.volume_boost * self.config["volume"]
         audio_int16 = (audio_np * 32767).astype(np.int16)
         audio_bytes = audio_int16.tobytes()
         return audio_bytes
