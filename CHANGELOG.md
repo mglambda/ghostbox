@@ -3,6 +3,10 @@
 In reverse chronological order.
 
 
+v0.22.0         Add Orpheus TTS support.
+v0.21.8         Fix the raw template and legacy backend.
+v0.21.7         Fix output for models that don't use tools when use_tools is enabled.
+v0.21.6         Fix collisions of option names and API methods.
 v0.21.5         Fix not being able to wait for tts to finish speaking.
 v0.21.4         Fix user configs overriding API calls. Also overhaul README.
 v0.21.3         Fix images and multimodality.

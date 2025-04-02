@@ -26,11 +26,22 @@ It also includes `ghostbox-tts`, which allows text-to-speech synthesis with vari
 
 I wrote this because I wanted to build stuff with LLMs, while still understanding what's going on under the hood. And also because I wanted an actually good, blind accessible terminal client. Ghostbox is those things.
 
+## Who this is for
+
+If you
+
+ - are a developer who wants to add AI assistance to your application
+ - are a developer who wants to add structured AI generated content to your program
+ - are anyone who wants a non-trivial terminal client for LLMs
+ - are blind and looking for fully accessible software to engage with AI 
+
+ghostbox might be for you.
+
 ## Features
 <a href="https://raw.github.com/mglambda/ghostbox/master/screenshots/webui.png"><img alt="A screenshot displaying ghostbox used in the Chrome web browser through the Web UI" width="300" align="right" src="https://raw.github.com/mglambda/ghostbox/master/screenshots/webui.png"></a>
  - Generate text, json, or pydantic class instances with LLMs
  - Support for OpenAI, Llama.cpp, Lllama-box, and anyone who supports the OAI API.
- - Interruptible, streaming TTS with Kokoro, Zonos, Amazon Polli, and others.
+ - Interruptible, streaming TTS with orpheus, Kokoro, Zonos, Amazon Polli, and others.
  - Continuous, voice activated transcription with OpenAI's whisper model
  - Include images for multimodal models (OAI and Llama-box only)
  - Create, configure, and switch between AI characters 
@@ -40,6 +51,7 @@ I wrote this because I wanted to build stuff with LLMs, while still understandin
  - Prompt format templates if you want them (you probably don't, everyone uses Jinja now)
  - Self documenting: Try `ghostbox -cghostbox-helper` to have a friendly chat with an expert on the project
  - Much more. This is a work in progress.
+
 
 ## Examples
 
@@ -455,6 +467,96 @@ for an immersive chat with a zen master.
 
 
 ## Additional Resources
+### Orpheus TTS
+
+[Orpheus](https://huggingface.co/canopylabs/orpheus-3b-0.1-pretrained) is a new state-of-the-art TTS model with a natural, conversational style, recently released by [Canopy Labs](https://canopylabs.ai/). It talks like a human, can laugh and sniffle and is permissively licensed (apache as of April 2025, though it should be llama3 licensed IMO). It's honestly really cool. To use it with ghostbox, set `tts_model` to `orpheus`. By default ghostbox will then acquire a [4bit quantization](https://huggingface.co/isaiahbjork/orpheus-3b-0.1-ft-Q4_K_M-GGUF) of the model. This will knock about 2.5 gigs off your vram, with an additional 300 or so MB taken up by the snac decoder. It's worth it though.
+
+Since orpheus is technically an LLM and based on llama3, it needs to be served by an inference engine. `ghostbox-tts` can work with any OpenAI compatible server, but has currently only been tested with llama.cpp. By default, it will try to start the `llama-server` program, so make sure that it is in your path. `ghostbox-tts` will also download other quants, and can be pointed to any gguf file for an orpheus model. See `ghostbox-tts --help` for more.
+
+#### Orpheus Quickstart
+
+1. Make sure llama-server is in your path. You can e.g. do the following, assuming you compiled llama.cpp in `~/llama.cpp/build`
+
+```bash
+cd /usr/bin
+sudo ln -s ~/llama.cpp/build/bin/llama-server
+```
+
+2. Start ghostbox with orpheus
+
+```bash
+ghostbox -cghost --tts --tts_model orpheus
+```
+
+It will then begin to download the quantized model from huggingface. This only has to be done once. After it's done, you can do `/ttsdebug` to see the output of `ghostbox-tts`. It should look something like this
+
+```bash
+ # Initializing orpheus TTS backend.
+ # Using device: cuda
+ # Spawning LLM server...
+ # Considering orpheus model: 
+
+Fetching 3 files:   0%|          | 0/3 [00:00<?, ?it/s]
+Fetching 3 files: 100%|██████████| 3/3 [00:00<00:00, 1886.78it/s]
+ # Executing `llama-server --port 8181 -c 1024 -ngl 999 -fa -ctk q4_0 -ctv q4_0 --mlock`.
+ # Using 'raw' as prompt format template.
+ # Loaded config /home/marius/.config/ghostbox.conf
+ # Dumping TTS config options. Set them with '/<OPTION> <VALUE>'. /ls to list again.
+ #     temperature	0.6
+ #     top_p	0.9
+ #     repeat_penalty	1.1
+ #     max_length	1024
+ #     samplers	['penalties', 'min_p', 'temperature']
+ #     available_voices	['tara', 'leah', 'jess', 'leo', 'dan', 'mia', 'zac', 'zoe']
+ #     special_tags	['<laugh>', '<chuckle>', '<sigh>', '<cough>', '<sniffle>', '<groan>', '<yawn>', '<gasp>']
+ #     voice	jess
+ #     volume	1.0
+ #     start_token_id	128259
+ #     end_token_ids	[128009, 128260, 128261, 128257]
+ #     custom_token_prefix	<custom_token_
+ #     snac_model	hubertsiuzdak/snac_24khz
+ #     sample_rate	24000
+ #     voices	False
+ #     quiet	False
+ #     language	en
+ #     pause_duration	1
+ #     clone	
+ #     clone_dir	/home/marius/prog/ai/ghostbox/voices
+ #     seed	420
+ #     sound_dir	sounds
+ #     model	orpheus
+ #     output_method	default
+ #     websock_host	localhost
+ #     websock_port	5052
+ #     zonos_model	hybrid
+ #     orpheus_quantization	Q4_K_M
+ #     orpheus_model	
+ #     llm_server	
+ #     llm_server_executable	llama-server
+ #     filepath	
+ # Good to go. Reading messages from standard input. Hint: Type stuff and it will be spoken.
+```
+
+And everything should work from there.
+
+#### Cloning with Orpheus
+
+Coming soon!
+
+#### Additional notes on Orpheus
+
+Orpheus is super new and things are a bit volatile. Here's some things to consider:
+ - `tara` is the best voice. I found her a bit quiet though, so `ghostbox-tts` boosts her by 25% by default. She unfortunately also has a light reverb, and I hereby pledge to donate 100% of my egg cartons to Canopy Labs, with which they can plaster the walls of their recording studio for a cheap, DIY soundbooth.
+ - Realtime streaming with the 4bit quant works. Here's how:
+    - According to the orpheus devs, you need~ 80 token/second on the orpheus LLM to do streaming. I have found I needed more like ~100t/s to avoid buffer underruns.
+     - The factory settings for orpheus give me around 60t/s with the 4bit quant (that's on an RTX 3090).
+     - The `ghostbox-tts` default settings replace the top_p sampler with min_p, which roughly doubles the t/s for me.
+     - You can also disable the `penalties` sampler as well, getting a 3x speed boost and dropping the repeat_penalty. However, this will give glitchy results.
+     - This way, I get about 160 to 180 t/s with good quality. Being able to set the samplers is one of the main reasons to use llama.cpp
+     - I don't know why this works. I haven't observed such strong effects of samplers on generation speeds before. This may be due to the relatively large token count, or I made a mistake somewhere. Idk, DM if you can explain.
+ - Orpheus has special conversational tags like `<laugh>` or `<cough>` trained into the model. By default, ghostbox will append these to the system prompt along with instructions if orpheus is being used. You can disable this with the `--no-tts_modify_system_msg` command line option.
+ - The ~2.5G vram proclaimed above are only achievable with a tiny context of 1024 tokens and a quantized KV cache (thanks, llama.cpp). This is enough, though. `ghostbox` and `ghostbox-tts` work together to do chunking on the streamed text to feed on average two complete sentences at a time to the orpheus LLM. This tends to stay within the token limit, while also giving the TTS enough semantic context for nuanced generation. Incidentally, this is also roughly the length of inputs the model was trained on, so it's all coming up milhouse.
+ 
 ### Kokoro
 
 [Kokoro](https://github.com/hexgrad/kokoro) is a very lightweight (<1GB vram) but high-quality TTS model. It is installed by default alongside the ghostbox package, and can be used with ghostbox-tts.
