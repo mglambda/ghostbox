@@ -457,6 +457,9 @@ zm_yunyang""".split(
         "\n"
     )
 
+
+    # hardcoded for random voice selection. user gets the full list from ghostbox-tts after about 3 seconds
+    orpheus_voices = ["tara", "leah", "jess", "leo", "dan", "mia", "zac", "zoe"]
     vs = []
     if prog.getOption("tts_model") == "polly":
         for voice in pollyvoices:
@@ -481,6 +484,8 @@ zm_yunyang""".split(
         else:
             return [voice for voice in kokoro_voice if voice not in english_voices]
 
+    elif prog.getOption("tts_model") == "orpheus":
+        return orpheus_voices
     else:
         # for file in ultraglob(prog.getOption("include"), prog.getOption("tts_voice_dir")):
         vs = [

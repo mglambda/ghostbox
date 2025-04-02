@@ -1219,12 +1219,26 @@ class Plumbing(object):
         self.tts_config = None
 
         def update_config():
+            retries = 0
+            max_retries = 3
+            
             while self.tts_config is None:
                 time.sleep(3)
                 if self.tts is None:
                     continue
-                self.tts.write_line("<dump_config>")
-                lines = self.tts.get()
+                
+                try:
+                    # this can fail e.g. if the tts isn't ready yet
+                    # but will also fail with a broken pipe if the underlying process is already closed or the ghostbox deleted
+                    # hence we give up after max_retries
+                    self.tts.write_line("<dump_config>")
+                    lines = self.tts.get()
+                except:
+                    retries += 1
+                    if retries >= max_retries:
+                        break
+                    continue
+                
                 for i in range(len(lines) - 1, -1, -1):
                     line = lines[i]
                     if line.startswith("config: "):

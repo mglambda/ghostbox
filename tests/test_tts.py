@@ -10,12 +10,10 @@ class TTSTest(unittest.TestCase):
 
     def test_speak(self):
         time.sleep(20)
-        box = ghostbox.from_llamacpp(character_folder="test_dolphin",
+        box = ghostbox.from_generic(character_folder="test_dolphin",
                                      tts = True,
-                                     tts_voice_dir="voices",
-                                     tts_program="/home/marius/prog/ai/ghostbox/tts.sh",
-                                     verbose=True,
-                                     include=["/home/marius/prog/ai/ghostbox"])
+                                     verbose=True)
+        
         w = box.text("Hi how are you?")
         print("You should hear:" + w)
         time.sleep(30)
@@ -25,12 +23,10 @@ class TTSTest(unittest.TestCase):
     def test_speak_async(self):
         # we need to wait for the gpu to release memory
         time.sleep(10)
-        box = ghostbox.from_llamacpp(character_folder="test_dolphin",
+        box = ghostbox.from_generic(character_folder="test_dolphin",
                                      tts = True,
-                                     tts_voice_dir="voices",
-                                     tts_program="/home/marius/prog/ai/ghostbox/tts.sh",
-                                     verbose=True,
-                                     include=["/home/marius/prog/ai/ghostbox"])
+                                     verbose=True)
+                                    
         def f(w):
             print("You should hear:" + w)
         
@@ -44,12 +40,10 @@ class TTSTest(unittest.TestCase):
     def test_speak_stream(self):
         # we need to wait for the gpu to release memory
         time.sleep(10)
-        box = ghostbox.from_llamacpp(character_folder="test_dolphin",
+        box = ghostbox.from_generic(character_folder="test_dolphin",
                                      tts = True,
-                                     tts_voice_dir="voices",
-                                     tts_program="/home/marius/prog/ai/ghostbox/tts.sh",
-                                     verbose=True,
-                                     include=["/home/marius/prog/ai/ghostbox"])        
+                                     verbose=True)
+                                    
         def f(w):
             print("You should hear:" + w)
 
@@ -65,29 +59,51 @@ class TTSTest(unittest.TestCase):
         
     def test_interrupt(self):
         time.sleep(10)
-        box = ghostbox.from_llamacpp(character_folder="test_dolphin",
+        box = ghostbox.from_generic(character_folder="test_dolphin",
                                      tts = True,
-                                     tts_voice_dir="voices",
-                                     tts_program="/home/marius/prog/ai/ghostbox/tts.sh",
-                                     verbose=True,
-                                     include=["/home/marius/prog/ai/ghostbox"])
+                                     verbose=True)
 
         w = "This is an extremely long sentence that should be interrupted after about 5 seconds. It was handcrafted to be extremely long and obnoxious, and it will be repeated 3 times unless I get interrupted."
         done = threading.Event()
+        done.clear()
         def stop_this(w):
             return w
 
 
             
         box.text_async(w, callback=stop_this)
-        #done.wait(timeout=60)
+
         time.sleep(20)
         box.tts_stop()
         box._plumbing.tts.close()
-        
+
+
+    def test_orpheus_stream(self):
+        time.sleep(10)
+        box = ghostbox.from_generic(character_folder="test_dolphin",
+                                     tts = True,
+                                    tts_model="orpheus",
+                                     verbose=True)
+
+        time.sleep(5)
+        w = "Hey, can you give an example sentence saying that you are demonstrating the orpheus TTS model."
+        box.text_stream(w,
+                        chunk_callback= lambda w: None,
+                        generation_callback= lambda w: None)
+
+        box.tts_wait()
+        box._plumbing.tts.close()
+
+
+
 def main():
     unittest.main()
 
+
+        
 if __name__=="__main__":
+    print("Make sure you have headphones for these tests. These kind of require a human listener. Also, grab a coffee, they take a while.") 
     main()
     
+        
+        
