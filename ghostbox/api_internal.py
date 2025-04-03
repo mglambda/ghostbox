@@ -1,7 +1,8 @@
 import os, datetime, glob, sys, requests, traceback, random, json
 from typing import *
 from ghostbox.session import Session
-from ghostbox.util import ultraglob, printerr
+from ghostbox.util import ultraglob, printerr, saveFile
+from ghostbox.StoryFolder import StoryFolder
 
 def start_session(plumbing, filepath: str, keep=False) -> str:
     
@@ -122,3 +123,16 @@ def all_chars(prog) -> List[str]:
             allchars.append(os.path.split(charpath)[1])
 
     return allchars
+
+def save(prog, filename: str = "", overwrite: bool = True) -> str:
+    if filename == "":
+        name = datetime.datetime.now().strftime("%Y-%m-%d-%H:%M:%S") + ".json"
+    else:
+        name = filename
+
+    return saveFile(name, prog.session.stories.toJSON(), overwrite=overwrite)    
+
+def load(prog, filename: str) -> None:
+    w = open(filename, "r").read()
+    s = StoryFolder.from_json(w)
+    prog.session.stories = s            

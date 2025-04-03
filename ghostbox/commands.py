@@ -309,9 +309,13 @@ def saveStoryFolder(prog, argv):
     if len(argv) > 0:
         name = " ".join(argv)
     else:
-        name = datetime.datetime.now().strftime("%Y-%m-%d-%H:%M:%S") + ".json"
+        name = ""
 
-    filename = saveFile(name, prog.session.stories.toJSON())
+    try:
+        filename = save(prog, name, overwrite=False)
+    except RuntimeError:
+        filename = None
+            
     if not (filename):
         return "Could not save story folder. Maybe provide a different filename?"
     return "Saved story folder as " + filename
@@ -343,14 +347,13 @@ def loadStoryFolder(prog, argv):
 
     filename = " ".join(argv)
     try:
-        w = open(filename, "r").read()
-        s = StoryFolder(json_data=w)
+        load(prog, filename)
     except FileNotFoundError as e:
         return "Could not load " + filename + ": file not found."
     except Exception as e:
         printerr(str(e))
         return "Could not load story folder: Maybe bogus JSON?"
-    prog.session.stories = s
+
     return (
         "Ok. Restored "
         + filename

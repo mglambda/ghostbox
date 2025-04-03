@@ -287,6 +287,8 @@ class Plumbing(object):
         self.loadTemplate(self.getOption("prompt_format"), startup=True)
 
         # whisper stuff. We do this with a special init function because it's lazy
+        self._on_transcription = None # Callable[[str],str] or None 
+        self._on_activation = None # Callable[[], None] or None
         self.whisper = self._newTranscriber()
         self.ct = None
         self._defaultSIGINTHandler = signal.getsignal(signal.SIGINT)
@@ -1068,12 +1070,19 @@ class Plumbing(object):
             self.printActivationPhraseWarning()
             return
 
+        if self._on_transcription is not None:
+            w = self._on_transcription(w)
+            
         self.interact(w, self._print_generation_callback)
 
     def _transcriptionOnThresholdCallback(self):
         """Gets called whenever the continuous transcriber picks up audio above the threshold."""
         if self.getOption("audio_interrupt"):
             self.stopAll()
+
+        if self._on_activation is not None:
+            self._on_activation()
+                
 
     def _streamCallback(self, token, user_callback=None, only_once=None):
         if only_once not in self._stream_only_once_token_bag:

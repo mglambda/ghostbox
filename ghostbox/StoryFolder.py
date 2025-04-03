@@ -1,17 +1,20 @@
-import jsonpickle #type:ignore
-from pydantic import BaseModel
+#import jsonpickle #type:ignore
+import json
+from pydantic import BaseModel, Field
 import copy 
 from ghostbox.Story import *
 
-class StoryFolder(object):
+class StoryFolder(BaseModel):
     """Thin wrapper around a list of Story objects."""
-
-    def __init__(self, json_data=None):
-        self.stories = [Story()]
-        self.index = 0 # points to where to append next
-        if json_data:
-            self.stories = jsonpickle.loads(json_data) # throw if illegal json
-            # FIXME: this will crash and burn if json is bogus, but oh well
+    stories: List[Story] = Field(default_factory=lambda: [Story()])
+    index: int = 0
+    
+    #def __init__(self, json_data=None):
+        #self.stories = [Story()]
+        #self.index = 0 # points to where to append next
+        #if json_data:
+            #self.stories = jsonpickle.loads(json_data) # throw if illegal json
+            # #FIXME: this will crash and burn if json is bogus, but oh well
 
     def empty(self):
         return self.stories[self.index] == []
@@ -64,9 +67,14 @@ class StoryFolder(object):
 
     def previousStory(self):
         return self._shiftStory(-1)
+
+    @staticmethod
+    def from_json(json_data: str) -> 'StoryFolder':
+        return StoryFolder(**json.loads(json_data))
     
-    def toJSON(self):
-        return jsonpickle.dumps(self.stories)
+    def toJSON(self) -> str:
+        #return jsonpickle.dumps(self.stories)
+        return json.dumps(self.model_dump())
     
     def shiftTo(self, i):
         l = len(self.stories)

@@ -175,12 +175,13 @@ def filterLineBeginsWith(target, w):
     return "\n".join(acc)
 
 
-def saveFile(filename, w, depth=0):
+def saveFile(filename: str, w:str, overwrite: bool, depth=0):
     # saves w in filename, but won't overwrite existing files, appending .new; returns the successful filename, if at all possible
     if depth > 10:
-        return ""  # give up
+        #return ""  # give up
+        raise RuntimeError(f"error: Cannot save '{filename}': Exceeded depths of appending .new")
 
-    if os.path.isfile(filename):
+    if os.path.isfile(filename) and not(overwrite):
         parts = filename.split(".")
         if len(parts) > 1:
             newfilename = ".".join([parts[0], "new"] + parts[1:])

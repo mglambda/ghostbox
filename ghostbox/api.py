@@ -322,8 +322,34 @@ class Ghostbox:
         self._plumbing.images = {}
 
     # audio transcription
+    def audio_on_transcription(
+        self, transcription_callback: Callable[[str], str]
+    ) -> Ghostbox:
+        """Set a user defined callback that will be invoked on transcribed phrases when audio=True.
+        This callback will be invoked in addition to ghostbox's own processing of the audio phrase, including fuzzy matching of the activation phrase. If you want full control of audio transcription, see adui_transcription_start_custom.
+        :param transcription_callback: Callback function that will receive the successfully transcribed string as only argument. The function's return value will be passed off to the LLM backend as the final user message.
+        :return: The ghostbox instance.
 
-    def audio_start_transcription(
+        Example:
+        box = ghostbox.from_generic(character_folder="doggy",
+        audio=True)
+
+        # with audio = True transcription is starting and the box is listening for microphone input.
+        # but we want to modify the user's inputs to make it more pallatable to dogs.
+        box.audio_on_transcription(lambda w: "woof woof " + w + " woof")
+        while True:
+            # transcription/output loop is happening in the background, need to keep main thread from exiting.
+            # if the user speaks e.g. "come here doggy" and it's above the audio threshold
+            # the LLM will be prompted with "woof woof come here woof".
+            time.sleep(0.1)
+        """
+        self._plumbing._on_transcription = transcription_callback
+        return self
+
+    def audio_on_activation(self, activation_callback: Callable[[], None]) -> Ghostbox:
+        self._plumbing._on_activation = activation_callback
+
+    def audio_transcription_start_custom(
         self,
         transcription_callback: Callable[[str], None],
         threshold_activation_callback: Callable[[], None],
@@ -358,10 +384,49 @@ class Ghostbox:
         )
         return self
 
-    def audio_stop_transcription(self):
+    def audio_transcription_stop(self):
         """Stops an ongoing continuous transcription."""
         if self._ct is not None:
             self._ct.stop()
+
+    # TTS
+
+    def tts_say(self, text: str, interrupt: bool = True) -> Self:
+        """Speak something with the underlying TTS engine.
+        You can modify the tts behaviour by wrapping this call in a `with options(...)` context. For possible options, see the ghostbox documentation of the various tts_* options.
+        :param text: The text to be spoken.
+        :param interrupt: If true, this call will interrupt speech output that is currently in progress (the default). Otherwise, text will be queue and spoken in sequence.
+        :return: The ghostbox instance.
+        """
+        self._plumbing.communicateTTS(text, interrupt=interrupt)
+        return self
+
+    def tts_is_speaking(self) -> bool:
+        """Returns True if the TTS engine is currently speaking."""
+        return self._plumbing.ttsIsSpeaking()
+
+    def tts_wait(self, timeout: Optional[float] = None, minimum: float = 2.0) -> bool:
+        """Blocks thread of execution until the TTS has finished speaking.
+        :param timeout: Number of seconds, if any, after which to resume execution. If you also want to stop the tts you'll have to do that yourself.
+        :param minimum: Number of seconds to wait at minimum. This is useful because, although the TTS engines are realtime capable, there may be a small delay between a request for speech output and the actual output starting.
+        :return: This function always returns True"""
+        begin = time.time()
+        time.sleep(minimum)
+
+        # we have to do it this way because we poll the process in plumbing
+        while self.tts_is_speaking():
+            if timeout is not None:
+                if (time.time() - begin) > timeout:
+                    break
+            time.sleep(0.3)
+        return True
+
+    def tts_stop(self) -> Self:
+        """Stops speech output that is in progress.
+        :return: The ghostbox instance.
+        """
+        self._plumbing.stopTTS()
+        return self
 
     # managing ghostbox operation
 
@@ -463,43 +528,6 @@ class Ghostbox:
 
         module.__dict__[symbol_name] = obj
 
-    def tts_say(self, text: str, interrupt: bool = True) -> Self:
-        """Speak something with the underlying TTS engine.
-        You can modify the tts behaviour by wrapping this call in a `with options(...)` context. For possible options, see the ghostbox documentation of the various tts_* options.
-        :param text: The text to be spoken.
-        :param interrupt: If true, this call will interrupt speech output that is currently in progress (the default). Otherwise, text will be queue and spoken in sequence.
-        :return: The ghostbox instance.
-        """
-        self._plumbing.communicateTTS(text, interrupt=interrupt)
-        return self
-
-    def tts_is_speaking(self) -> bool:
-        """Returns True if the TTS engine is currently speaking."""
-        return self._plumbing.ttsIsSpeaking()
-
-    def tts_wait(self, timeout: Optional[float] = None, minimum: float = 2.0) -> bool:
-        """Blocks thread of execution until the TTS has finished speaking.
-        :param timeout: Number of seconds, if any, after which to resume execution. If you also want to stop the tts you'll have to do that yourself.
-        :param minimum: Number of seconds to wait at minimum. This is useful because, although the TTS engines are realtime capable, there may be a small delay between a request for speech output and the actual output starting.
-        :return: This function always returns True"""
-        begin = time.time()
-        time.sleep(minimum)
-
-        # we have to do it this way because we poll the process in plumbing
-        while self.tts_is_speaking():
-            if timeout is not None:
-                if (time.time() - begin) > timeout:
-                    break
-            time.sleep(0.3)
-        return True
-
-    def tts_stop(self) -> Self:
-        """Stops speech output that is in progress.
-        :return: The ghostbox instance.
-        """
-        self._plumbing.stopTTS()
-        return self
-
     def set_char(
         self,
         character_folder: str,
@@ -538,18 +566,32 @@ class Ghostbox:
     def clear_history(self) -> None:
         """Resets the chat history."""
         self.set_char(self.character_folder, [])
-    
+
     def history(self) -> List[ChatMessage]:
         """Returns the current chat history for this ghostbox instance.
         :return: The chat history.
         """
         return self._plumbing.session.stories.get().getData()
 
+    def save(self, filename: str = "") -> str:
+        """Save chat history and session variables to a file.
+        Note: Currently only saves history.
+        :param filename: Filename for the savefile. If none is provided, a date-time based filename will be generated automatically.
+        :return: Filename of the successfully saved file."""
+        return save(self._plumbing, filename, overwrite=True)
+
+    def load(self, filename: str) -> Ghostbox:
+        """Load a previously saved history and session variables.
+        :param filename: Filename of the file previously generated with ghostbox.save.
+        :return: The ghostbox instance."""
+        load(self._plumbing, filename)
+        return self
+
     # debug
 
     def get_last_request(self) -> Dict[str, Any]:
         """Returns the last request send to the backend server. The dict may be empty if no request was sent yet."""
-        return self._plumbing.getBackend().getLastRequest()        
+        return self._plumbing.getBackend().getLastRequest()
 
     def get_last_result(self) -> Dict[str, Any]:
         """Returns the last result that was retrieved from the server. The dict may be empty if no result was received yet."""
