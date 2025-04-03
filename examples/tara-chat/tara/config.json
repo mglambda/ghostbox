@@ -1,0 +1,7 @@
+{
+	"mode" : "default",
+	"chat_ai": "Tara",
+	"temperature" : 0.8,
+	"tts_model": "orpheus",
+	"tts_voice": "tara"
+}
