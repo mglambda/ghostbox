@@ -68,6 +68,13 @@ def makeTaggedParser(default_params) -> TaggedArgumentParser:
         tag=mktag(type=AT.Plumbing, group=AG.Templates),
     )
     parser.add_argument(
+        "--history",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="If false, do not append messages to chat history. This is used mostly in the API to send system messages that won't clutter up the user's chat history.",
+        tag=mktag(type=AT.Plumbing, group=AG.General),
+    )    
+    parser.add_argument(
         "-T",
         "--prompt_format",
         type=str,

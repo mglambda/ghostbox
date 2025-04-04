@@ -239,6 +239,10 @@ class Plumbing(object):
         util.printerr_callback = self._initial_printerr_callback
         if not (options["stderr"]):
             util.printerr_disabled = True
+        # some general callbacks that are veryuseful
+        self._on_interaction = None # Callable[[], None]
+        self._on_interaction_finished = None # Callable[[], None]
+            
         # this is for the websock clients
         self.stderr_token = "[|STDER|]:"
         self._stdout_ringbuffer = ""
@@ -287,8 +291,9 @@ class Plumbing(object):
         self.loadTemplate(self.getOption("prompt_format"), startup=True)
 
         # whisper stuff. We do this with a special init function because it's lazy
-        self._on_transcription = None # Callable[[str],str] or None 
-        self._on_activation = None # Callable[[], None] or None
+        self._on_transcription = None  # Callable[[str],str] or None
+        self._on_activation = None  # Callable[[], None] or None
+        self._on_transcription_generation = None  # Callable[[str], None]
         self.whisper = self._newTranscriber()
         self.ct = None
         self._defaultSIGINTHandler = signal.getsignal(signal.SIGINT)
@@ -696,7 +701,7 @@ class Plumbing(object):
         return self.getAIColorFormatter() + self.getFormatters()[3]
 
     def addUserText(self, w):
-        if w:
+        if w and self.getOption("history"):
             self.session.stories.get().addUserText(
                 self.getUserFormatter().format(w), image_context=self.images
             )
@@ -724,7 +729,9 @@ class Plumbing(object):
             addition = hint + w
         else:
             addition = self.getAIFormatter().format(hint + w)
-        self.session.stories.get().addAssistantText(addition)
+
+        if self.getOption("history"):
+            self.session.stories.get().addAssistantText(addition)
         return addition
 
     def addSystemText(self, w):
@@ -1073,7 +1080,12 @@ class Plumbing(object):
         if self._on_transcription is not None:
             w = self._on_transcription(w)
             
-        self.interact(w, self._print_generation_callback)
+                
+        self.interact(
+            w,
+            user_generation_callback=self._on_transcription_generation,
+            generation_callback=self._print_generation_callback,
+        )
 
     def _transcriptionOnThresholdCallback(self):
         """Gets called whenever the continuous transcriber picks up audio above the threshold."""
@@ -1082,7 +1094,6 @@ class Plumbing(object):
 
         if self._on_activation is not None:
             self._on_activation()
-                
 
     def _streamCallback(self, token, user_callback=None, only_once=None):
         if only_once not in self._stream_only_once_token_bag:
@@ -1187,11 +1198,16 @@ class Plumbing(object):
                 # the default, which is reasonable for most people, is to use the 4bit quant
                 # if users want some more specific stuff they're going to have to work for it a little bit I guess
                 downloaded = False
-                if (gguf_file := try_to_load_from_cache("isaiahbjork/orpheus-3b-0.1-ft-Q4_K_M-GGUF", "orpheus-3b-0.1-ft-q4_k_m.gguf")) is not None:
+                if (
+                    gguf_file := try_to_load_from_cache(
+                        "isaiahbjork/orpheus-3b-0.1-ft-Q4_K_M-GGUF",
+                        "orpheus-3b-0.1-ft-q4_k_m.gguf",
+                    )
+                ) is not None:
                     if os.path.isfile(gguf_file):
                         downloaded = True
 
-                if not(downloaded):
+                if not (downloaded):
                     snapshot_download("isaiahbjork/orpheus-3b-0.1-ft-Q4_K_M-GGUF")
 
         # pick a voice in case of random
@@ -1684,8 +1700,16 @@ class Plumbing(object):
         self.freeze()
 
         def loop_interact(w):
+            while self._busy.is_set():
+                # another interaction might be happening
+                # respect the jinja template 🔥🔥🔥
+                time.sleep(0.1)
+                
             self._stop_generation.clear()
             communicating = True
+            if self._on_interaction is not None:
+                self._on_interaction()
+                
             self._busy.set()
             (modified_w, hint) = self.modifyInput(w)
             self.addUserText(modified_w)
@@ -1728,6 +1752,9 @@ class Plumbing(object):
             self.unfreeze()
             self._lastInteraction = time_ms()
             self._busy.clear()
+            if self._on_interaction_finished is not None:
+                self._on_interaction_finished()
+                
 
         t = threading.Thread(target=loop_interact, args=[w])
         t.start()

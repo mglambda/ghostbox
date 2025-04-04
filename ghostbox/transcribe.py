@@ -176,14 +176,14 @@ class ContinuousTranscriber(object):
             self.websock_server = WS.serve(self._handle_client, host=self.websock_host, port=self.websock_port)
             self.websock_server.serve_forever()
 
-        server_thread = threading.Thread(target=run_server)
+        server_thread = threading.Thread(target=run_server, daemon=True)
         server_thread.start()
                 
     def _spawnThread(self):
         self.running = True
         self.resume_flag.set()
         self.payload_flag.clear()
-        thread = threading.Thread(target=self._recordLoop, args=())
+        thread = threading.Thread(target=self._recordLoop, args=(), daemon=True)
         thread.start()
 
     def _recordLoop(self):

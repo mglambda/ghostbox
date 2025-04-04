@@ -84,6 +84,11 @@ class Ghostbox:
             self._plumbing.options["tts"] = False
             printerr(toggle_tts(self._plumbing))
 
+        # this will unblock interact
+        # normally this is cleared by the CLI prompt
+        # but we don't have a CLI prompt wit hthe api so
+        self._plumbing._busy.clear()
+
     @contextmanager
     def options(self, **kwargs):
         # copy old values
@@ -141,6 +146,25 @@ class Ghostbox:
         :return: Either None or an object with timing statistics.
         """
         return self._plumbing.getBackend().timings()
+
+    # Generation
+
+    def on_interaction(self, interaction_callback: Callable[[], None]) -> Ghostbox:
+        """Set a callback that is called at the start of every interaction.
+        An interaction is any generation, based on a prompt, wether streaming, asynchronous, invoked through API calls or the audio transcriber etc.
+        :param interaction_callback: A zero argument function called at the start of any interaction.
+        :return: The ghostbox instance."""
+        self._plumbing._on_interaction = interaction_callback
+        return self
+
+    def on_interaction_finished(
+        self, finished_interaction_callback: Callable[[], None]
+    ) -> Ghostbox:
+        """Set a callback function that will be called after an interaction has completely finished.
+        :param finished_interaction_callback: The zero argument function that will be called at the end of an interaction.
+        """
+        self._plumbing._on_interaction_finished = finished_interaction_callback
+        return self
 
     # these are the payload functions
     def text(
@@ -348,6 +372,17 @@ class Ghostbox:
 
     def audio_on_activation(self, activation_callback: Callable[[], None]) -> Ghostbox:
         self._plumbing._on_activation = activation_callback
+        return self
+
+    def audio_on_generation(
+        self, generation_callback: Callable[[str], None]
+    ) -> Ghostbox:
+        """Set a function to be called on a completed generation that was triggered by a transcription.
+        This is similar to setting the generation_callback in text_async, except that this callback will be triggered in the background by an inference initiated by the user speaking into the microphone, instead of you calling bathe async function.
+        :param generation_callback: A function that takes a string, which will be the completed generation of the LLM. It is called when generation has finished.
+        :return: The ghostbox instance."""
+        self._plumbing._on_transcription_generation = generation_callback
+        return self
 
     def audio_transcription_start_custom(
         self,
