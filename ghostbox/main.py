@@ -1711,6 +1711,8 @@ class Plumbing(object):
                 self._on_interaction()
                 
             self._busy.set()
+            if self.getOption("history_force_alternating_roles"):
+                self._ensureAlternatingRoles()            
             (modified_w, hint) = self.modifyInput(w)
             self.addUserText(modified_w)
             while communicating:
@@ -1751,6 +1753,9 @@ class Plumbing(object):
             generation_callback(output)
             self.unfreeze()
             self._lastInteraction = time_ms()
+            if self.getOption("history_force_alternating_roles"):
+                self._ensureAlternatingRoles()
+                
             self._busy.clear()
             if self._on_interaction_finished is not None:
                 self._on_interaction_finished()
@@ -1787,6 +1792,63 @@ class Plumbing(object):
         self._stopInteraction()
         self.stopTTS()
 
+    def _ensureAlternatingRoles(self) -> None:
+        """Rewrites chat history to ensure that 'assistant' and 'user' roles alternate."""
+        # FIXME: this whole approach is kind of smelly
+        # this only became necessary because llama.cpp started throwing errors and refusing to handle requests
+        # with some models and jinja templates enabled, when roles don't alternate properly.
+        # well, jinja is becoming the norm and works well when it doesn't do this kind of pedantry
+        # so I just wanted a quick fix since it's extremely annoying when this comes up while I'm experimenting on something else entirely
+        # I personally disagree with the entire philosophybehind this, and I think you should give the user the choice to make suboptimal or even broken queries.
+        # ofc I understand the opposite view as well, where you force users to make good choices. I just think that approach doesn't fit llama.cpp, which is kind of DIY to the core
+        # ultimately the two views are irreconcilable, and I think llama.cpp should add a --jinja-strict toggle
+        history = self.session.stories.get().data
+        # history is a list of chatmessages
+        if history == []:
+            return
+
+        if len(history) == 1:
+            # this is sort of a weird case
+            # it can happen sometimes with old chars where we used to have initial_msg
+            # so if it's an assistant message, we just pretend there was a user.
+            msg = history[0]
+            if msg.role == "assistant":
+                fake_msg = ChatMessage(role="user", content="[System Message: User is initiating chat but has not send any message yet.]")
+            else:
+                # only a user msg
+                # this is even weirder
+                fake_msg = ChatMessage(role="assistant", content="")
+
+            history.insert(0, fake_msg)
+            return                
+
+
+        # we have n messages in history
+        # for now, we will only consider the last two
+        last = history[-1]
+        before = history[-2]
+        if last.role != before.role:
+            # ok, history is safe
+            # consider also that we might have tool calls
+            # though I don't know maybe the jinja pope will throw a hissy fit about that as well
+            # but I think this is a reasonably safe case
+            return
+
+        # here, we know the roles are equal, which is a problem
+        if last.role == "assistant" or last.role == "user":
+            # this feels wrong but oh well
+            # we are going to merge the two messages
+            before.content = before.content + "\n" + last.content
+            history.pop(-1)
+            return
+        
+            
+        
+
+            
+        
+        
+        
     def hasImages(self):
         return bool(self.images) and self._images_dirty
 

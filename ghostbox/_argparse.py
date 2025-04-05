@@ -73,7 +73,14 @@ def makeTaggedParser(default_params) -> TaggedArgumentParser:
         default=True,
         help="If false, do not append messages to chat history. This is used mostly in the API to send system messages that won't clutter up the user's chat history.",
         tag=mktag(type=AT.Plumbing, group=AG.General),
-    )    
+    )
+    parser.add_argument(
+        "--history_force_alternating_roles",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Force chat history to keep alternating roles between 'assistant' and 'user'. This can be important as many backends require this server-side, throwing a server error if it is not observed. Enabling this will enforce the alternation through a variety of strategies, some of which may alter your messages.",
+        tag=mktag(type=AT.Plumbing, group=AG.General),
+    )        
     parser.add_argument(
         "-T",
         "--prompt_format",
