@@ -1792,6 +1792,31 @@ class Plumbing(object):
         self._stopInteraction()
         self.stopTTS()
 
+    def _aggressively_fix_history(self, history) -> None:
+        """Ensures role alternates between assistant and user with extreme prejudice. Currently untested for tool calls etc."""
+        # this is supposed to be called from _ensure_...
+        if len(history) < 2:
+            return
+
+        # history must start with user msg
+        # we did say 'aggressive'
+        if history[0].role != "user":
+            history.insert(0, ChatMessage(role="user",content="Hello."))
+            
+        # we know that history has at least 2 items
+        # and starts with a user message
+        i = 1
+        while i < len(history):
+            # we consider pairs throughout history
+            before_msg = history[i-1]
+            current_msg = history[i]
+            if before_msg.role == current_msg.role:
+                # if roles happen to be the same, we merge them
+                before_msg.content = before_msg.content + "\n" + current_msg.content
+                del history[i]
+            # if they are different, it's fine
+            i += 1
+
     def _ensureAlternatingRoles(self) -> None:
         """Rewrites chat history to ensure that 'assistant' and 'user' roles alternate."""
         # FIXME: this whole approach is kind of smelly
@@ -1824,31 +1849,31 @@ class Plumbing(object):
 
 
         # we have n messages in history
-        # for now, we will only consider the last two
-        last = history[-1]
-        before = history[-2]
-        if last.role != before.role:
-            # ok, history is safe
-            # consider also that we might have tool calls
-            # though I don't know maybe the jinja pope will throw a hissy fit about that as well
-            # but I think this is a reasonably safe case
+        # FIXME: right now, we defer to the ultra aggressive version, but this is no long term solution
+        if True:
+            # wrapped in if to not confuse black
+            self._aggressively_fix_history(history)
             return
+        else:
+            # This is the less aggressive version, only fixing the last 2 msgs
+            # for now, we will only consider the last two
+            last = history[-1]
+            before = history[-2]
+            if last.role != before.role:
+                # ok, history is safe
+                # consider also that we might have tool calls
+                # though I don't know maybe the jinja pope will throw a hissy fit about that as well
+                # but I think this is a reasonably safe case
+                return
 
-        # here, we know the roles are equal, which is a problem
-        if last.role == "assistant" or last.role == "user":
-            # this feels wrong but oh well
-            # we are going to merge the two messages
-            before.content = before.content + "\n" + last.content
-            history.pop(-1)
-            return
-        
-            
-        
+            # here, we know the roles are equal, which is a problem
+            if last.role == "assistant" or last.role == "user":
+                # this feels wrong but oh well
+                # we are going to merge the two messages
+                before.content = before.content + "\n" + last.content
+                history.pop(-1)
+                return
 
-            
-        
-        
-        
     def hasImages(self):
         return bool(self.images) and self._images_dirty
 

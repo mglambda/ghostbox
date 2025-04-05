@@ -118,6 +118,10 @@ def save_and_exit(prog: Program) -> None:
         # the AI sometimes adds backticks, sometimes not
         # so we just remove them in any case
         new_memory = new_memory.replace("```", "").strip()
+        if new_memory == "":
+            answer = input("AI wants to wipe memory. Really delete it (sometimes this is by mistake)? y/n")
+            if answer != "y":
+                return
         f.write(new_memory)
 
 
