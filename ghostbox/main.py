@@ -702,6 +702,11 @@ class Plumbing(object):
 
     def addUserText(self, w):
         if w and self.getOption("history"):
+            if self.getOption("history_force_alternating_roles"):
+                # we don't want 2 consecutive user messages
+                # and in this particular case we can just extend the last message.
+                w = self._maybe_extend_last_user_message(w)
+                              
             self.session.stories.get().addUserText(
                 self.getUserFormatter().format(w), image_context=self.images
             )
@@ -1817,6 +1822,26 @@ class Plumbing(object):
             # if they are different, it's fine
             i += 1
 
+    def _maybe_extend_last_user_message(self, new_message) -> str:
+        """Part of the entire history_force_alternating_roles suite of methods.
+        If the last message in history is of user role, this method deletes it and then returns new_message with the deleted message's contents prepended."""
+        history = self.session.stories.get().data
+        if len(history) == 0:
+            return new_message
+
+        msg = history[-1]
+        if msg.role == "user":
+            prepended_message = msg.content + "\n" + new_message
+            del history[-1]
+            return prepended_message
+        return new_message
+        
+            
+            
+            
+
+
+        
     def _ensureAlternatingRoles(self) -> None:
         """Rewrites chat history to ensure that 'assistant' and 'user' roles alternate."""
         # FIXME: this whole approach is kind of smelly

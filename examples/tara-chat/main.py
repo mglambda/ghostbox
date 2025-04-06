@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-import os, time, traceback, random, threading, json
+import os, time, traceback, random, threading, json, sys
 import shutil
 import ghostbox
 from ghostbox import Ghostbox
@@ -10,6 +10,11 @@ local_dir = os.path.dirname(os.path.abspath(__file__))
 tara_dir = os.path.join(local_dir, "tara")
 history_file = os.path.join(local_dir, "chat_history.json")
 memory_file = os.path.join(tara_dir, "memory")
+debug_mode = True
+
+def debug(w):
+    if debug_mode:
+        print(w, file=sys.stderr)
 
 
 def ensure_exists(filename: str) -> None:
@@ -54,6 +59,9 @@ class State(BaseModel, arbitrary_types_allowed=True):
         )
 
     def reset_timer(self) -> None:
+        t = time.time()
+        delta = t - self.last_interaction_time
+        debug(f"Timer reset after {delta}")
         self.last_interaction_time = time.time()
 
     def user_activity(self):
@@ -153,6 +161,7 @@ def spawn_timer(prog: Program) -> None:
             # this functions as time.sleep(1)
             # it also prevents the system_msg from interrupting tara
             if box.tts_is_speaking():
+                debug("Resetting due to AI speaking.")
                 state.reset_timer()
             box.tts_wait(minimum=1.0)
 
@@ -198,7 +207,7 @@ def main():
         tts=True,
         # tara has more options set in her config.json
         audio=True,
-        # verbose=True,
+        verbose=True,
         # stderr=False,
         # stdout=False
     )
@@ -214,7 +223,6 @@ def main():
     box.audio_on_transcription(lambda w: modify_transcription(w, prog))
     box.audio_on_activation(lambda: audio_activation(prog))
     box.audio_on_generation(lambda w: state.user_activity())
-    print("lol")
     box.on_interaction(state.reset_timer)
     box.on_interaction_finished(lambda: spawn_timer(prog))
 

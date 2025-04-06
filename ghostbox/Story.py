@@ -19,6 +19,12 @@ class Story(BaseModel):
         self.data.append(new_data)
 
     def addAssistantText(self, w: str, **kwargs):
+        # so it shouldn't come to this but
+        # as a rule, we don't allow empty assistant messages.
+        # since that can break server side when the content field with "" is interpreted as None or something
+        if w == "":
+            w = "..."
+            
         self.data.append(ChatMessage(role="assistant", content= w, **kwargs))
 
     def addRawJSON(self, json: Dict[str, Any]) -> None:
