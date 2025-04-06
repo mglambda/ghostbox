@@ -15,6 +15,12 @@ import torch
 import queue
 from huggingface_hub import snapshot_download
 from ghostbox.tts_backends import TTSBackend
+try:
+    import feedwater
+    _feedwater = True
+except ModuleNotFoundError:
+    _feedwater = False
+    
 
 
 class OrpheusBackend(TTSBackend):
@@ -161,14 +167,21 @@ class OrpheusBackend(TTSBackend):
         # extend so we properly escape the model_name
         cmd_list.extend(["-m", model_name])
         self._print(f"Executing `{command}`.")
-        self._server_process = subprocess.Popen(
-            cmd_list,
-            text=True,
+        global _feedwater
+        if _feedwater:
+            # the advantage of feedwater for our purposes is that it will 100% clean up and kill the process
+            self._server_process = feedwater.run(" ".join(cmd_list))
+        else:
+            # with subprocess, the llama-server might not be killed at program end
+            # which is annoying as it will hold like 3gigs of vram
+            self._server_process = subprocess.Popen(
+                cmd_list,
+                text=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                stdin=subprocess.PIPE,
+            )
 
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            stdin=subprocess.PIPE,
-        )
 
     def _get_orpheus_model_name(self) -> str:
         """Returns filepath to an orpheus model."""

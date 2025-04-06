@@ -168,6 +168,8 @@ def spawn_timer(prog: Program) -> None:
 
             delta = time.time() - state.last_interaction_time
             if delta > limit:
+                debug(f"Reached limit {delta}")
+                delta = round(delta, 2)
                 state.conversation_start_attempts += 1
                 if (
                     state.conversation_start_attempts
@@ -181,12 +183,12 @@ def spawn_timer(prog: Program) -> None:
                     config.max_conversation_start_attempts - 1
                 ):
                     system_msg(
-                        f"User has not interacted in {delta} seconds. You may respond with a message that tries to keep the conversation going. This is the last system message before you will be suspended.",
+                        f"User has not interacted in {delta} seconds. Give a small response indicating that you are still conversing, or gently try to keep the conversation going. This is the last system message before you will be suspended.",
                         box,
                     )
                 else:
                     system_msg(
-                        f"The user has not interacted in {delta} seconds. Try to keep the conversation going by taking a turn yourself.",
+                        f"The user has not interacted in {delta} seconds. Give a short, context appropriate response that indicates you are still engaged in the conversation.",
                         box,
                     )
 
@@ -207,7 +209,7 @@ def main():
         tts=True,
         # tara has more options set in her config.json
         audio=True,
-        verbose=True,
+        #verbose=True,
         # stderr=False,
         # stdout=False
     )
