@@ -2145,10 +2145,18 @@ class Plumbing(object):
         # to figure out if ghostbox-tts is speaking, we send a '<is_speaking> message
         # the return in stdout should be is_speaking: True'
         self.tts.write_line("<is_speaking>")
-        time.sleep(0.1)
-        lines = self.tts.get()
-        return "is_speaking: True\n" in lines
-
+        # FIXME: find a better way for tts and ghostbox to  interact
+        start_t = time.time()
+        limit = 60.0
+        while time.time() - start_t < limit:
+            lines = self.tts.get()
+            for line in lines:
+                if "is_speaking: " in line:
+                    return "is_speaking: True" in line
+            time.sleep(0.1)
+        printerr("warning: TTS is unresponsive when querying for is_speaking state.")
+        return False
+        
 
 def main():
     just_fix_windows_console()

@@ -28,10 +28,10 @@ def ensure_exists(filename: str) -> None:
 
 class Config(BaseModel):
     # time the AI will tolerate non-interaction from the user before receiving a system note to drive the conversation onward
-    awkward_silence_seconds: float = 40.0
-    awkward_silence_std_deviation: float = 3.5
+    awkward_silence_seconds: float = 7.0
+    awkward_silence_std_deviation: float = 2.5
     # with each failed attempt at restarting conversation, how much more time should the ai wait before initiating again
-    awkward_silence_increment: float = 15.0
+    awkward_silence_increment: float = 30.0
     # how many times should the AI try to push before going dormant
     max_conversation_start_attempts: int = 3
 
@@ -157,20 +157,17 @@ def spawn_timer(prog: Program) -> None:
 
             if state.user_is_speaking.is_set():
                 break
-            
-            # this functions as time.sleep(1)
-            # it also prevents the system_msg from interrupting tara
-            if box.tts_is_speaking():
-                debug("Resetting due to AI speaking.")
-                state.reset_timer()
-            box.tts_wait(minimum=1.0)
 
+            if box.tts_is_speaking():
+                #debug("Resetting due to AI speaking.")
+                state.reset_timer()
 
             delta = time.time() - state.last_interaction_time
             if delta > limit:
                 debug(f"Reached limit {delta}")
                 delta = round(delta, 2)
                 state.conversation_start_attempts += 1
+                state.reset_timer()
                 if (
                     state.conversation_start_attempts
                     >= config.max_conversation_start_attempts
@@ -192,6 +189,8 @@ def spawn_timer(prog: Program) -> None:
                         box,
                     )
 
+            time.sleep(1)
+            
     # start the timer
     t = threading.Thread(target=count, daemon=True)
     t.start()
