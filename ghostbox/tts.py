@@ -6,7 +6,8 @@ from ghostbox.tts_state import *
 from ghostbox.tts_backends import *
 from ghostbox.tts_backends_orpheus import OrpheusBackend
 from ghostbox.tts_output import *
-    
+import cProfile
+
 def main():
     program_name = sys.argv[0]
     parser = argparse.ArgumentParser(description= program_name + " - TTS program to consume text from stdin and speak it out/ save it as wav file.")
@@ -31,6 +32,7 @@ def main():
     parser.add_argument("--orpheus_model", type=str, default="", help="The exact orpheus model to use. By default, ghostbox-tts will figure this out on its own based on the value of orpheus_quantization. Setting this option will override orpheus_quantization. You may set this option to either a filepath pointing to a model (e.g. a gguf file), or to a huggingface repo like 'https://huggingface.co/lex-au/Orpheus-3b-FT-Q8_0.gguf'.")
     parser.add_argument("--llm_server", type=str, default="", help="Hostname and port of LLM server to query for models that need it. Currently this is used only by Orpheus. Any OpenAI compatible backend can be used. If this is set, ghostbox-tts will not spawn its own server and options like orpheus_model or orpheus_quantization are ignored.")
     parser.add_argument("--llm_server_executable", type=str, default="llama-server", help="Path to an executable of a server capable of loading LLM models. This is only relevant when ghostbox-tts attempts to spawn its own llm server. Note: only tested with llama.cpp.")
+    parser.add_argument("--profiling", action=argparse.BooleanOptionalAction, default=False, help="Enable profiling. This produces a .prof file that you can analyze for performance statistics.")
     args = parser.parse_args()
 
 
@@ -81,6 +83,10 @@ def main():
     msg_queue = Queue()
     done = threading.Event()
 
+    if args.profiling:
+        # we start profiling as we don't care about how long initialization takes
+        profiler = cProfile.Profile()
+    
     def input_loop():
         nonlocal done
         nonlocal prog
@@ -100,6 +106,13 @@ def main():
                     msg_queue.put(silence_token)
                 elif w == "<is_speaking>":
                     print("is_speaking: " + str(output_module.is_speaking()), flush=True)
+                    continue
+                elif args.profiling and w == "<simulate_eof>":
+                    # this is just convenient for testing, since it can be nontrivial to send EOF ina way that respects the msg queue
+                    msg_queue.put(eof_token)
+                    continue
+                elif args.profiling and w == "<start_profiling>":
+                    profiler.enable()
                     continue
                 elif w == "<dump_config>":
                     print("config: " + json.dumps(tts.config))
@@ -221,7 +234,10 @@ def main():
     # this will let all enqueued files finish playing
     output_module.shutdown()
     prog.cleanup()
-
+    if args.profiling:
+        profiler.disable()
+        profiler.dump_stats("ghostbox-tts.prof")
+    
 if __name__ == "__main__":
     main()
     
