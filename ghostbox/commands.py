@@ -751,7 +751,7 @@ def client_handshake(prog, argv):
     payload = {option : prog.getOption(option) for option in required_options}
     # this will go to the client
     # it will get printed server side but oh well
-    prog.print(RemoteInfo.show_json(json.dumps(payload)))
+    prog.print(RemoteInfo.show_json(json.dumps(payload)), tts=False)
     return ""
 
     

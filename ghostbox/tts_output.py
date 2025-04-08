@@ -245,13 +245,13 @@ class WebsockTTSOutput(TTSOutput):
             try:
                 while self.server_running.isSet():
                     msg = websocket.recv()
-                    # print(msg)
+                    print(msg)
                     if msg == "done":
                         # current sound has finished playing
                         self.go_flag.set()
 
             except websockets.exceptions.ConnectionClosed:
-                pass
+                printerr("[WEBSOCK] Connection with " + str(remote_address) + " closed unexpectedly.")
             finally:
                 self.clients.remove(websocket)
                 # FIXME: this doesn't work with multiple clients. see play()
@@ -304,7 +304,8 @@ class WebsockTTSOutput(TTSOutput):
             # FIXME: this doesn't work 100% correctly with multiple clients (it might be ok though), but that is not the intended use case
             if self.go_flag.isSet():
                 break
-            time.sleep(0.1)
+            time.sleep(1)
+            print("in trap")
 
     def stop(self) -> None:
         """Instantly stop playback and clears the queue."""
@@ -312,7 +313,8 @@ class WebsockTTSOutput(TTSOutput):
         self.stop_flag.set()
         self.go_flag.clear()
         for client in self.clients:
-            client.close()
+            #client.close()
+            client.send("stop")
         printerr("[WEBSOCK] TTS output stopped.")
 
     def is_speaking(self) -> bool:

@@ -1,3 +1,4 @@
+from typing import *
 import os, getpass, shutil, base64, requests, re, csv, glob, time
 
 # removed tortoise dependency because it will require torch, which import multiprocess, which won't work with renpy
@@ -507,3 +508,27 @@ def time_ms():
 
 def compose2(f, g):
     return lambda x: f(g(x))
+
+
+def get_default_microphone_sample_rate(pyaudio_object=None) -> Optional[float]:
+    import pyaudio
+    if pyaudio_object is None:
+        p = pyaudio.PyAudio()
+    else:
+        p = pyaudio_object
+        
+    info = p.get_host_api_info_by_index(0)
+    num_devices = info.get('deviceCount')
+    
+    for i in range(0, num_devices):
+        device_info = p.get_device_info_by_host_api_device_index(0, i)
+        if device_info.get('maxInputChannels') > 0:
+            # This is a microphone device
+            default_sample_rate = device_info.get('defaultSampleRate')
+            if pyaudio_object is None:
+                p.terminate()
+            return default_sample_rate
+    
+    if pyaudio_object is None:
+        p.terminate()
+    return None

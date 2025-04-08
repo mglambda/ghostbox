@@ -5,7 +5,7 @@ from queue import Queue, Empty
 import websockets
 from websockets.sync.client import connect, ClientConnection
 import threading, time, sys, json, traceback
-from ghostbox.util import printerr
+from ghostbox.util import printerr, get_default_microphone_sample_rate
 
 @dataclass
 class RemoteMsg:
@@ -67,8 +67,17 @@ class GhostboxClient:
 
     _print_thread: Optional[threading.Thread] = None
     _websock_thread: Optional[threading.Thread] = None
+    _tts_thread: Optional[threading.Thread] = None
+    _tts_playback_thread: Optional[threading.Thread] = None    
+    _audio_thread: Optional[threading.Thread] = None
     
     _websocket: Optional[ClientConnection] = None
+    _tts_websocket: Optional[ClientConnection] = None    
+
+    # wave chunks are on this queue
+    _tts_play_queue: Queue[bytes] = field(default_factory=Queue)
+    # if set, playback should stop immediately
+    _tts_stop_flag: threading.Event = field(default_factory=threading.Event)
     
 
     def __post_init__(self):
@@ -107,11 +116,13 @@ class GhostboxClient:
         if info.tts and info.tts_websock:
             self._print("TTS service active.")
             no_services = False
-            
+            self._start_tts_client()
 
         if info.audio and info.audio_websock:
             self._print("Audio transcription service active.")
             no_services = False
+            self._start_audio_client()
+            
 
         if no_services:
             self._print("No services active.")
@@ -154,13 +165,15 @@ class GhostboxClient:
         except websockets.exceptions.InvalidURI as e:
             self._print(f"Invalid URI: {e}")
             time.sleep(3)
-        except websockets.exceptions.ConnectionRefusedError as e:
-            self._print(f"Connection refused: {e}")
-            time.sleep(3)
+        #except websockets.exceptions.ConnectionRefusedError as e:
+            #self._print(f"Connection refused: {e}")
+            #time.sleep(3)
         except Exception as e:
             self._print(f"An error occurred while connecting: {e}")
             time.sleep(3)
-        self._print(f"Successfully established connection to {self.uri()}.")
+
+        if self._websocket is not None:
+            self._print(f"Successfully established connection to {self.uri()}.")
 
     def _client_loop(self) -> None:
         """Websock connection loop. Handles connecting and receiving messages from server."""
@@ -199,5 +212,154 @@ class GhostboxClient:
             self._websocket.send(msg)
         except websockets.exceptions.ConnectionClosedError as e:
             self._print(f"Connection closed with error: {e}")
+
+    def _start_tts_client(self) -> None:
+        """Starts a websock client that connects to the remote TTS host and launches a handler loop that plays audio on the local machine."""
+        import pyaudio
+        import wave
+        import numpy as np
+
+        p = pyaudio.PyAudio()
+        stream = None
+        buffer = bytearray()
+
+        info = self._remote_info
+        if not info or not info.tts_websock:
+            self._print("TTS service not available.")
+            return
+
+        uri = f"ws://{info.tts_websock_host}:{info.tts_websock_port}"
+        self._print(f"Connecting to TTS WebSocket at {uri}.")
+
+        def handle_tts_msgs_loop():
+            while self.running:
+                try:
+                    if self._tts_websocket is None:
+                        self._tts_websocket = connect(uri)
+                        
+                    data = self._tts_websocket.recv()
+                    if data == "stop":
+                        self._print("Received stop signal.")
+                        self._tts_stop_flag.set()
+                    else:
+                        self._print("Queueing data.")
+                        self._tts_stop_flag.clear()
+                        self._tts_play_queue.put(data)
+
+                except websockets.exceptions.ConnectionClosedOK:
+                    self._print("TTS WebSocket connection closed normally.")
+                    time.sleep(3)                
+                    continue
+                except websockets.exceptions.ConnectionClosedError as e:
+                    self._print(f"TTS WebSocket connection closed with error: {e}")
+                    time.sleep(3)                
+                    continue
+                except Exception as e:
+                    self._print(f"An error occurred while receiving TTS data: {e}")
+                    continue
+                except Exception as e:
+                    self._print(f"Failed to connect to TTS WebSocket: {e}")
+                    time.sleep(3)
+                    continue
+
+            if stream:
+                stream.stop_stream()
+                stream.close()
+            p.terminate()
+
+        self._tts_thread = threading.Thread(target=handle_tts_msgs_loop, daemon=True)
+        self._tts_thread.start()
+
+        def playback_loop():
+            chunk_size = 1024            
+            nonlocal stream
+            if not stream:
+                stream = p.open(format=pyaudio.paInt16,
+                                channels=1,
+                                rate=24000,
+                                output=True)
+            #stream.write(np.frombuffer(buffer, dtype=np.int16))
+                
+            while self.running:
+                try:
+                    data = self._tts_play_queue.get(timeout=1)
+                except Empty:
+                    continue
+
+                stream.start_stream()
+                for i in range(0, len(data), chunk_size):
+                    if self._tts_stop_flag.is_set():
+                        break
+                    chunk = data[i:i + chunk_size]
+                    stream.write(chunk)
+                self._tts_stop_flag.clear()
+                stream.stop_stream()
+                self._tts_websocket.send("done")
+
+        self._tts_playback_thread = threading.Thread(target=playback_loop, daemon=True)
+        self._tts_playback_thread.start()
+
         
-        
+    def _start_audio_client(self) -> None:
+        """Starts a websock client that connects to the remote audio transcription service and launches a handler loop that records from the local microphone and sends audio data to the remote endpoint."""
+        info = self._remote_info
+        if not info or not info.audio_websock:
+            self._print("Audio transcription service not available.")
+            return
+
+        uri = f"ws://{info.audio_websock_host}:{info.audio_websock_port}"
+        self._print(f"Connecting to Audio WebSocket at {uri}.")
+
+        def record_audio_loop():
+            import pyaudio
+            import wave
+            # FIXME: so on some systems opening pyaudio will vomit a bunch of irrelevant error messages into sdterr
+            # we can turn this off but that will sometimes supress other stderr messages
+            # I don't wanna do that since the client is still under heavy development, we're just going to eat the errors for now
+            p = pyaudio.PyAudio()
+            sample_rate = int(rate) if (rate := get_default_microphone_sample_rate(p)) is not None else 16000
+            chunk_size = 1024
+
+            def send_audio_data(data):
+                try:
+                    websocket.send(data)
+                except websockets.exceptions.ConnectionClosedError as e:
+                    self._print(f"Audio WebSocket connection closed with error: {e}")
+                except Exception as e:
+                    self._print(f"An error occurred while sending audio data: {e}")
+
+            try:
+                with connect(uri) as websocket:
+                    # Send sample rate to the server
+                    websocket.send(f"samplerate:{sample_rate}")
+
+                    stream = p.open(format=pyaudio.paInt16,
+                                      channels=1,
+                                      rate=sample_rate,
+                                      input=True,
+                                      frames_per_buffer=chunk_size)
+
+                    while self.running:
+                        try:
+                            data = stream.read(chunk_size)
+                            send_audio_data(data)
+                        except websockets.exceptions.ConnectionClosedOK:
+                            self._print("Audio WebSocket connection closed normally.")
+                            break
+                        except websockets.exceptions.ConnectionClosedError as e:
+                            self._print(f"Audio WebSocket connection closed with error: {e}")
+                            break
+                        except Exception as e:
+                            self._print(f"An error occurred while recording audio: {e}")
+                            break
+            except Exception as e:
+                self._print(f"Failed to connect to Audio WebSocket: {e}")
+            finally:
+                if stream:
+                    stream.stop_stream()
+                    stream.close()
+                p.terminate()
+
+        self._audio_thread = threading.Thread(target=record_audio_loop, daemon=True)
+        self._audio_thread.start()
+
