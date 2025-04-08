@@ -36,6 +36,7 @@ class RemoteInfo(BaseModel):
             info = RemoteInfo(**data)
         except:
             printerr("warning: Couldn't parse RemoteInfo.")
+            printerr(traceback.format_exc())
             return None
         return info
             
@@ -50,7 +51,10 @@ class GhostboxClient:
     stderr_callback: Callable[[str], None] = printerr
     logging: bool = False
     running: bool = True
-
+    # how many bytes are pushed to the output stream at a time. Note that the authority sits server side, as the server determines the size of the network packets. This value is merely used to set the output stream parameter.
+    # FIXME: make this part of remoteinfo
+    tts_chunk_size: int = 512
+    
 
     # this is what prepends messages if they are supposed to be printed to standard error
     _stderr_token: str = "[|STDER|]:"
@@ -68,7 +72,7 @@ class GhostboxClient:
     _print_thread: Optional[threading.Thread] = None
     _websock_thread: Optional[threading.Thread] = None
     _tts_thread: Optional[threading.Thread] = None
-    _tts_playback_thread: Optional[threading.Thread] = None    
+    _tts_playback_thread: Optional[threading.Thread] = None
     _audio_thread: Optional[threading.Thread] = None
     
     _websocket: Optional[ClientConnection] = None
@@ -243,6 +247,7 @@ class GhostboxClient:
                     data = self._tts_websocket.recv()
                     if data == "stop":
                         self._print("Received stop signal.")
+                        self._tts_play_queue.queue.clear()
                         self._tts_stop_flag.set()
                     elif data == "ok":
                         self._sent_done = True
@@ -261,6 +266,7 @@ class GhostboxClient:
                     continue
                 except Exception as e:
                     self._print(f"An error occurred while receiving TTS data: {e}")
+                    time.sleep(3)                                    
                     continue
                 except Exception as e:
                     self._print(f"Failed to connect to TTS WebSocket: {e}")
@@ -276,7 +282,7 @@ class GhostboxClient:
         self._tts_thread.start()
 
         def playback_loop():
-            chunk_size = 512            
+
             nonlocal stream
             if not stream:
                 stream = p.open(
@@ -284,13 +290,13 @@ class GhostboxClient:
                     format=p.get_format_from_width(2),
                                 channels=1,
                                 rate=24000,
-                    frames_per_buffer=chunk_size,
+                    frames_per_buffer=self.tts_chunk_size,
                                 output=True)
                 stream.start_stream()
 
             while self.running:
                 try:
-                    data = self._tts_play_queue.get(timeout=0.1)
+                    data = self._tts_play_queue.get(timeout=0.01)
                 except Empty:
                     if not(self._sent_done):
                         self._print("Done playing.")
@@ -298,14 +304,8 @@ class GhostboxClient:
                     continue
 
                 self._sent_done = False
-                for i in range(0, len(data), chunk_size):
-                    if self._tts_stop_flag.is_set():
-                        break
-                    chunk = data[i:i + chunk_size]
-                    stream.write(chunk)
-                self._tts_stop_flag.clear()
-                #stream.stop_stream()
-                #self._tts_websocket.send("done")
+                self._tts_stop_flag.clear()                
+                stream.write(data)
 
         self._tts_playback_thread = threading.Thread(target=playback_loop, daemon=True)
         self._tts_playback_thread.start()

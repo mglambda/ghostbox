@@ -132,7 +132,7 @@ def makeTaggedParser(default_params) -> TaggedArgumentParser:
     parser.add_argument(
         "--remote_host",
         type=str,
-        default="",
+        default="localhost",
         help="Remote address to connect to with --client.",
         tag=mktag(type=AT.Porcelain, group=AG.General),
     )
