@@ -46,7 +46,7 @@ class GhostboxClient:
 
     remote_host: str
     remote_port: int = 5150
-    stdout_callback: Callable[[str], None] = lambda w: print(w, end="")
+    stdout_callback: Callable[[str], None] = lambda w: print(w, end="", flush=True)
     stderr_callback: Callable[[str], None] = printerr
     logging: bool = False
     running: bool = True
