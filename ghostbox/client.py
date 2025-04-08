@@ -78,6 +78,9 @@ class GhostboxClient:
     _tts_play_queue: Queue[bytes] = field(default_factory=Queue)
     # if set, playback should stop immediately
     _tts_stop_flag: threading.Event = field(default_factory=threading.Event)
+    # did the server get notified that we are done playing?
+    _sent_done: bool = False
+    
     
 
     def __post_init__(self):
@@ -241,8 +244,10 @@ class GhostboxClient:
                     if data == "stop":
                         self._print("Received stop signal.")
                         self._tts_stop_flag.set()
+                    elif data == "ok":
+                        self._sent_done = True
                     else:
-                        self._print("Queueing data.")
+                        self._print(f"Queueing {len(data)} bytes.")
                         self._tts_stop_flag.clear()
                         self._tts_play_queue.put(data)
 
@@ -271,30 +276,36 @@ class GhostboxClient:
         self._tts_thread.start()
 
         def playback_loop():
-            chunk_size = 1024            
+            chunk_size = 512            
             nonlocal stream
             if not stream:
-                stream = p.open(format=pyaudio.paInt16,
+                stream = p.open(
+                    #format=pyaudio.paInt16,
+                    format=p.get_format_from_width(2),
                                 channels=1,
                                 rate=24000,
+                    frames_per_buffer=chunk_size,
                                 output=True)
-            #stream.write(np.frombuffer(buffer, dtype=np.int16))
-                
+                stream.start_stream()
+
             while self.running:
                 try:
-                    data = self._tts_play_queue.get(timeout=1)
+                    data = self._tts_play_queue.get(timeout=0.1)
                 except Empty:
+                    if not(self._sent_done):
+                        self._print("Done playing.")
+                        self._tts_websocket.send("done")
                     continue
 
-                stream.start_stream()
+                self._sent_done = False
                 for i in range(0, len(data), chunk_size):
                     if self._tts_stop_flag.is_set():
                         break
                     chunk = data[i:i + chunk_size]
                     stream.write(chunk)
                 self._tts_stop_flag.clear()
-                stream.stop_stream()
-                self._tts_websocket.send("done")
+                #stream.stop_stream()
+                #self._tts_websocket.send("done")
 
         self._tts_playback_thread = threading.Thread(target=playback_loop, daemon=True)
         self._tts_playback_thread.start()
@@ -326,7 +337,7 @@ class GhostboxClient:
                 except websockets.exceptions.ConnectionClosedError as e:
                     self._print(f"Audio WebSocket connection closed with error: {e}")
                 except Exception as e:
-                    self._print(f"An error occurred while sending audio data: {e}")
+                    self._print(f"An error occurred while sending audio data: {e}\n" + traceback.format_exc())
 
             try:
                 with connect(uri) as websocket:

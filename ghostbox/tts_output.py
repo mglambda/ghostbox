@@ -222,12 +222,15 @@ class WebsockTTSOutput(TTSOutput):
             while self.server_running.isSet() or not (self._queue.empty()):
                 # don't remove the loop or timeout or else thread will not be terminated through signals
                 try:
-                    filename = self._queue.get(timeout=1)
+                    payload = self._queue.get(timeout=1)
                 except Empty:
                     continue
 
-                # _play will block until stop is called or playback finishes
-                self._play(filename)
+                if type(payload) == str:
+                    # _play will block until stop is called or playback finishes
+                    self._play_file(payload)
+                else:
+                    self._play_stream(payload)
 
         # start queue worker
         self.worker_thread = threading.Thread(target=play_worker)
@@ -245,11 +248,10 @@ class WebsockTTSOutput(TTSOutput):
             try:
                 while self.server_running.isSet():
                     msg = websocket.recv()
-                    print(msg)
                     if msg == "done":
                         # current sound has finished playing
                         self.go_flag.set()
-
+                        websocket.send("ok")
             except websockets.exceptions.ConnectionClosed:
                 printerr("[WEBSOCK] Connection with " + str(remote_address) + " closed unexpectedly.")
             finally:
@@ -267,12 +269,12 @@ class WebsockTTSOutput(TTSOutput):
         self.server_running.clear()
         printerr("Halting websocket server.")
 
-    def enqueue(self, filename: str) -> None:
-        """Send a wave file   over the network, or enqueue it to be sent if busy.
+    def enqueue(self, payload: str | Iterator[bytes]) -> None:
+        """Send a wave file   over the network, or enqueue it to be sent if busy. Alternatively, send bytes from a generator stream over the network.
         This method is non-blocking."""
-        self._queue.put(filename)
+        self._queue.put(payload)
 
-    def _play(self, filename: str) -> None:
+    def _play_file(self, filename: str) -> None:
         """Sends a wave file ofer the network to all connected sockets."""
         from websockets import ConnectionClosedError
 
@@ -304,9 +306,37 @@ class WebsockTTSOutput(TTSOutput):
             # FIXME: this doesn't work 100% correctly with multiple clients (it might be ok though), but that is not the intended use case
             if self.go_flag.isSet():
                 break
-            time.sleep(1)
+            time.sleep(0.1)
             print("in trap")
 
+
+    def _play_stream(self, audio_stream: Iterator[bytes]) -> None: 
+        """Sends chunks from a stream generator over the network."""
+        from websockets import ConnectionClosedError
+
+        printerr("[WEBSOCK] Playing audio stream with " + str(len(self.clients)) + " clients.")
+        
+        for data in audio_stream:
+            for client in self.clients:
+                try:
+                    client.send(data, text=False)
+                except ConnectionClosedError:
+                    print(
+                        "[WEBSOCK] error: Unable to send data to "
+                        + str(client.remote_address)
+                        + ": Connection closed."
+                    )
+                    break
+                
+        # we block now, just as if we were playing the sound waiting for it to finish
+        self.go_flag.clear()
+        while True:
+            # FIXME: this doesn't work 100% correctly with multiple clients (it might be ok though), but that is not the intended use case
+            if self.go_flag.isSet():
+                break
+            time.sleep(0.1)
+            print("in trap")
+            
     def stop(self) -> None:
         """Instantly stop playback and clears the queue."""
         self._queue.queue.clear()
