@@ -4,6 +4,7 @@ from ghostbox.util import *
 from ghostbox.StoryFolder import *
 from ghostbox.definitions import *
 from ghostbox.api_internal import *
+from ghostbox.client import RemoteInfo
 
 
 def newSession(program, argv, keep=False):
@@ -743,6 +744,17 @@ def detokenize(prog, argv):
     print(w)
     return ""
 
+def client_handshake(prog, argv):
+    """
+    Internal command used by ghostbox in --client mode."""
+    required_options = RemoteInfo.model_fields.keys()
+    payload = {option : prog.getOption(option) for option in required_options}
+    # this will go to the client
+    # it will get printed server side but oh well
+    prog.print(RemoteInfo.show_json(json.dumps(payload)))
+    return ""
+
+    
 
 def testQuestion(prog, argv):
     """

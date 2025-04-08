@@ -1,9 +1,10 @@
 from typing import *
 from dataclasses import dataclass, field
+from pydantic import BaseModel, Field
 from queue import Queue, Empty
 import websockets
 from websockets.sync.client import connect, ClientConnection
-import threading, time, sys
+import threading, time, sys, json, traceback
 from ghostbox.util import printerr
 
 @dataclass
@@ -11,6 +12,33 @@ class RemoteMsg:
     text: str
     is_stderr: bool = False
 
+_remote_info_token = "RemoteInfo: "
+
+class RemoteInfo(BaseModel):
+    tts: bool
+    tts_websock: bool
+    tts_websock_host: str
+    tts_websock_port: int
+    audio: bool
+    audio_websock: bool
+    audio_websock_host: str
+    audio_websock_port: int
+
+
+    @staticmethod
+    def show_json(data: str) -> str:
+        return _remote_info_token + data
+
+    @staticmethod
+    def maybe_from_remote_payload(line: str) -> Optional['RemoteInfo']:
+        try:
+            data = json.loads(line[len(_remote_info_token):])
+            info = RemoteInfo(**data)
+        except:
+            printerr("warning: Couldn't parse RemoteInfo.")
+            return None
+        return info
+            
 @dataclass
 class GhostboxClient:
     """Holds connection information and runs a remote session with a ghostbox started with --server.
@@ -28,10 +56,13 @@ class GhostboxClient:
     _stderr_token: str = "[|STDER|]:"
     # this will be computed on init
     _stderr_token_length: int = 0
+
+
+    # this carries information about remote services
+    _remote_info: Optional[RemoteInfo] = None
     
     # queue that carries messages that are sent from remote box, so it's the remote's stdout and stderr
     _message_queue: Queue[RemoteMsg] = field(default_factory=Queue)
-
     
 
     _print_thread: Optional[threading.Thread] = None
@@ -64,12 +95,27 @@ class GhostboxClient:
         
         # we need to know if we have to start audio and tts on the client box
         # we will start them if they are being served on the remote box
-        # to find out what is served, we do a handshake.
-        #self.write_line("/client_handshake")
-        # the results of this are handled in _client_loop
+        # to find out what is served, we do a client handshake
+        self._print("Determining remote services.")
+        while self._remote_info is None:
+            if self._websocket is not None:
+                self.write_line("/client_handshake")
+            time.sleep(1)
 
+        info = self._remote_info
+        no_services = True
+        if info.tts and info.tts_websock:
+            self._print("TTS service active.")
+            no_services = False
+            
 
-    
+        if info.audio and info.audio_websock:
+            self._print("Audio transcription service active.")
+            no_services = False
+
+        if no_services:
+            self._print("No services active.")
+            
     def _print(self, log_msg) -> None:
         if self.logging:
             print(f"[Client] {log_msg} :: {time.strftime("%c")}", file=sys.stderr)
@@ -124,12 +170,17 @@ class GhostboxClient:
                 
             try:
                 msg = self._websocket.recv()
-                # FIXME: this is absolutely not the right way to do it
-                # addendum: if a plan is stupid, but it works, then it's not stupid
-                if msg.startswith(self._stderr_token):
+                if self._remote_info is None and msg.startswith(_remote_info_token):
+                    # note that currently, updating the remote info while server is running is not supported
+                    # only way to do that is to reconnect
+                    if (info := RemoteInfo.maybe_from_remote_payload(msg)) is not None:
+                        self._remote_info = info
+                elif msg.startswith(self._stderr_token):
                     self._message_queue.put(RemoteMsg(text=msg[self._stderr_token_length:], is_stderr=True))
                 else:
                     self._message_queue.put(RemoteMsg(text=msg))
+
+                    
             except websockets.exceptions.ConnectionClosedOK:
                 self._print("Connection closed normally.")
                 self._websocket = None
@@ -137,7 +188,7 @@ class GhostboxClient:
                 self._print(f"Connection closed with error: {e}")
                 self._websocket = None
             except Exception as e:
-                self._print(f"An error occurred while receiving: {e}")
+                self._print(f"An error occurred while receiving: {e}\n" + traceback.format_exc())
                 time.sleep(5)
                 # ??? what to do here
 

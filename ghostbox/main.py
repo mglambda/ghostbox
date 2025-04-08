@@ -169,6 +169,7 @@ cmds = [
     ("/start", newSession),
     ("/switch", switch),
     ("/quit", exitProgram),
+    ("/client_handshake", client_handshake),    
     ("/test", testQuestion),
     ("/restart", lambda prog, argv: newSession(prog, [])),
     ("/print", printStory),
