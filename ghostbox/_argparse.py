@@ -123,6 +123,27 @@ def makeTaggedParser(default_params) -> TaggedArgumentParser:
         tag=mktag(type=AT.Porcelain, group=AG.Backend),
     )
     parser.add_argument(
+        "--client",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help="Run ghostbox in client mode, connecting to the remote address specified with --remote_host and --remote_port. The remote host must run a ghostbox instance started with --http.",
+        tag=mktag(type=AT.Porcelain, group=AG.General),
+    )
+    parser.add_argument(
+        "--remote_host",
+        type=str,
+        default="",
+        help="Remote address to connect to with --client.",
+        tag=mktag(type=AT.Porcelain, group=AG.General),
+    )
+    parser.add_argument(
+        "--remote_port",
+        type=int,
+        default=5150,
+        help="Remote port to connect to in client mode.",
+        tag=mktag(type=AT.Porcelain, group=AG.General),
+    )    
+    parser.add_argument(
         "--backend",
         type=str,
         default=LLMBackend.generic.name,

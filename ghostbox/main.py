@@ -20,6 +20,7 @@ from ghostbox.session import Session
 from ghostbox.pftemplate import *
 from ghostbox.backends import *
 from ghostbox import backends
+from ghostbox.client import GhostboxClient
 import ghostbox
 
 
@@ -240,9 +241,9 @@ class Plumbing(object):
         if not (options["stderr"]):
             util.printerr_disabled = True
         # some general callbacks that are veryuseful
-        self._on_interaction = None # Callable[[], None]
-        self._on_interaction_finished = None # Callable[[], None]
-            
+        self._on_interaction = None  # Callable[[], None]
+        self._on_interaction_finished = None  # Callable[[], None]
+
         # this is for the websock clients
         self.stderr_token = "[|STDER|]:"
         self._stdout_ringbuffer = ""
@@ -706,7 +707,7 @@ class Plumbing(object):
                 # we don't want 2 consecutive user messages
                 # and in this particular case we can just extend the last message.
                 w = self._maybe_extend_last_user_message(w)
-                              
+
             self.session.stories.get().addUserText(
                 self.getUserFormatter().format(w), image_context=self.images
             )
@@ -1084,8 +1085,7 @@ class Plumbing(object):
 
         if self._on_transcription is not None:
             w = self._on_transcription(w)
-            
-                
+
         self.interact(
             w,
             user_generation_callback=self._on_transcription_generation,
@@ -1709,15 +1709,15 @@ class Plumbing(object):
                 # another interaction might be happening
                 # respect the jinja template 🔥🔥🔥
                 time.sleep(0.1)
-                
+
             self._stop_generation.clear()
             communicating = True
             if self._on_interaction is not None:
                 self._on_interaction()
-                
+
             self._busy.set()
             if self.getOption("history_force_alternating_roles"):
-                self._ensureAlternatingRoles()            
+                self._ensureAlternatingRoles()
             (modified_w, hint) = self.modifyInput(w)
             self.addUserText(modified_w)
             while communicating:
@@ -1760,11 +1760,10 @@ class Plumbing(object):
             self._lastInteraction = time_ms()
             if self.getOption("history_force_alternating_roles"):
                 self._ensureAlternatingRoles()
-                
+
             self._busy.clear()
             if self._on_interaction_finished is not None:
                 self._on_interaction_finished()
-                
 
         t = threading.Thread(target=loop_interact, args=[w])
         t.start()
@@ -1806,14 +1805,14 @@ class Plumbing(object):
         # history must start with user msg
         # we did say 'aggressive'
         if history[0].role != "user":
-            history.insert(0, ChatMessage(role="user",content="Hello."))
-            
+            history.insert(0, ChatMessage(role="user", content="Hello."))
+
         # we know that history has at least 2 items
         # and starts with a user message
         i = 1
         while i < len(history):
             # we consider pairs throughout history
-            before_msg = history[i-1]
+            before_msg = history[i - 1]
             current_msg = history[i]
             if before_msg.role == current_msg.role:
                 # if roles happen to be the same, we merge them
@@ -1824,7 +1823,8 @@ class Plumbing(object):
 
     def _maybe_extend_last_user_message(self, new_message) -> str:
         """Part of the entire history_force_alternating_roles suite of methods.
-        If the last message in history is of user role, this method deletes it and then returns new_message with the deleted message's contents prepended."""
+        If the last message in history is of user role, this method deletes it and then returns new_message with the deleted message's contents prepended.
+        """
         history = self.session.stories.get().data
         if len(history) == 0:
             return new_message
@@ -1835,13 +1835,7 @@ class Plumbing(object):
             del history[-1]
             return prepended_message
         return new_message
-        
-            
-            
-            
 
-
-        
     def _ensureAlternatingRoles(self) -> None:
         """Rewrites chat history to ensure that 'assistant' and 'user' roles alternate."""
         # FIXME: this whole approach is kind of smelly
@@ -1863,15 +1857,17 @@ class Plumbing(object):
             # so if it's an assistant message, we just pretend there was a user.
             msg = history[0]
             if msg.role == "assistant":
-                fake_msg = ChatMessage(role="user", content="[System Message: User is initiating chat but has not send any message yet.]")
+                fake_msg = ChatMessage(
+                    role="user",
+                    content="[System Message: User is initiating chat but has not send any message yet.]",
+                )
             else:
                 # only a user msg
                 # this is even weirder
                 fake_msg = ChatMessage(role="assistant", content="")
 
             history.insert(0, fake_msg)
-            return                
-
+            return
 
         # we have n messages in history
         # FIXME: right now, we defer to the ultra aggressive version, but this is no long term solution
@@ -2156,13 +2152,29 @@ class Plumbing(object):
             time.sleep(0.1)
         printerr("warning: TTS is unresponsive when querying for is_speaking state.")
         return False
-        
+
 
 def main():
     just_fix_windows_console()
     tagged_parser = makeTaggedParser(backends.default_params)
     parser = tagged_parser.get_parser()
     args = parser.parse_args()
+    if args.client:
+        # we do something completely different
+        client = GhostboxClient(
+            remote_host=args.remote_host, remote_port=args.remote_port, logging=args.verbose
+        )
+        while client.running:
+            try:
+                w = input()
+                if w == "/quit":
+                    client.shutdown()
+                else:
+                    client.write_line(w)
+            except EOFError:
+                client.shutdown()
+        return
+
     prog = Plumbing(
         options=args.__dict__,
         initial_cli_prompt=args.cli_prompt,
