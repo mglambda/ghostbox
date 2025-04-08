@@ -34,6 +34,11 @@ function init_tts_socket () {
         const audioData = event.data;
         //const pcmData = new Int16Array(audioData);
 
+
+        if (event.data == "ok") {
+            return;
+        }
+		
         if (!tts_audioContext || isMuted) {
             return;
         }

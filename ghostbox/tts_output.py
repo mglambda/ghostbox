@@ -108,7 +108,7 @@ class DefaultTTSOutput(TTSOutput):
             skip_prebuffer = False
             while self.running:
                 if len(self._audio_queue.queue) < n_prebuffer and not (skip_prebuffer):
-                    time.sleep(0.1)
+                    time.sleep(0.01)
                     continue
                 else:
                     skip_prebuffer = True

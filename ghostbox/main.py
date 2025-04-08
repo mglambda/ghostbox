@@ -20,7 +20,7 @@ from ghostbox.session import Session
 from ghostbox.pftemplate import *
 from ghostbox.backends import *
 from ghostbox import backends
-from ghostbox.client import GhostboxClient
+from ghostbox.client import GhostboxClient, client_cli_token
 import ghostbox
 
 
@@ -2083,16 +2083,20 @@ class Plumbing(object):
         """Checks wether we are busy. If we are busy and then aren't, we print the CLI prompt."""
         # we don't want to use the self.print, nor printerr for this as both of them have side effects
         # this really is just for terminal users
-        print_cli = lambda prefix="": print(
-            prefix + self.showCLIPrompt(), file=sys.stderr, end="", flush=True
-        )
+        def print_cli(prefix=""):
+            prompt = prefix + self.showCLIPrompt()
+            print(
+                prompt, file=sys.stderr, end="", flush=True
+            )
+            if self.getOption("websock"):
+                self.websockSend(client_cli_token + prompt)
 
         def cli_printer():
             while self.running:
                 self._busy.wait()
                 while self._busy.is_set():
                     # don't blow up potato cpu
-                    # user can wait for their coveted cli for 10ms
+                    # user can wait for their coveted cli for 100ms
                     time.sleep(0.1)
                     continue
 
@@ -2165,17 +2169,9 @@ def main():
         client = GhostboxClient(
             remote_host=args.remote_host, remote_port=args.remote_port, logging=args.verbose
         )
-        while client.running:
-            try:
-                w = input()
-                if w == "/quit":
-                    client.shutdown()
-                else:
-                    client.write_line(w)
-            except EOFError:
-                client.shutdown()
+        client.input_loop()
         return
-
+    
     prog = Plumbing(
         options=args.__dict__,
         initial_cli_prompt=args.cli_prompt,

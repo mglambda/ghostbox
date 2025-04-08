@@ -12,6 +12,7 @@ class RemoteMsg:
     text: str
     is_stderr: bool = False
 
+client_cli_token = "TriggerCLIPrompt: "
 _remote_info_token = "RemoteInfo: "
 
 class RemoteInfo(BaseModel):
@@ -197,6 +198,9 @@ class GhostboxClient:
                         self._remote_info = info
                 elif msg.startswith(self._stderr_token):
                     self._message_queue.put(RemoteMsg(text=msg[self._stderr_token_length:], is_stderr=True))
+                elif msg.startswith( client_cli_token):
+                    # this bypasses the message queue because we don't want # and color etc.
+                    print(msg[len(client_cli_token):], flush=True, file=sys.stderr, end="")
                 else:
                     self._message_queue.put(RemoteMsg(text=msg))
 
@@ -374,3 +378,17 @@ class GhostboxClient:
         self._audio_thread = threading.Thread(target=record_audio_loop, daemon=True)
         self._audio_thread.start()
 
+
+    def input_loop(self) -> None:
+        """Read-eval-print loop for the client."""
+        while self.running:
+            try:
+                w = input()
+                if w == "/quit":
+                    self.shutdown()
+                else:
+                    self.write_line(w)
+            except EOFError:
+                self.shutdown()
+        return
+        
