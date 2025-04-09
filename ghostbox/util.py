@@ -532,3 +532,23 @@ def get_default_microphone_sample_rate(pyaudio_object=None) -> Optional[float]:
     if pyaudio_object is None:
         p.terminate()
     return None
+
+def get_default_output_sample_rate(pyaudio_object: Optional[Any] = None) -> Optional[int]:
+    """
+    Uses PyAudio to return the default sample rate for the default output device.
+
+    Returns:
+        int: The default sample rate in Hz, or None if an error occurs.
+    """
+    try:
+        if (p := pyaudio_object) is None:
+            p = pyaudio.PyAudio()
+
+        default_device = p.get_default_output_device_index()
+
+        info = p.get_device_info_by_index(default_device)
+        sample_rate = info['defaultSampleRate']
+        return sample_rate
+    except Exception as e:
+        print(f"Error getting default sample rate: {e}")
+        return None

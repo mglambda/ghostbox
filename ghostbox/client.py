@@ -5,7 +5,7 @@ from queue import Queue, Empty
 import websockets
 from websockets.sync.client import connect, ClientConnection
 import threading, time, sys, json, traceback
-from ghostbox.util import printerr, get_default_microphone_sample_rate
+from ghostbox.util import printerr, get_default_microphone_sample_rate, get_default_output_sample_rate
 
 @dataclass
 class RemoteMsg:
@@ -25,7 +25,6 @@ class RemoteInfo(BaseModel):
     audio_websock_host: str
     audio_websock_port: int
 
-
     @staticmethod
     def show_json(data: str) -> str:
         return _remote_info_token + data
@@ -40,7 +39,8 @@ class RemoteInfo(BaseModel):
             printerr(traceback.format_exc())
             return None
         return info
-            
+
+    
 @dataclass
 class GhostboxClient:
     """Holds connection information and runs a remote session with a ghostbox started with --server.
@@ -156,6 +156,22 @@ class GhostboxClient:
             prefix = "ws://"
             
         return f"{prefix}{self.remote_host}:{self.remote_port}"
+
+
+    def pick_host(self, host_b) -> str:
+        """Help pick the remote host in situations where we have several candidates.
+        Mostly this is use to avoid using RemoteInfo hostnames that are localhost or 0.0.0.0.
+        Example: ghostbox --client --remote_host galaxybrain.ai
+        now let host_a="galaxybrain.ai"
+        On galxybrain.ai, someone started the tts with tts_host="0.0.0.0", binding it to all available network interfaces, including galaxybrain.ai.
+        Let host_b="0.0.0.0"
+        Given this situation, obviously we want to connect to host_a. However, if host_b was a different hostname, like "universebrainhosting.ai", it might be that the tts is actually on a different machine, in which case we want host_b."""
+        host_a = self.remote_host
+        if host_b == "0.0.0.0" or host_b == "localhost":
+            return host_a
+        return host_b
+    
+        
     
     def _init_websocket(self) -> None:
         """Establishes the websocket connection to remote host."""
@@ -232,14 +248,13 @@ class GhostboxClient:
 
         p = pyaudio.PyAudio()
         stream = None
-        buffer = bytearray()
 
         info = self._remote_info
         if not info or not info.tts_websock:
             self._print("TTS service not available.")
             return
 
-        uri = f"ws://{info.tts_websock_host}:{info.tts_websock_port}"
+        uri = f"ws://{self.pick_host(info.tts_websock_host)}:{info.tts_websock_port}"
         self._print(f"Connecting to TTS WebSocket at {uri}.")
 
         def handle_tts_msgs_loop():
@@ -293,7 +308,7 @@ class GhostboxClient:
                     #format=pyaudio.paInt16,
                     format=p.get_format_from_width(2),
                                 channels=1,
-                                rate=24000,
+                                rate=get_default_output_sample_rate(p), #24000,
                     frames_per_buffer=self.tts_chunk_size,
                                 output=True)
                 stream.start_stream()
@@ -322,7 +337,7 @@ class GhostboxClient:
             self._print("Audio transcription service not available.")
             return
 
-        uri = f"ws://{info.audio_websock_host}:{info.audio_websock_port}"
+        uri = f"ws://{self.pick_host(info.audio_websock_host)}:{info.audio_websock_port}"
         self._print(f"Connecting to Audio WebSocket at {uri}.")
 
         def record_audio_loop():
