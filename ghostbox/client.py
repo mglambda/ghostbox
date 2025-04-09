@@ -347,7 +347,7 @@ class GhostboxClient:
             # we can turn this off but that will sometimes supress other stderr messages
             # I don't wanna do that since the client is still under heavy development, we're just going to eat the errors for now
             p = pyaudio.PyAudio()
-            sample_rate = int(rate) if (rate := get_default_microphone_sample_rate(p)) is not None else 16000
+            sample_rate = rate if (rate := get_default_microphone_sample_rate(p)) is not None else 16000
             chunk_size = 1024
 
             def send_audio_data(data):

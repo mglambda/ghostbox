@@ -510,7 +510,7 @@ def compose2(f, g):
     return lambda x: f(g(x))
 
 
-def get_default_microphone_sample_rate(pyaudio_object=None) -> Optional[float]:
+def get_default_microphone_sample_rate(pyaudio_object=None) -> Optional[int]:
     import pyaudio
     if pyaudio_object is None:
         p = pyaudio.PyAudio()
@@ -527,28 +527,21 @@ def get_default_microphone_sample_rate(pyaudio_object=None) -> Optional[float]:
             default_sample_rate = device_info.get('defaultSampleRate')
             if pyaudio_object is None:
                 p.terminate()
-            return default_sample_rate
+            return int(default_sample_rate)
     
     if pyaudio_object is None:
         p.terminate()
     return None
 
 def get_default_output_sample_rate(pyaudio_object: Optional[Any] = None) -> Optional[int]:
-    """
-    Uses PyAudio to return the default sample rate for the default output device.
-
-    Returns:
-        int: The default sample rate in Hz, or None if an error occurs.
-    """
+    import pyaudio
+    """Uses PyAudio to return the default sample rate for the default output device."""
     try:
         if (p := pyaudio_object) is None:
             p = pyaudio.PyAudio()
 
-        default_device = p.get_default_output_device_index()
-
-        info = p.get_device_info_by_index(default_device)
-        sample_rate = info['defaultSampleRate']
-        return sample_rate
+        info = p.get_default_output_device_info()
+        return int(info['defaultSampleRate'])
     except Exception as e:
         print(f"Error getting default sample rate: {e}")
         return None
