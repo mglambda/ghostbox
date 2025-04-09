@@ -240,6 +240,14 @@ class GhostboxClient:
         except websockets.exceptions.ConnectionClosedError as e:
             self._print(f"Connection closed with error: {e}")
 
+    def tts_websocket_send(self, msg) -> None:
+        """Sends a message to the remote tts if it is connected."""
+        try:
+            if self._tts_websocket is not None:
+                self._tts_websocket.send(msg)
+        except:
+            self._print("Could not send message to tts: " + traceback.format_exc())
+            
     def _start_tts_client(self) -> None:
         """Starts a websock client that connects to the remote TTS host and launches a handler loop that plays audio on the local machine."""
         import pyaudio
@@ -319,7 +327,7 @@ class GhostboxClient:
                 except Empty:
                     if not(self._sent_done):
                         self._print("Done playing.")
-                        self._tts_websocket.send("done")
+                        self.tts_websocket_send("done")
                     continue
 
                 self._sent_done = False
