@@ -568,9 +568,9 @@ def is_output_format_supported(rate: float, channels=None, format=None, pyaudio_
 
         info = get_default_output_device_info(p)
         return p.is_format_supported(rate,
-                                     input_channels=channels if channels is not None else info["maxInputChannels"],
-                                     input_format=format if format is not None else pyaudio.paInt16,
-                                     input_device=info["index"])
+                                     output_channels=channels if channels is not None else info["maxOutputChannels"],
+                                     output_format=format if format is not None else pyaudio.paInt16,
+                                     output_device=info["index"])
                                      
     except Exception as e:
         printerr("warning: Exception while determining supported output formats for default sound device.\n" + traceback.format_exc())

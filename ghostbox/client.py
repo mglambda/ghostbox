@@ -365,7 +365,7 @@ class GhostboxClient:
                 # FIXME: right now the server always sends int16, so we at least always convert to float32, but this will change in the future
                 np_data = convert_int16_to_float(data)
                 if resampling:
-                    np_data = librosa.resample(self.tts_samplerate, supported_samplerate)
+                    np_data = librosa.resample(np_data, self.tts_samplerate, supported_samplerate)
                     
                 stream.write(np_data.tobytes())
 
