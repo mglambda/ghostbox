@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 from enum import Enum
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_serializer
 from pydantic.types import Json
 from typing import *
 
@@ -74,9 +74,13 @@ class ChatMessage(BaseModel):
     role: Literal["system", "assistant", "user", "tool"]
     content: Optional[ChatContent] = None
     tool_calls: List[ToolCall] = []
-    tool_name: str = ""
-    tool_call_id: str = ""
+    tool_name: Optional[str] = None
+    tool_call_id: Optional[str] = None
 
+    @model_serializer
+    def ser_model(self) -> Dict[str, Any]:
+        # we basically want exclude_none=True by default
+        return {k:v for k, v in dict(self).items() if v is not None}
     @staticmethod
     def make_image_message(text: str, images: List[ImageRef], **kwargs) -> 'ChatMessage':
         from ghostbox.util import getImageExtension
