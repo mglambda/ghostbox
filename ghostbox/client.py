@@ -316,7 +316,7 @@ class GhostboxClient:
                     #format=pyaudio.paInt16,
                     format=p.get_format_from_width(2),
                                 channels=1,
-                                rate=get_default_output_sample_rate(p), #24000,
+                                rate=24000,# get_default_output_sample_rate(p), #24000,
                     frames_per_buffer=self.tts_chunk_size,
                                 output=True)
                 stream.start_stream()
@@ -367,6 +367,7 @@ class GhostboxClient:
                     self._print(f"An error occurred while sending audio data: {e}\n" + traceback.format_exc())
 
             try:
+                stream = None
                 with connect(uri) as websocket:
                     # Send sample rate to the server
                     websocket.send(f"samplerate:{sample_rate}")
@@ -391,7 +392,7 @@ class GhostboxClient:
                             self._print(f"An error occurred while recording audio: {e}")
                             break
             except Exception as e:
-                self._print(f"Failed to connect to Audio WebSocket: {e}")
+                self._print(f"Failed to connect to Audio WebSocket: {e}\n" + traceback.format_exc())
             finally:
                 if stream:
                     stream.stop_stream()

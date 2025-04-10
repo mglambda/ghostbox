@@ -166,7 +166,7 @@ class ContinuousTranscriber(object):
                     # this only happens on buffer underrun though, e.g. during high network latency. It's ok to fail transcribing in such cases, this should be handled by record_on_detect
                     self.audio_buffer.put(packet)
             except websockets.exceptions.ConnectionClosed:
-                self.running = False
+                #self.running = False
                 self.resume_flag.set()
 
                 
