@@ -338,7 +338,7 @@ class GhostboxClient:
             else:
                 resampling = True
                 supported_samplerate = get_default_output_sample_rate(p)
-                self.print_(f"Sample rate of {self.tts_samplerate} not supported by device. Resampling to {supported_samplerate} for tts output.")
+                self._print(f"Sample rate of {self.tts_samplerate} not supported by device. Resampling to {supported_samplerate} for tts output.")
                 
             nonlocal stream
             if not stream:
