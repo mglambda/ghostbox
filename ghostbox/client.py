@@ -2,10 +2,12 @@ from typing import *
 from dataclasses import dataclass, field
 from pydantic import BaseModel, Field
 from queue import Queue, Empty
+import librosa        
+import numpy as np
 import websockets
 from websockets.sync.client import connect, ClientConnection
 import threading, time, sys, json, traceback
-from ghostbox.util import printerr, get_default_microphone_sample_rate, get_default_output_sample_rate
+from ghostbox.util import printerr, get_default_microphone_sample_rate, get_default_output_sample_rate, is_output_format_supported, convert_int16_to_float
 
 @dataclass
 class RemoteMsg:
@@ -14,6 +16,7 @@ class RemoteMsg:
 
 client_cli_token = "TriggerCLIPrompt: "
 _remote_info_token = "RemoteInfo: "
+samplerate_token = "samplerate: "
 
 class RemoteInfo(BaseModel):
     tts: bool
@@ -55,6 +58,8 @@ class GhostboxClient:
     # how many bytes are pushed to the output stream at a time. Note that the authority sits server side, as the server determines the size of the network packets. This value is merely used to set the output stream parameter.
     # FIXME: make this part of remoteinfo
     tts_chunk_size: int = 512
+    # this is the sample rate that the server pushes audio data at. the server communicates it to us on connect
+    tts_samplerate: Optional[float] = None
     
 
     # this is what prepends messages if they are supposed to be printed to standard error
@@ -252,7 +257,6 @@ class GhostboxClient:
         """Starts a websock client that connects to the remote TTS host and launches a handler loop that plays audio on the local machine."""
         import pyaudio
         import wave
-        import numpy as np
 
         p = pyaudio.PyAudio()
         stream = None
@@ -276,6 +280,12 @@ class GhostboxClient:
                         self._print("Received stop signal.")
                         self._tts_play_queue.queue.clear()
                         self._tts_stop_flag.set()
+                    elif type(data) == str and data.startswith(samplerate_token):
+                        try:
+                            self.tts_samplerate = float(data[len(samplerate_token):])
+                            self._print(f"Set tts sample rate to {self.tts_samplerate} herz from server message.")
+                        except:
+                            self._print("error parsing sample rate!")
                     elif data == "ok":
                         self._sent_done = True
                     else:
@@ -309,14 +319,34 @@ class GhostboxClient:
         self._tts_thread.start()
 
         def playback_loop():
+            # check for sample rate and if it's supported by our device
+            while self.tts_samplerate is None:
+                # we need to get it from the server
+                self.tts_websocket_send("get_samplerate")
+                time.sleep(1)
 
+
+            # some parameters for pyaudio
+            channels = 1
+            format = pyaudio.paFloat32 #p.get_format_from_width(2),
+                
+            # ok we have the samplerate that the server wants. do we support it?
+            if is_output_format_supported(self.tts_samplerate, channels=channels, format=format, pyaudio_object=p):
+                resampling = False
+                supported_samplerate = self.tts_samplerate
+                self._print(f"Using device native {self.tts_samplerate} herz sample rate for tts output.")                
+            else:
+                resampling = True
+                supported_samplerate = get_default_output_sample_rate(p)
+                self.print_(f"Sample rate of {self.tts_samplerate} not supported by device. Resampling to {supported_samplerate} for tts output.")
+                
             nonlocal stream
             if not stream:
                 stream = p.open(
-                    #format=pyaudio.paInt16,
-                    format=p.get_format_from_width(2),
-                                channels=1,
-                                rate=24000,# get_default_output_sample_rate(p), #24000,
+                    #format=pyaudio.paFloat32,,
+                    format=format,
+                                channels=channels,
+                                rate=int(supported_samplerate),
                     frames_per_buffer=self.tts_chunk_size,
                                 output=True)
                 stream.start_stream()
@@ -331,8 +361,13 @@ class GhostboxClient:
                     continue
 
                 self._sent_done = False
-                self._tts_stop_flag.clear()                
-                stream.write(data)
+                self._tts_stop_flag.clear()
+                # FIXME: right now the server always sends int16, so we at least always convert to float32, but this will change in the future
+                np_data = convert_int16_to_float(data)
+                if resampling:
+                    np_data = librosa.resample(self.tts_samplerate, supported_samplerate)
+                    
+                stream.write(np_data.tobytes())
 
         self._tts_playback_thread = threading.Thread(target=playback_loop, daemon=True)
         self._tts_playback_thread.start()

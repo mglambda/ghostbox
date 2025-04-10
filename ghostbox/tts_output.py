@@ -205,6 +205,9 @@ class WebsockTTSOutput(TTSOutput):
 
         super().__init__(**kwargs)
         self.clients = []
+        # this is sent to clients and changes depending on what we play
+        self.samplerate = 24000.0
+        self.samplerate_token = "samplerate: "
         self.stop_flag = threading.Event()
         self.is_speaking = False
         self.server_running = threading.Event()
@@ -277,6 +280,8 @@ class WebsockTTSOutput(TTSOutput):
             remote_address = websocket.remote_address
             printerr("[WEBSOCK] Got connection from " + str(remote_address))
             self.clients.append(websocket)
+            self._send_sample_rate(websocket, self.samplerate)
+            
             try:
                 while self.server_running.isSet():
                     msg = websocket.recv()
@@ -284,6 +289,8 @@ class WebsockTTSOutput(TTSOutput):
                         # current sound has finished playing
                         self.is_speaking = False
                         websocket.send("ok")
+                    elif msg == "get_samplerate":
+                        self._send_sample_rate(websocket, self.samplerate)
             except websockets.exceptions.ConnectionClosed:
                 printerr(
                     "[WEBSOCK] Connection with "
@@ -355,6 +362,15 @@ class WebsockTTSOutput(TTSOutput):
             client.send("stop")
         printerr("[WEBSOCK] TTS output stopped.")
 
+    def _update_sample_rate(self, new_rate) -> None:
+        if new_rate != self.samplerate:
+            self.samplerate = new_rate
+            for client in self.clients:
+                self._send_sample_rate(client, new_rate)
+
+    def _send_sample_rate(self, client, new_rate: float) -> None:
+        client.send(self.samplerate_token + str(new_rate))
+        
     def is_speaking(self) -> bool:
         return self.is_speaking
 

@@ -1,5 +1,5 @@
 from typing import *
-import os, getpass, shutil, base64, requests, re, csv, glob, time
+import os, getpass, shutil, base64, requests, re, csv, glob, time, traceback
 
 # removed tortoise dependency because it will require torch, which import multiprocess, which won't work with renpy
 # FIXME: not a big deal because tortoise and all tts are spawned with subprocess. However, we will have to find a better way to get the voices.
@@ -543,5 +543,48 @@ def get_default_output_sample_rate(pyaudio_object: Optional[Any] = None) -> Opti
         info = p.get_default_output_device_info()
         return int(info['defaultSampleRate'])
     except Exception as e:
-        print(f"Error getting default sample rate: {e}")
+        printerr(f"Error getting default sample rate: {e}")
         return None
+
+
+def get_default_output_device_info(pyaudio_object: Optional[Any] = None) -> Dict[str, Any]:
+    import pyaudio
+    try:
+        if (p := pyaudio_object) is None:
+            p = pyaudio.PyAudio()
+
+        info = p.get_default_output_device_info()
+        return info
+    except Exception as e:
+        printerr(f"Error getting default output device info: {e}")
+        return None
+    
+def is_output_format_supported(rate: float, channels=None, format=None, pyaudio_object=None) -> bool:
+    """Checks wether the given parameters work with the default output device."""
+    import pyaudio
+    try:
+        if (p := pyaudio_object) is None:
+            p = pyaudio.PyAudio()
+
+        info = get_default_output_device_info(p)
+        return p.is_format_supported(rate,
+                                     input_channels=channels if channels is not None else info["maxInputChannels"],
+                                     input_format=format if format is not None else pyaudio.paInt16,
+                                     input_device=info["index"])
+                                     
+    except Exception as e:
+        printerr("warning: Exception while determining supported output formats for default sound device.\n" + traceback.format_exc())
+        return False
+
+def convert_int16_to_float(audio_bytes: bytes):
+    """Converts paInt16 bytes to a float32 NumPy array."""
+    # Convert bytes to a NumPy array of int16
+    import numpy as np
+    audio_array = np.frombuffer(audio_bytes, dtype=np.int16)
+
+    # Normalize to float32 (range -1.0 to 1.0)
+    audio_float = audio_array.astype(np.float32) / 32768.0  # or 2**15 if signed
+
+    return audio_float
+    
+    
