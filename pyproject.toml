@@ -19,6 +19,8 @@ dependencies = [
     "lazy-object-proxy",
     "openai-whisper",
     "pyaudio",
+    "numpy",
+    "librosa",
     "pydub",
     "colorama",
     "automodinit",
