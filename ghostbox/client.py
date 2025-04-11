@@ -2,21 +2,30 @@ from typing import *
 from dataclasses import dataclass, field
 from pydantic import BaseModel, Field
 from queue import Queue, Empty
-import librosa        
+import librosa
 import numpy as np
 import websockets
 from websockets.sync.client import connect, ClientConnection
 import threading, time, sys, json, traceback
-from ghostbox.util import printerr, get_default_microphone_sample_rate, get_default_output_sample_rate, is_output_format_supported, convert_int16_to_float
+from ghostbox.util import (
+    printerr,
+    find_default_sound_output_device_info,
+    get_default_microphone_sample_rate,
+    is_output_format_supported,
+    convert_int16_to_float,
+)
+
 
 @dataclass
 class RemoteMsg:
     text: str
     is_stderr: bool = False
 
+
 client_cli_token = "TriggerCLIPrompt: "
 _remote_info_token = "RemoteInfo: "
 samplerate_token = "samplerate: "
+
 
 class RemoteInfo(BaseModel):
     tts: bool
@@ -33,9 +42,9 @@ class RemoteInfo(BaseModel):
         return _remote_info_token + data
 
     @staticmethod
-    def maybe_from_remote_payload(line: str) -> Optional['RemoteInfo']:
+    def maybe_from_remote_payload(line: str) -> Optional["RemoteInfo"]:
         try:
-            data = json.loads(line[len(_remote_info_token):])
+            data = json.loads(line[len(_remote_info_token) :])
             info = RemoteInfo(**data)
         except:
             printerr("warning: Couldn't parse RemoteInfo.")
@@ -43,46 +52,45 @@ class RemoteInfo(BaseModel):
             return None
         return info
 
-    
+
 @dataclass
 class GhostboxClient:
     """Holds connection information and runs a remote session with a ghostbox started with --server.
-    This is most often used with the --client command line option, and takes the --remote_host and --remote_port as arguments."""
+    This is most often used with the --client command line option, and takes the --remote_host and --remote_port as arguments.
+    """
 
     remote_host: str
     remote_port: int = 5150
     stdout_callback: Callable[[str], None] = lambda w: print(w, end="", flush=True)
     stderr_callback: Callable[[str], None] = printerr
     logging: bool = False
+    options: Dict[str, Any] = field(default_factory=dict)
     running: bool = True
     # how many bytes are pushed to the output stream at a time. Note that the authority sits server side, as the server determines the size of the network packets. This value is merely used to set the output stream parameter.
     # FIXME: make this part of remoteinfo
     tts_chunk_size: int = 512
     # this is the sample rate that the server pushes audio data at. the server communicates it to us on connect
     tts_samplerate: Optional[float] = None
-    
 
     # this is what prepends messages if they are supposed to be printed to standard error
     _stderr_token: str = "[|STDER|]:"
     # this will be computed on init
     _stderr_token_length: int = 0
 
-
     # this carries information about remote services
     _remote_info: Optional[RemoteInfo] = None
-    
+
     # queue that carries messages that are sent from remote box, so it's the remote's stdout and stderr
     _message_queue: Queue[RemoteMsg] = field(default_factory=Queue)
-    
 
     _print_thread: Optional[threading.Thread] = None
     _websock_thread: Optional[threading.Thread] = None
     _tts_thread: Optional[threading.Thread] = None
     _tts_playback_thread: Optional[threading.Thread] = None
     _audio_thread: Optional[threading.Thread] = None
-    
+
     _websocket: Optional[ClientConnection] = None
-    _tts_websocket: Optional[ClientConnection] = None    
+    _tts_websocket: Optional[ClientConnection] = None
 
     # wave chunks are on this queue
     _tts_play_queue: Queue[bytes] = field(default_factory=Queue)
@@ -90,11 +98,10 @@ class GhostboxClient:
     _tts_stop_flag: threading.Event = field(default_factory=threading.Event)
     # did the server get notified that we are done playing?
     _sent_done: bool = False
-    
-    
 
     def __post_init__(self):
         self._stderr_token_length = len(self._stderr_token)
+
         def print_loop():
             while self.running:
                 try:
@@ -114,7 +121,7 @@ class GhostboxClient:
         # this will establish a connection and handle messages
         self._websock_thread = threading.Thread(target=self._client_loop, daemon=True)
         self._websock_thread.start()
-        
+
         # we need to know if we have to start audio and tts on the client box
         # we will start them if they are being served on the remote box
         # to find out what is served, we do a client handshake
@@ -135,33 +142,30 @@ class GhostboxClient:
             self._print("Audio transcription service active.")
             no_services = False
             self._start_audio_client()
-            
 
         if no_services:
             self._print("No services active.")
-            
+
     def _print(self, log_msg) -> None:
         if self.logging:
             print(f"[Client] {log_msg} :: {time.strftime("%c")}", file=sys.stderr)
-                     
-                     
+
     def shutdown(self) -> None:
         self.running = False
         if self._websocket is not None:
             self._websocket.close()
-            
 
-            
     def uri(self) -> str:
         if self.remote_host.startswith("ws://"):
             prefix == ""
         elif self.remote_host.startswith("wss://"):
-            raise RuntimeError(f"fatal error: SSL not supported yet for websockets. Change the uri '{self.remote_host}' to use ws:// instead.")
+            raise RuntimeError(
+                f"fatal error: SSL not supported yet for websockets. Change the uri '{self.remote_host}' to use ws:// instead."
+            )
         else:
             prefix = "ws://"
-            
-        return f"{prefix}{self.remote_host}:{self.remote_port}"
 
+        return f"{prefix}{self.remote_host}:{self.remote_port}"
 
     def pick_host(self, host_b) -> str:
         """Help pick the remote host in situations where we have several candidates.
@@ -170,18 +174,19 @@ class GhostboxClient:
         now let host_a="galaxybrain.ai"
         On galxybrain.ai, someone started the tts with tts_host="0.0.0.0", binding it to all available network interfaces, including galaxybrain.ai.
         Let host_b="0.0.0.0"
-        Given this situation, obviously we want to connect to host_a. However, if host_b was a different hostname, like "universebrainhosting.ai", it might be that the tts is actually on a different machine, in which case we want host_b."""
+        Given this situation, obviously we want to connect to host_a. However, if host_b was a different hostname, like "universebrainhosting.ai", it might be that the tts is actually on a different machine, in which case we want host_b.
+        """
         host_a = self.remote_host
         if host_b == "0.0.0.0" or host_b == "localhost":
             return host_a
         return host_b
-    
-        
-    
+
     def _init_websocket(self) -> None:
         """Establishes the websocket connection to remote host."""
         if self._websocket is not None:
-            self._print("Skipping initialization of websocket: Connection already established.")
+            self._print(
+                "Skipping initialization of websocket: Connection already established."
+            )
             time.sleep(3)
             return
 
@@ -194,9 +199,9 @@ class GhostboxClient:
         except websockets.exceptions.InvalidURI as e:
             self._print(f"Invalid URI: {e}")
             time.sleep(3)
-        #except websockets.exceptions.ConnectionRefusedError as e:
-            #self._print(f"Connection refused: {e}")
-            #time.sleep(3)
+        # except websockets.exceptions.ConnectionRefusedError as e:
+        # self._print(f"Connection refused: {e}")
+        # time.sleep(3)
         except Exception as e:
             self._print(f"An error occurred while connecting: {e}")
             time.sleep(3)
@@ -209,7 +214,7 @@ class GhostboxClient:
         while self.running:
             if self._websocket is None:
                 self._init_websocket()
-                
+
             try:
                 msg = self._websocket.recv()
                 if self._remote_info is None and msg.startswith(_remote_info_token):
@@ -218,14 +223,20 @@ class GhostboxClient:
                     if (info := RemoteInfo.maybe_from_remote_payload(msg)) is not None:
                         self._remote_info = info
                 elif msg.startswith(self._stderr_token):
-                    self._message_queue.put(RemoteMsg(text=msg[self._stderr_token_length:], is_stderr=True))
-                elif msg.startswith( client_cli_token):
+                    self._message_queue.put(
+                        RemoteMsg(text=msg[self._stderr_token_length :], is_stderr=True)
+                    )
+                elif msg.startswith(client_cli_token):
                     # this bypasses the message queue because we don't want # and color etc.
-                    print(msg[len(client_cli_token):], flush=True, file=sys.stderr, end="")
+                    print(
+                        msg[len(client_cli_token) :],
+                        flush=True,
+                        file=sys.stderr,
+                        end="",
+                    )
                 else:
                     self._message_queue.put(RemoteMsg(text=msg))
 
-                    
             except websockets.exceptions.ConnectionClosedOK:
                 self._print("Connection closed normally.")
                 self._websocket = None
@@ -233,7 +244,9 @@ class GhostboxClient:
                 self._print(f"Connection closed with error: {e}")
                 self._websocket = None
             except Exception as e:
-                self._print(f"An error occurred while receiving: {e}\n" + traceback.format_exc())
+                self._print(
+                    f"An error occurred while receiving: {e}\n" + traceback.format_exc()
+                )
                 time.sleep(5)
                 # ??? what to do here
 
@@ -252,7 +265,7 @@ class GhostboxClient:
                 self._tts_websocket.send(msg)
         except:
             self._print("Could not send message to tts: " + traceback.format_exc())
-            
+
     def _start_tts_client(self) -> None:
         """Starts a websock client that connects to the remote TTS host and launches a handler loop that plays audio on the local machine."""
         import pyaudio
@@ -274,7 +287,7 @@ class GhostboxClient:
                 try:
                     if self._tts_websocket is None:
                         self._tts_websocket = connect(uri)
-                        
+
                     data = self._tts_websocket.recv()
                     if data == "stop":
                         self._print("Received stop signal.")
@@ -282,8 +295,10 @@ class GhostboxClient:
                         self._tts_stop_flag.set()
                     elif type(data) == str and data.startswith(samplerate_token):
                         try:
-                            self.tts_samplerate = float(data[len(samplerate_token):])
-                            self._print(f"Set tts sample rate to {self.tts_samplerate} herz from server message.")
+                            self.tts_samplerate = float(data[len(samplerate_token) :])
+                            self._print(
+                                f"Set tts sample rate to {self.tts_samplerate} herz from server message."
+                            )
                         except:
                             self._print("error parsing sample rate!")
                     elif data == "ok":
@@ -295,15 +310,15 @@ class GhostboxClient:
 
                 except websockets.exceptions.ConnectionClosedOK:
                     self._print("TTS WebSocket connection closed normally.")
-                    time.sleep(3)                
+                    time.sleep(3)
                     continue
                 except websockets.exceptions.ConnectionClosedError as e:
                     self._print(f"TTS WebSocket connection closed with error: {e}")
-                    time.sleep(3)                
+                    time.sleep(3)
                     continue
                 except Exception as e:
                     self._print(f"An error occurred while receiving TTS data: {e}")
-                    time.sleep(3)                                    
+                    time.sleep(3)
                     continue
                 except Exception as e:
                     self._print(f"Failed to connect to TTS WebSocket: {e}")
@@ -325,37 +340,47 @@ class GhostboxClient:
                 self.tts_websocket_send("get_samplerate")
                 time.sleep(1)
 
-
             # some parameters for pyaudio
+            device_info = find_default_output_device_info(
+                p, index_override=self.options.get("sound_output_device_index", None)
+            )
             channels = 1
-            format = pyaudio.paFloat32 #p.get_format_from_width(2),
-                
+            format = pyaudio.paFloat32  # p.get_format_from_width(2)
+
             # ok we have the samplerate that the server wants. do we support it?
-            if is_output_format_supported(self.tts_samplerate, channels=channels, format=format, pyaudio_object=p):
+            if is_output_format_supported(
+                device_info, rate=self.tts_samplerate, channels=channels, format=format
+            ):
                 resampling = False
                 supported_samplerate = self.tts_samplerate
-                self._print(f"Using device native {self.tts_samplerate} herz sample rate for tts output.")                
+                self._print(
+                    f"Using device native {self.tts_samplerate} herz sample rate for tts output."
+                )
             else:
                 resampling = True
-                supported_samplerate = get_default_output_sample_rate(p)
-                self._print(f"Sample rate of {self.tts_samplerate} not supported by device. Resampling to {supported_samplerate} for tts output.")
-                
+                supported_samplerate = device_info["defaultSampleRate"]
+                self._print(
+                    f"Sample rate of {self.tts_samplerate} not supported by device. Resampling to {supported_samplerate} for tts output."
+                )
+
             nonlocal stream
             if not stream:
                 stream = p.open(
-                    #format=pyaudio.paFloat32,,
+                    # format=pyaudio.paFloat32,,
                     format=format,
-                                channels=channels,
-                                rate=int(supported_samplerate),
+                    channels=channels,
+                    rate=int(supported_samplerate),
                     frames_per_buffer=self.tts_chunk_size,
-                                output=True)
+                    output=True,
+                    output_device_index=device_info["index"],
+                )
                 stream.start_stream()
 
             while self.running:
                 try:
                     data = self._tts_play_queue.get(timeout=0.01)
                 except Empty:
-                    if not(self._sent_done):
+                    if not (self._sent_done):
                         self._print("Done playing.")
                         self.tts_websocket_send("done")
                     continue
@@ -365,14 +390,17 @@ class GhostboxClient:
                 # FIXME: right now the server always sends int16, so we at least always convert to float32, but this will change in the future
                 np_data = convert_int16_to_float(data)
                 if resampling:
-                    np_data = librosa.resample(np_data, orig_sr=self.tts_samplerate, target_sr=supported_samplerate)
-                    
+                    np_data = librosa.resample(
+                        np_data,
+                        orig_sr=self.tts_samplerate,
+                        target_sr=supported_samplerate,
+                    )
+
                 stream.write(np_data.tobytes())
 
         self._tts_playback_thread = threading.Thread(target=playback_loop, daemon=True)
         self._tts_playback_thread.start()
 
-        
     def _start_audio_client(self) -> None:
         """Starts a websock client that connects to the remote audio transcription service and launches a handler loop that records from the local microphone and sends audio data to the remote endpoint."""
         info = self._remote_info
@@ -380,17 +408,24 @@ class GhostboxClient:
             self._print("Audio transcription service not available.")
             return
 
-        uri = f"ws://{self.pick_host(info.audio_websock_host)}:{info.audio_websock_port}"
+        uri = (
+            f"ws://{self.pick_host(info.audio_websock_host)}:{info.audio_websock_port}"
+        )
         self._print(f"Connecting to Audio WebSocket at {uri}.")
 
         def record_audio_loop():
             import pyaudio
             import wave
+
             # FIXME: so on some systems opening pyaudio will vomit a bunch of irrelevant error messages into sdterr
             # we can turn this off but that will sometimes supress other stderr messages
             # I don't wanna do that since the client is still under heavy development, we're just going to eat the errors for now
             p = pyaudio.PyAudio()
-            sample_rate = rate if (rate := get_default_microphone_sample_rate(p)) is not None else 16000
+            sample_rate = (
+                rate
+                if (rate := get_default_microphone_sample_rate(p)) is not None
+                else 16000
+            )
             chunk_size = 1024
 
             def send_audio_data(data):
@@ -399,7 +434,10 @@ class GhostboxClient:
                 except websockets.exceptions.ConnectionClosedError as e:
                     self._print(f"Audio WebSocket connection closed with error: {e}")
                 except Exception as e:
-                    self._print(f"An error occurred while sending audio data: {e}\n" + traceback.format_exc())
+                    self._print(
+                        f"An error occurred while sending audio data: {e}\n"
+                        + traceback.format_exc()
+                    )
 
             try:
                 stream = None
@@ -407,11 +445,13 @@ class GhostboxClient:
                     # Send sample rate to the server
                     websocket.send(f"samplerate:{sample_rate}")
 
-                    stream = p.open(format=pyaudio.paInt16,
-                                      channels=1,
-                                      rate=sample_rate,
-                                      input=True,
-                                      frames_per_buffer=chunk_size)
+                    stream = p.open(
+                        format=pyaudio.paInt16,
+                        channels=1,
+                        rate=sample_rate,
+                        input=True,
+                        frames_per_buffer=chunk_size,
+                    )
 
                     while self.running:
                         try:
@@ -421,13 +461,18 @@ class GhostboxClient:
                             self._print("Audio WebSocket connection closed normally.")
                             break
                         except websockets.exceptions.ConnectionClosedError as e:
-                            self._print(f"Audio WebSocket connection closed with error: {e}")
+                            self._print(
+                                f"Audio WebSocket connection closed with error: {e}"
+                            )
                             break
                         except Exception as e:
                             self._print(f"An error occurred while recording audio: {e}")
                             break
             except Exception as e:
-                self._print(f"Failed to connect to Audio WebSocket: {e}\n" + traceback.format_exc())
+                self._print(
+                    f"Failed to connect to Audio WebSocket: {e}\n"
+                    + traceback.format_exc()
+                )
             finally:
                 if stream:
                     stream.stop_stream()
@@ -436,7 +481,6 @@ class GhostboxClient:
 
         self._audio_thread = threading.Thread(target=record_audio_loop, daemon=True)
         self._audio_thread.start()
-
 
     def input_loop(self) -> None:
         """Read-eval-print loop for the client."""
@@ -450,4 +494,3 @@ class GhostboxClient:
             except EOFError:
                 self.shutdown()
         return
-        

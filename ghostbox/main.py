@@ -2164,10 +2164,15 @@ def main():
     tagged_parser = makeTaggedParser(backends.default_params)
     parser = tagged_parser.get_parser()
     args = parser.parse_args()
+    if args.sound_list_output_devices:
+        list_output_devices()
+        return
+    
+    
     if args.client:
         # we do something completely different
         client = GhostboxClient(
-            remote_host=args.remote_host, remote_port=args.remote_port, logging=args.verbose
+            remote_host=args.remote_host, remote_port=args.remote_port, logging=args.verbose, options=args
         )
         client.input_loop()
         return

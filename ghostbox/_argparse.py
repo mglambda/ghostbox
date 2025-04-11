@@ -602,6 +602,28 @@ def makeTaggedParser(default_params) -> TaggedArgumentParser:
         tag=mktag(type=AT.Plumbing, group=AG.Interface, motd=True),
     )
     parser.add_argument(
+        "--sound_output_device_index",
+        type=Optional[int],
+        default=None,
+        help="Index of sound output device for playback using pyaudio. If left unspecified, the default output device will be automatically determined. Use --sound_list_output_devices to see the device indices you can use here.",
+        tag=mktag(type=AT.Plumbing, group=AG.General)
+    )
+    parser.add_argument(
+        "--sound_input_device_index",
+        type=Optional[int],
+        default=None,
+        help="Index of sound input device for recording using pyaudio. If left unspecified, the default output device will be automatically determined. Use --sound_list_output_devices to see the device indices you can use here.",
+        tag=mktag(type=AT.Plumbing, group=AG.General)
+    )    
+    parser.add_argument(
+    parser.add_argument(
+        "--sound_list_output_devices",
+        type=bool,
+        default=False,
+        help="List output devices and their indices. You can use the numbers as arguments to --sound_output_device_index.",
+        tag=mktag(type=AT.Plumbing, group=AG.General)
+    )    
+    parser.add_argument(
         "--audio",
         action=argparse.BooleanOptionalAction,
         default=False,

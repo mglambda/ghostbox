@@ -508,8 +508,38 @@ def time_ms():
 
 def compose2(f, g):
     return lambda x: f(g(x))
+def find_default_sound_output_device_info(pyaudio_object, index_override=None) -> Dict[str, Any]:
+    """Tries its best to find the default output device for sound.
+    In most cases this will be the pyaudio default. If pipewire is found as a device, it will be preferred to the pyaudio default."""
+    p = pyaudio_object
+    # this will be returned
+    info = None
+    
+    default_info = p.get_default_output_device_info()
 
+    # now in most cases, info will be enough
+    # however on my laptop I use pipewire and pyaudio consitently misidentifies the default devices
+    # very frustrating, as everything else works with pipewire
+    # this little check fixes my laptop
+    api_info = p.get_host_api_info_by_index(0)
+    num_devices = info.get('deviceCount')
+    for i in range(0, num_devices):
+        device_info = p.get_device_info_by_host_api_device_index(0, i)
+        if index_override is not None and i == index_override:
+            return device_info
+        
+        if device_info.get('maxOutputChannels') > 0:
+            # This is an output device
+            if device_info.get("name") == "pipewire":
+                info = device_info
+                
 
+    if info is None:
+        return default_info
+    return info
+            
+    
+    
 def get_default_microphone_sample_rate(pyaudio_object=None) -> Optional[int]:
     import pyaudio
     if pyaudio_object is None:
@@ -533,45 +563,17 @@ def get_default_microphone_sample_rate(pyaudio_object=None) -> Optional[int]:
         p.terminate()
     return None
 
-def get_default_output_sample_rate(pyaudio_object: Optional[Any] = None) -> Optional[int]:
-    import pyaudio
-    """Uses PyAudio to return the default sample rate for the default output device."""
-    try:
-        if (p := pyaudio_object) is None:
-            p = pyaudio.PyAudio()
-
-        info = p.get_default_output_device_info()
-        return int(info['defaultSampleRate'])
-    except Exception as e:
-        printerr(f"Error getting default sample rate: {e}")
-        return None
-
-
-def get_default_output_device_info(pyaudio_object: Optional[Any] = None) -> Dict[str, Any]:
+def is_output_format_supported(output_device_info, rate: float=0.0, channels=None, format=None) -> bool:
+    """Checks wether the given parameters work with the given output device."""
     import pyaudio
     try:
-        if (p := pyaudio_object) is None:
-            p = pyaudio.PyAudio()
-
-        info = p.get_default_output_device_info()
-        return info
-    except Exception as e:
-        printerr(f"Error getting default output device info: {e}")
-        return None
-    
-def is_output_format_supported(rate: float, channels=None, format=None, pyaudio_object=None) -> bool:
-    """Checks wether the given parameters work with the default output device."""
-    import pyaudio
-    try:
-        if (p := pyaudio_object) is None:
-            p = pyaudio.PyAudio()
-
-        info = get_default_output_device_info(p)
         return p.is_format_supported(rate,
                                      output_channels=channels if channels is not None else info["maxOutputChannels"],
                                      output_format=format if format is not None else pyaudio.paInt16,
                                      output_device=info["index"])
-                                     
+
+    except ValueError as e:
+        return False
     except Exception as e:
         printerr("warning: Exception while determining supported output formats for default sound device.\n" + traceback.format_exc())
         return False
@@ -586,5 +588,25 @@ def convert_int16_to_float(audio_bytes: bytes):
     audio_float = audio_array.astype(np.float32) / 32768.0  # or 2**15 if signed
 
     return audio_float
-    
+
+def list_output_devices():
+    """Lists all available output devices using PyAudio."""
+
+    p = pyaudio.PyAudio()
+
+    num_devices = p.get_device_count()
+
+    print("Available Output Devices:")
+    for i in range(num_devices):
+        device_info = p.get_device_info_by_host_api_device_index(0,i)
+        if device_info['maxOutputChannels'] > 0:  # Check for output capability
+            print(f"  Device {i}: {device_info['name']}")
+            print(f"    Host API: {device_info['hostApi']}")
+            print(f"    Default Sample Rate: {device_info['defaultSampleRate']}")
+            print(f"    Max Input Channels: {device_info['maxInputChannels']}")
+            print(f"    Max Output Channels: {device_info['maxOutputChannels']}")
+            print("-" * 20)
+
+    p.terminate()
+
     
