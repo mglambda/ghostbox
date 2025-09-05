@@ -318,6 +318,20 @@ def makeTaggedParser(default_params) -> TaggedArgumentParser:
         tag=mktag(type=AT.Plumbing, group=AG.Templates, motd=True),
     )
     parser.add_argument(
+        "--dynamic_file_vars_unsafe",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help="If true, will recursively expand dynamic file variables. This allows you to have nested includes of files. Disabled by default because this may lead to accidental prompt injections and general confusion.",
+        tag=mktag(type=AT.Plumbing, group=AG.Templates, motd=True),
+    )
+    parser.add_argument(
+        "--dynamic_file_vars_max_depth",
+        type=int,
+        default=5,
+        help="Maximum recursion depths for the expansion of nested dynamic file variables. If dynamic_file_vars_unsafe is false, this has no effect. Setting this to 0 or lower can lead to infinite recursion.",
+        tag=mktag(type=AT.Plumbing, group=AG.Templates, motd=True),
+    )
+    parser.add_argument(
         "--warn_trailing_space",
         action=argparse.BooleanOptionalAction,
         default=True,

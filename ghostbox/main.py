@@ -1466,7 +1466,7 @@ class Plumbing(object):
         self.multiline_buffer = ""
         return w
 
-    def expandDynamicFileVars(self, w):
+    def expandDynamicFileVars(self, w, depth: int =0):
         """Expands strings of the form `{[FILEPATH]}` by replacing them with the contents of FILE1 if it is found and readable."""
         if not (self.getOption("dynamic_file_vars")):
             return w
@@ -1499,6 +1499,13 @@ class Plumbing(object):
                     + "An unknown exception has occurred. Here's the full traceback."
                 )
                 printerr(traceback.format_exc())
+
+
+        if self.getOption("dynamic_file_vars_unsafe"):
+            if depth >= (limit := self.getOption("dynamic_file_vars_max_depth")):
+                printerr(f"warning: Exceeded maximum dynamic file variable depth limit of {limit}. Not expanding.")
+                return w
+            return self.expandDynamicFileVars(w, depth+1)
         return w
 
     def modifyInput(prog, w):
