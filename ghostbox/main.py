@@ -1474,6 +1474,9 @@ class Plumbing(object):
         pattern = r"\{\[(.*?)\]\}"
         matches = re.findall(pattern, w)
 
+        if not(matches):
+            return w
+        
         for match in matches:
             var = "{[" + match + "]}"
             # users will probably mess around with this so we wanna be real careful
