@@ -353,6 +353,13 @@ def makeTaggedParser(default_params) -> TaggedArgumentParser:
         tag=mktag(type=AT.Porcelain, group=AG.Generation, motd=True),
     )
     parser.add_argument(
+        "--response_format",
+        type=str,
+        default="text",
+        help="Used internally to request JSON schemas as response format (see OpenAI API). Setting it to 'text' will yield default text generation.",
+        tag=mktag(type=AT.Plumbing, group=AG.Generation, motd=True),
+    )    
+    parser.add_argument(
         "--stream_flush",
         type=str,
         default="token",
@@ -615,7 +622,6 @@ def makeTaggedParser(default_params) -> TaggedArgumentParser:
         help="Index of sound input device for recording using pyaudio. If left unspecified, the default output device will be automatically determined. Use --sound_list_output_devices to see the device indices you can use here.",
         tag=mktag(type=AT.Plumbing, group=AG.General)
     )    
-    parser.add_argument(
     parser.add_argument(
         "--sound_list_output_devices",
         type=bool,

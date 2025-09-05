@@ -50,7 +50,9 @@ class ChatContentComplex(BaseModel):
     """Contentfield of a ChatMessage, at least when the content is not a mere string."""
 
     type: Literal["text", "image_url"]
+    # FIXME: I've seen multiple versions of this with text and content so we do both. the new llama.cpp vision implementation wants text
     content: str
+    text: Optional[str] = None 
     image_url: Optional[ImageURL] = None
 
 
@@ -103,7 +105,7 @@ class ChatMessage(BaseModel):
             complex_content_list.append(image_content)
 
         # don't forget the prompt
-        complex_content_list.append(ChatContentComplex(type="text", content=text))
+        complex_content_list.append(ChatContentComplex(type="text", content=text, text=text))
 
         return ChatMessage(role="user", content=complex_content_list, **kwargs)
 

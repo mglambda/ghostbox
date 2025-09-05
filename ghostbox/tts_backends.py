@@ -24,7 +24,7 @@ def assert_downloaded(filepath: str, download_url: str) -> None:
 
 import nltk.data
 
-nltk.download("punkt_tab")
+#nltk.download("punkt_tab")
 tokenizer = nltk.data.load("tokenizers/punkt/english.pickle")
 
 

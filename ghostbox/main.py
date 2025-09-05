@@ -224,6 +224,8 @@ cmds = [
 # 3 - formats text to be saved as AI message in the chat history
 mode_formatters = {
     "default": lambda d: (DoNothing, DoNothing, DoNothing, CleanResponse),
+    "thinking": lambda d: (StripThinking, StripThinking, StripThinking, StripThinking),    
+    "raw_output": lambda d: (DoNothing, DoNothing, DoNothing, DoNothing),
     "chat": lambda d: (
         DoNothing,
         NicknameRemover(d["chat_ai"]),
@@ -730,6 +732,8 @@ class Plumbing(object):
             hint = ""
 
         if (rformat := self.getOption("response_format")) and (
+                type(rformat) == dict
+        ) and (
             rformat["type"] != "text"
         ):
             # don't use formatters if user expects structured data
@@ -1832,6 +1836,7 @@ class Plumbing(object):
 
         msg = history[-1]
         if msg.role == "user":
+            # FIXME: this will crash with images where type of content isnt str
             prepended_message = msg.content + "\n" + new_message
             del history[-1]
             return prepended_message

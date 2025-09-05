@@ -93,7 +93,7 @@ class DefaultTTSOutput(TTSOutput):
         self._stream = p.open(
             format=p.get_format_from_width(2),
             channels=1,
-            rate=get_default_output_sample_rate(p), #24000,
+            rate=24000,#get_default_output_sample_rate(p), #24000,
             output=True,
             frames_per_buffer=chunk,
         )

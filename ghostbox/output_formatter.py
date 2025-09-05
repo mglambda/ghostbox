@@ -1,4 +1,5 @@
 from abc import ABC, abstractmethod
+import re
 from functools import *
 from ghostbox.util import *
 from colorama import Fore, Style
@@ -183,11 +184,18 @@ class ColorFormatter(OutputFormatter):
 
     def format(self, w):
         return wrapColorStyle(w, self.color, self.style)
-        
+
+class StripThinkingFormatter(OutputFormatter):
+    """Removes <think>...</think> section., including trailing whitespace."""
+    
+    def format(self, w: str) -> str:
+        pattern = r'<think>.*</think>\s*'
+        return re.sub(pattern, '', w, flags=re.DOTALL)
+    
 DoNothing = IdentityFormatter() # more descriptive name                
 DefaultResponseCleaner = OutputFormatter.compose([IncompleteSentenceCleaner()])
 CleanResponse = DefaultResponseCleaner
 DefaultResponseCleaner.__doc__ =     """Does minimum cleanup. Intended for AI responses."""
-
+StripThinking = StripThinkingFormatter()
 
     

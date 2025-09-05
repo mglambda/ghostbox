@@ -330,6 +330,10 @@ class Ghostbox:
                     if retries == 0:
                         raise e
                     retries -= 1
+                except json.decoder.JSONDecodeError as e:
+                    if retries == 0:
+                        raise e
+                    retries -= 1                    
 
     # images
     @contextmanager
@@ -600,7 +604,9 @@ class Ghostbox:
 
     def clear_history(self) -> None:
         """Resets the chat history."""
-        self.set_char(self.character_folder, [])
+        # changed recently because the old way was resetting options which is surprising
+        #self.set_char(self.character_folder, [])
+        self.__dict__["_plumbing"].session.stories.reset()
 
     def history(self) -> List[ChatMessage]:
         """Returns the current chat history for this ghostbox instance.

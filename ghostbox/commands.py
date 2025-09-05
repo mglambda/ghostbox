@@ -479,12 +479,8 @@ def image(prog, argv):
         ```"""
 
     if argv == []:
-        ws = []
-        for id, imagedata in sorted(prog.images.items()):
-            ws.append(mkImageEmbeddingString(id) + "\t" + imagedata["url"])
-        # FIXME: secret, undocumented function: /image without arguments dirties the image cache
-        prog._images_dirty = True
-        return "\n".join(ws)
+        prog.images = {}
+        return "Images reset."
 
     if argv[0].startswith("--id="):
         id = maybeReadInt(argv[0].replace("--id=", ""))
