@@ -425,7 +425,12 @@ class LlamaCPPBackend(AIBackend):
 
         if self._config["llamacpp_use_chat_completion_endpoint"]:
             # this one wants more oai like results
-            return OpenAIBackend.handleGenerateResultOpenAI(result.json())
+            # FIXME: as of september 2025 this returns a weirdly structured message. the fixme is more a reminder to investigate
+            llama_msg = OpenAIBackend.handleGenerateResultOpenAI(result.json())
+            print(f"{type(llama_msg)}")
+            print(f"{llama_msg}")
+            return llama_msg
+
 
         # handling the /completion endpoint
         if (payload := result.json()["content"]) is not None:
@@ -729,7 +734,13 @@ class OpenAIBackend(AIBackend):
     def makeOpenAICallback(callback, last_result_callback=lambda x: x):
         def openAICallback(d):
             last_result_callback(d)
-            choice = d["choices"][0]
+            # FIXME: handle reasoning here
+            print(f"{d}")
+            choices = d["choices"]
+            if not(choices):
+                return
+            choice = choices[0]
+
             maybeChunk = choice["delta"].get("content", None)
             if maybeChunk is not None:
                 callback(maybeChunk)
