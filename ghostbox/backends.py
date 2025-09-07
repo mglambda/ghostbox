@@ -427,8 +427,6 @@ class LlamaCPPBackend(AIBackend):
             # this one wants more oai like results
             # FIXME: as of september 2025 this returns a weirdly structured message. the fixme is more a reminder to investigate
             llama_msg = OpenAIBackend.handleGenerateResultOpenAI(result.json())
-            print(f"{type(llama_msg)}")
-            print(f"{llama_msg}")
             return llama_msg
 
 
@@ -735,7 +733,6 @@ class OpenAIBackend(AIBackend):
         def openAICallback(d):
             last_result_callback(d)
             # FIXME: handle reasoning here
-            print(f"{d}")
             choices = d["choices"]
             if not(choices):
                 return
