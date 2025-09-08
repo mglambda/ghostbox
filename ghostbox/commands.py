@@ -438,6 +438,8 @@ def exitProgram(prog, argv):
     See also /save, /saveoptions, /saveconfig"""
     prog.stopAudioTranscription()
     prog.stopImageWatch()
+    # prevent last cli printing
+    prog.setOption("cli_prompt", "")
     prog.running = False
     return ""
 

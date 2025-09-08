@@ -2107,8 +2107,13 @@ class Plumbing(object):
                 self.websockSend(client_cli_token + prompt)
 
         def cli_printer():
+            if self.getOption("__api__"):
+                # no cli prompt if ghostbox was started from python
+                return
+
             while self.running:
                 self._busy.wait()
+               
                 while self._busy.is_set():
                     # don't blow up potato cpu
                     # user can wait for their coveted cli for 100ms

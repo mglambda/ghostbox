@@ -227,5 +227,6 @@ api_default_options = {
     "log_time": True,
     "cli_prompt": "",
     "dynamic_file_vars": False,
-    "max_context_length": 2**15
+    "max_context_length": 2**15,
+    "__api__": True # hidden option indicating that ghsotbox was started from Ghostbox class
 }
