@@ -41,7 +41,7 @@ ghostbox might be for you.
 <a href="https://raw.github.com/mglambda/ghostbox/master/screenshots/webui.png"><img alt="A screenshot displaying ghostbox used in the Chrome web browser through the Web UI" width="300" align="right" src="https://raw.github.com/mglambda/ghostbox/master/screenshots/webui.png"></a>
  - Generate text, json, or pydantic class instances with LLMs
  - Support for OpenAI, Llama.cpp, Lllama-box, and anyone who supports the OAI API.
- - Interruptible, streaming TTS with orpheus, Kokoro, Zonos, Amazon Polli, and others.
+ - Interruptible, streaming TTS with orpheus, Kokoro, Zonos, Amazon Polli, and others. Local or over the network.
  - Continuous, voice activated transcription with OpenAI's whisper model
  - Include images for multimodal models (OAI and Llama-box only)
  - Create, configure, and switch between AI characters 
@@ -49,6 +49,7 @@ ghostbox might be for you.
  - Track, save, and reload chat history (with branching, retries, and all the usual features in the CLI)
  - Integrated HTTP webserver using websockets, with a basic web UI that let's you monitor your applications AI while it is running
  - Prompt format templates if you want them (you probably don't, everyone uses Jinja now)
+ - Remote networking support. Run ghostbox on your nvidia rig and have it talk through a raspberry pie (WIP)
  - Self documenting: Try `ghostbox -cghostbox-helper` to have a friendly chat with an expert on the project
  - Much more. This is a work in progress.
 
