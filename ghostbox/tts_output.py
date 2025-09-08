@@ -146,7 +146,7 @@ class DefaultTTSOutput(TTSOutput):
         import pyaudio
 
         wf = wave.open(filename, "rb")
-        chunk = 1024
+        chunk = 512
         p = self.pyaudio
         stream = p.open(
             format=p.get_format_from_width(wf.getsampwidth()),
@@ -156,6 +156,9 @@ class DefaultTTSOutput(TTSOutput):
             frames_per_buffer=chunk,
         )
 
+        while not(stream.is_active()):
+            time.sleep(0.01)
+            
         # Play the audio data
         while data := wf.readframes(chunk):
             if self.stop_flag.isSet():
@@ -163,7 +166,11 @@ class DefaultTTSOutput(TTSOutput):
 
             stream.write(data)
 
-        stream.stop_stream()
+
+        # FIXME: sleep is to prevent abrupt/choppy endings of sentences. Many TTS engines (kokro) could use some padding of silence after their generations, but oh well. In the future, this should be a config option that the engien can set.
+        # note: this can probably be fixed by switching to the callback API of pyaudio
+        time.sleep(0.3)
+        stream.stop_stream()            
         stream.close()
         self.stop_flag.set()
 
@@ -381,3 +388,8 @@ class WebsockTTSOutput(TTSOutput):
         self.stop()
         self._stop_server()
         super().shutdown()
+
+
+        
+
+        
