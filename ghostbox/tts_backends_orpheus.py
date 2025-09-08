@@ -162,7 +162,7 @@ class OrpheusBackend(TTSBackend):
         layers = 999
 
         # obviously this is specific to llamacpp
-        command = f"{executable} --port {port} -c {max_context_length} -ngl {layers} -fa -ctk {quant} -ctv {quant} --mlock"
+        command = f"{executable} --port {port} -c {max_context_length} -ngl {layers} -ctk {quant} -ctv {quant} --mlock"
         cmd_list =             command.split(" ")
         # extend so we properly escape the model_name
         cmd_list.extend(["-m", model_name])
