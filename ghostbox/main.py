@@ -223,7 +223,8 @@ cmds = [
 # 2 - Formats text to be saved as user message in the chat history
 # 3 - formats text to be saved as AI message in the chat history
 mode_formatters = {
-    "default": lambda d: (DoNothing, DoNothing, DoNothing, CleanResponse),
+    "default": lambda d: (DoNothing, DoNothing, DoNothing, DoNothing),
+    "clean": lambda d: (DoNothing, DoNothing, DoNothing, CleanResponse),    
     "thinking": lambda d: (StripThinking, StripThinking, StripThinking, StripThinking),    
     "raw_output": lambda d: (DoNothing, DoNothing, DoNothing, DoNothing),
     "chat": lambda d: (
@@ -343,6 +344,12 @@ class Plumbing(object):
                 sys.exit()
             self.backend = OpenAIBackend(api_key, **kwargs)
             self.setOption("prompt_format", "auto")
+        elif backend == LLMBackend.google.name:
+            google_api_key = self.getOption("google_api_key")
+            self.backend = GoogleBackend(
+                api_key = google_api_key if google_api_key else api_key
+            )
+            self.setOption("prompt_format", "auto")            
         elif backend == LLMBackend.generic.name:
             self.backend = OpenAIBackend(api_key, endpoint=endpoint, **kwargs)
             self.setOption("prompt_format", "auto")
@@ -435,8 +442,13 @@ class Plumbing(object):
                 if "grammar" in d:
                     del d["grammar"]
 
+        # these are currently exclusive to google ai studio
+        if self.getOption("backend") == LLMBackend.google.name:
+            d["model"] = self.getOption("model")
+                    
         if (
             self.getOption("backend") == LLMBackend.generic.name
+            or             self.getOption("backend") == LLMBackend.google.name
             or self.getOption("backend") == LLMBackend.openai.name
             or self.getOption("prompt_format")
             == PromptFormatTemplateSpecialValue.auto.name
@@ -983,7 +995,8 @@ class Plumbing(object):
         signal.signal(signal.SIGINT, self._ctPauseHandler)
 
     def _imageWatchCallback(self, image_path, image_id):
-        newStory(self, [])
+        if self.getOption("image_watch_clear_history"):
+            newStory(self, [])
         w = self.getOption("image_watch_msg")
         if w == "":
             return

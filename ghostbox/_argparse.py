@@ -156,9 +156,16 @@ def makeTaggedParser(default_params) -> TaggedArgumentParser:
         "--api_key",
         type=str,
         default="",
-        help="API key for OpenAI. Without the `--backend openai` option, this has no effect.",
+        help="API key for various services. (e.g. OpenAI, Google's AI Studio). Be sure to specify the right --backend option. If using a specific backend and a specific api key is set, the specific key will be used over the general one.",
         tag=mktag(type=AT.Plumbing, group=AG.OpenAI),
     )
+    parser.add_argument(
+        "--google_api_key",
+        type=str,
+        default="",
+        help="API key for google's AI Studio. https://aistudio.google.com. If this value is set, it will override the --api_key when using google's api.",
+        tag=mktag(type=AT.Plumbing, group=AG.OpenAI),
+    )    
     parser.add_argument(
         "--max_length",
         type=int,
@@ -552,6 +559,13 @@ def makeTaggedParser(default_params) -> TaggedArgumentParser:
         tag=mktag(type=AT.Porcelain, group=AG.Images, service=True, motd=True),
     )
     parser.add_argument(
+        "--image_watch_clear_history",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Clear the current story/message hisotry when a new image is automatically detected.",
+        tag=mktag(type=AT.Porcelain, group=AG.Images, service=True, motd=True),
+    )    
+    parser.add_argument(
         "--image_watch_dir",
         type=str,
         default=os.path.expanduser("~/Pictures/Screenshots/"),
@@ -849,3 +863,4 @@ def makeDefaultOptions():
     tp = makeTaggedParser(backends.default_params)
     parser = tp.get_parser()
     return parser.parse_args(args=""), tp.get_tags()
+

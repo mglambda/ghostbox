@@ -865,3 +865,162 @@ class OpenAIBackend(AIBackend):
 
             self._memoized_params = d
             return d
+
+
+class GoogleBackend(AIBackend):
+    """Backend for google's AI Studio https://aistudio.google.com"""
+
+    def __init__(self, api_key: str, **kwargs):
+        super().__init__("https://aistudio.google.com", **kwargs)
+        self.api_key = api_key
+        # fail early on imports
+        try:
+            from google import genai
+            self.client = genai.Client(api_key=self.api_key)
+        except ImportError:
+            printerr("error: Could not import google's SDK. Do you have the google-genai package installed?\nTry\n\n```\npip install google-genai```\n")
+            raise RuntimeError("Aborting due to failed imports.")
+        
+        self._memoized_params = None
+        api_str = "" if not(api_key) else " with api key " + api_key[:4] + ("x" * len(api_key[4:]))
+        self.log(f"Initialized Google compatible backend {api_str}. Routing to https://aistudio.google.com. Config is {self._config}")
+                                                                            
+    def getName(self):
+        return LLMBackend.google.name
+
+    def getMaxContextLength(self):
+        return -1
+    def get_models(self) -> List[str]:
+        """Returns a list of names of supported models by google."""
+        return ['gemini-2.5-flash']
+
+    def _fix_model(self, model: str) -> str:
+        """Ensures the given model name is a valid one. Returns a default model with a warning if not."""
+        models = self.get_models()
+        if model not in models:
+            default_model = models[0]
+            printerr(f"warning: Model {model} not supported by google. Defaulting to {default_model}")
+            return default_model
+        return model
+    
+    def generate(self, payload):
+        # we don't really make a http request but for debugging purposes we still construct a request object
+        from google.genai import types
+        config=types.GenerateContentConfig(
+            system_instruction=payload["system"],
+            temperature=payload["temperature"],
+        )
+
+        # FIXME: hacky, use the google client.chat interface
+        history = "\n\n".join([msg["role"] + ":\n" + msg["content"] + "\n\n" for msg in payload["messages"] if msg["role"] != "system"])
+        
+        google_payload = {
+            "model": self._fix_model(payload["model"]),
+            "config": config,
+            "contents": history
+            }
+
+        self.log("generate with payload {google_payload}")
+        self._last_request = google_payload
+        response = self.client.models.generate_content(**google_payload)
+        self._last_result = response.model_dump()
+        return response
+
+    def handleGenerateResult(self, result):
+        return self.handleGenerateResultGoogle(result)
+
+
+    @staticmethod
+    def handleGenerateResultGoogle(result):
+        # keep it simple
+        try:
+            return result.text
+        except:
+            self.log(f"warning: Exception while unpacking result from google API. Traceback:\n{traceback.format_exc()}\n")
+            return None
+            
+    @staticmethod
+    def makeOpenAICallback(callback, last_result_callback=lambda x: x):
+        def openAICallback(d):
+            last_result_callback(d)
+            # FIXME: handle reasoning here
+            choices = d["choices"]
+            if not(choices):
+                return
+            choice = choices[0]
+
+            maybeChunk = choice["delta"].get("content", None)
+            if maybeChunk is not None:
+                callback(maybeChunk)
+
+        return openAICallback
+
+    def generateStreaming(self, payload, callback=lambda w: print(w)):
+        self.stream_done.clear()
+        headers = {
+            "Authorization": f"Bearer {self.api_key}",
+            "Content-Type": "application/json",
+        }
+
+        data = payload | {"max_tokens": payload["max_length"], "stream": True, "stream_options": {"include_usage": True}}
+        self._last_request = data
+
+        def one_line_lambdas_for_python(r):
+            self._last_result = r
+
+
+        final_endpoint = self.endpoint + "/v1/chat/completions"
+        self.log(f"generateStreaming to {final_endpoint}.")
+        self.log(f"Payload: {json.dumps(data, indent=4)}")        
+        response = streamPrompt(
+            self.makeOpenAICallback(
+                callback, last_result_callback=one_line_lambdas_for_python
+            ),
+            self.stream_done,
+            final_endpoint,
+            json=data,
+            headers=headers,
+        )
+        if response.status_code != 200:
+            self.last_error = (
+                f"HTTP request with status code {response.status_code}: {response.text}"
+            )
+            self.stream_done.set()
+            return True
+        return False
+
+    def tokenize(self, w):
+        self.log("tokenize not implemented yet for google backend.")
+        return []
+
+    def detokenize(self, ts):
+        self.log("detokenize not implemented yet for google backend.")
+        return []
+    
+    def health(self):
+        return "Google AI Studio API is assumed to be healthy."
+
+    def timings(self, result_json=None) -> Optional[Timings]:
+        self.log("timings not implemented yet for google backend.")
+        return None
+    
+    def sampling_parameters(self) -> Dict[str, SamplingParameterSpec]:
+        # I don't like doing this everytime
+        if self._memoized_params is not None:
+            return self._memoized_params
+
+        supported = supported_parameters.keys()
+        sometimes = sometimes_parameters.keys()
+        d = {hp.name: hp for hp in sampling_parameters.values() if hp.name in supported}
+        for param in sometimes:
+            sp = sampling_parameters[param]
+            d[param] = SamplingParameterSpec(
+                name=sp.name,
+                default_value=sp.default_value,
+                description=sp.description
+                + "\nNote: May not be supported in this backend. For full support, try out llama.cpp https://github.com/ggml-org/llama.cpp",
+            )
+
+            self._memoized_params = d
+            return d
+        
