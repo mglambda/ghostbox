@@ -345,6 +345,9 @@ class Plumbing(object):
             self.backend = OpenAIBackend(api_key, **kwargs)
             self.setOption("prompt_format", "auto")
         elif backend == LLMBackend.google.name:
+            # check the model
+            self.setOption("model", GoogleBackend.fix_model(self.getOption("model")))
+            
             google_api_key = self.getOption("google_api_key")
             self.backend = GoogleBackend(
                 api_key = google_api_key if google_api_key else api_key
@@ -445,10 +448,13 @@ class Plumbing(object):
         # these are currently exclusive to google ai studio
         if self.getOption("backend") == LLMBackend.google.name:
             d["model"] = self.getOption("model")
+            d["system"] = self.session.getSystem()
+            if self.getOption("tts_modify_system_msg"):
+                d["system"] += self._getTTSSpecialMsg()
+            d["story"] = self.session.stories.get().data
                     
         if (
             self.getOption("backend") == LLMBackend.generic.name
-            or             self.getOption("backend") == LLMBackend.google.name
             or self.getOption("backend") == LLMBackend.openai.name
             or self.getOption("prompt_format")
             == PromptFormatTemplateSpecialValue.auto.name
@@ -2192,6 +2198,19 @@ class Plumbing(object):
         return False
 
 
+def get_api_keys(config_file: str, args: Dict[Any, Any]) -> Dict[str, Any]:
+    """Loads api keys from various sources."""
+    key_names = ["api_key","google_api_key"]
+    arg_keys = {k:v for k, v in args.items() if k in key_names and v != ""}
+    
+    try:
+        with open(config_file, "r") as f:
+            config = json.load(f)
+    except:
+        printerr("warning: Couldn't load config file {config_file} while trying to get API keys. Full traceback:\n{traceback.format_exc()}")
+        return arg_keys
+    return {k:v for k, v in config.items() if k in key_names} | arg_keys
+    
 def main():
     just_fix_windows_console()
     tagged_parser = makeTaggedParser(backends.default_params)
@@ -2209,9 +2228,13 @@ def main():
         )
         client.input_loop()
         return
+
+    # user config setup happens later, but unfortunately we need the API keys right now
+    # this may involve the config file as well as environment vars, if they aren't given as command line args
+    keys = get_api_keys(userConfigFile(), args.__dict__)
     
     prog = Plumbing(
-        options=args.__dict__,
+        options= args.__dict__ | keys,
         initial_cli_prompt=args.cli_prompt,
         tags=tagged_parser.get_tags(),
     )

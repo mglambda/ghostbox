@@ -55,6 +55,12 @@ class ChatContentComplex(BaseModel):
     text: Optional[str] = None 
     image_url: Optional[ImageURL] = None
 
+    def get_text(self) -> str:
+        """Simple helper to extract text from a complex message."""
+        if self.text:
+            return self.text
+        else:
+            return self.content
 
 ChatContent = str | List[ChatContentComplex] | Dict
 
@@ -79,6 +85,16 @@ class ChatMessage(BaseModel):
     tool_name: Optional[str] = None
     tool_call_id: Optional[str] = None
 
+    def get_text(self) -> str:
+        """Simple helper to extract the text from a possibly complex message. This may drop other parts."""
+        if type(self.content) == str:
+            return self.content
+        elif type(self.content) == ChatContentComplex:
+            return self.content.get_text()
+        elif type(self.content) == dict:
+            return str(self.content)
+        return ""
+    
     @model_serializer
     def ser_model(self) -> Dict[str, Any]:
         # we basically want exclude_none=True by default

@@ -873,6 +873,12 @@ class GoogleBackend(AIBackend):
     def __init__(self, api_key: str, **kwargs):
         super().__init__("https://aistudio.google.com", **kwargs)
         self.api_key = api_key
+        if not(self.api_key):
+            printerr("error: Google AI Studio requires an API key. Please set it with either the --google_api_key or the general --api_key option. You can get an API key at https://aistudio.google.com")
+            raise RuntimeError("Missing API key for google.")
+
+        api_str = "" if not(api_key) else " with api key " + api_key[:4] + ("x" * len(api_key[4:]))
+        self.log(f"Initializing Google compatible backend {api_str}. Routing to https://aistudio.google.com. Config is {self._config}")
         # fail early on imports
         try:
             from google import genai
@@ -882,27 +888,51 @@ class GoogleBackend(AIBackend):
             raise RuntimeError("Aborting due to failed imports.")
         
         self._memoized_params = None
-        api_str = "" if not(api_key) else " with api key " + api_key[:4] + ("x" * len(api_key[4:]))
-        self.log(f"Initialized Google compatible backend {api_str}. Routing to https://aistudio.google.com. Config is {self._config}")
                                                                             
     def getName(self):
         return LLMBackend.google.name
 
     def getMaxContextLength(self):
         return -1
-    def get_models(self) -> List[str]:
+
+    @staticmethod
+    def get_models() -> List[str]:
         """Returns a list of names of supported models by google."""
         return ['gemini-2.5-flash']
 
-    def _fix_model(self, model: str) -> str:
+    @staticmethod
+    def fix_model(model: str) -> str:
         """Ensures the given model name is a valid one. Returns a default model with a warning if not."""
-        models = self.get_models()
+        models = GoogleBackend.get_models()
         if model not in models:
             default_model = models[0]
             printerr(f"warning: Model {model} not supported by google. Defaulting to {default_model}")
             return default_model
         return model
-    
+
+    def content_from_chatmessage(self, msg: ChatMessage) -> 'google.genai.types.Content':
+        from google.genai.types import Content, Part
+        # FIXME: we don't deal with system here but we should support tool etc in the future
+        # FIXME: also image handling
+        role_mapping = {"assistant": "model",
+                        "user": "user"}
+        
+        parts = [Part(text=msg.get_text())]
+        return Content(role=role_mapping.get(msg.role, "user"),
+                       parts=parts)
+
+    def chat_from_story(self, story: List[ChatMessage], config: 'google.genai.types.GenerateContentConfig', model: Optional[str] = None) -> Tuple['google.genai.chats.Chat', 'google.genai.types.Part']:
+        """Given a chat history and a config, generates a proper google chat history and a prompt.
+        This expects the entire chat history as the story parameter, including the current user prompt as the last message, which will be split out and returned as the second return value.
+        System messages are filtered out and should be put in the config object."""
+        from google.genai.types import Content, GenerateContentConfig
+        history = [self.content_from_chatmessage(msg) for msg in story[:-1] if msg.role != "system"]
+        current_prompt = self.content_from_chatmessage(story[-1]) if story else ""
+        chat = self.client.chats.create(model=self.fix_model(model),
+                                        config=config,
+                                        history=history)
+        return chat, current_prompt
+
     def generate(self, payload):
         # we don't really make a http request but for debugging purposes we still construct a request object
         from google.genai import types
@@ -910,19 +940,17 @@ class GoogleBackend(AIBackend):
             system_instruction=payload["system"],
             temperature=payload["temperature"],
         )
-
-        # FIXME: hacky, use the google client.chat interface
-        history = "\n\n".join([msg["role"] + ":\n" + msg["content"] + "\n\n" for msg in payload["messages"] if msg["role"] != "system"])
         
         google_payload = {
-            "model": self._fix_model(payload["model"]),
+            "story": payload["story"],
             "config": config,
-            "contents": history
-            }
+            "model":payload["model"]
+        }
 
         self.log("generate with payload {google_payload}")
-        self._last_request = google_payload
-        response = self.client.models.generate_content(**google_payload)
+        self._last_request = google_payload        
+        chat, current_prompt = self.chat_from_story(**google_payload)
+        response = chat.send_message(current_prompt.parts)
         self._last_result = response.model_dump()
         return response
 
