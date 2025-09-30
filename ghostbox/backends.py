@@ -933,11 +933,34 @@ class GoogleBackend(AIBackend):
                                         history=history)
         return chat, current_prompt
 
+
+    @staticmethod
+    def get_safety_settings() -> List['google.genai.types.SafetySetting']:
+        from google.genai import types
+        # so the APi will error out with 400 invalid request if you set any other than the following (as per the docs)
+        # kind of defeats the point of an enum. thanks, googl!
+        supported_categories = [
+            types.HarmCategory.HARM_CATEGORY_HATE_SPEECH,
+            types.HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT,
+            types.HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT,
+            types.HarmCategory.HARM_CATEGORY_HARASSMENT
+        ]
+        
+        # FIXME: right now we just turn it all off. mayb let user configure?
+        return [
+                        types.SafetySetting(category=category,
+                                            threshold=types.HarmBlockThreshold.OFF)
+                        for category in list(types.HarmCategory)
+                        if category in supported_categories
+        ]
+
+        
     def generate(self, payload):
         # we don't really make a http request but for debugging purposes we still construct a request object
         from google.genai import types
         config=types.GenerateContentConfig(
             system_instruction=payload["system"],
+            safety_settings=self.get_safety_settings(),
             temperature=payload["temperature"],
         )
         
