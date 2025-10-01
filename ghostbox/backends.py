@@ -908,7 +908,7 @@ class GoogleBackend(AIBackend):
     def get_models() -> List[str]:
         """Returns a list of names of supported models by google."""
         # This should ideally be dynamic, but for now, hardcode a common one.
-        return ['gemini-2.5-flash','gemini-pro']
+        return ['gemini-2.5-flash','gemini-2.0-flash','gemini-2.5-pro']
 
     @staticmethod
     def fix_model(model: str) -> str:
@@ -920,8 +920,9 @@ class GoogleBackend(AIBackend):
             return default_model
         return model
 
+    
     def content_from_chatmessage(self, msg: ChatMessage) -> 'google.genai.types.Content':
-        from google.genai.types import Content, Part, FunctionCall, FunctionResponse
+        from google.genai.types import Content, Part, FunctionCall, FunctionResponse, Blob
         import base64
 
         # Google GenAI roles: 'user', 'model', 'tool'
@@ -942,9 +943,9 @@ class GoogleBackend(AIBackend):
                     try:
                         # Expecting data URI: data:image/jpeg;base64,...
                         mime_type_part, base64_data_part = image_url_str.split(",", 1)
-                        mime_type = mime_type_part.split(':')[1]
+                        mime_type = mime_type_part.split(';')[0].split(':')[1]
                         image_bytes = base64.b64decode(base64_data_part)
-                        genai_parts.append(Part(inline_data=types.Blob(mime_type=mime_type, data=image_bytes)))
+                        genai_parts.append(Part(inline_data=Blob(mime_type=mime_type, data=image_bytes)))
                     except Exception as e:
                         self.log(f"warning: Could not parse image_url for Google GenAI: {image_url_str}. Error: {e}")
                         # Skip this image part if parsing fails
@@ -979,8 +980,7 @@ class GoogleBackend(AIBackend):
             genai_parts.append(Part(text=""))
 
         return Content(role=role_map.get(msg.role, "user"), parts=genai_parts)
-
-    # Deleted chat_from_story as it's no longer used.
+    
 
     @staticmethod
     def get_safety_settings() -> List['google.genai.types.SafetySetting']:
@@ -1002,7 +1002,13 @@ class GoogleBackend(AIBackend):
                         if category in supported_categories
         ]
 
-        
+    def _post_generation(self):
+        """Some processing that runs after generating text, shared between generation methods."""
+        # Check for block/failure etc and notify the user
+        if self._last_result is not None:
+            if (prompt_feedback := self._last_result.get("prompt_feedback", None)) != "":
+                printerr(f"warning: Got prompt feedback from server:\n{json.dumps(prompt_feedback, indent=4)}")
+            
     def generate(self, payload) -> Optional[Any]:
         from google.genai import types
         
@@ -1027,10 +1033,12 @@ class GoogleBackend(AIBackend):
                 continue
             genai_contents.append(self.content_from_chatmessage(msg))
 
+        serializable_contents = self._serialize_content(genai_contents)
+            
         # Store the request for debugging
         self._last_request = {
             "model": payload["model"],
-            "contents": [c.model_dump() for c in genai_contents],
+            "contents": [c.model_dump() for c in serializable_contents],
             "generation_config": generation_config.model_dump(),
             "safety_settings": [s.model_dump() for s in self.get_safety_settings()],
         }
@@ -1044,6 +1052,7 @@ class GoogleBackend(AIBackend):
                 model=self.fix_model(payload["model"])
             )
             self._last_result = response.model_dump()
+            self._post_generation()
             return response
         except Exception as e:
             self.last_error = f"Google API error: {e.__class__.__name__}: {e}\n{traceback.format_exc()}"
@@ -1065,7 +1074,24 @@ class GoogleBackend(AIBackend):
             printerr(f"warning: Exception while unpacking result from Google API. Traceback:\n{traceback.format_exc()}\n")
             return None
 
-    def generateStreaming(self, payload, callback=lambda w: print(w)) -> bool:
+
+    def _serialize_content(self, genai_contents):
+        """Serialize a google genai content type to json strings. This is mostly used for debugging and self.lastResult."""
+        from google.genai import types
+        # Before serializing to JSON, base64 encode any bytes data
+        serializable_contents = []
+        for c in genai_contents:
+            serializable_parts = []
+            for part in c.parts:
+                if part.inline_data and isinstance(part.inline_data.data, bytes):
+                    # no need to see binary data. just snip it.
+                    serializable_parts.append(types.Part(text="<BINARY_BLOB>"))
+                else:
+                    serializable_parts.append(part)
+            serializable_contents.append(Content(role=c.role, parts=serializable_parts))
+        return serializable_contents
+
+    def generateStreaming(self, payload, callback=lambda w: print(w)):
         self.stream_done.clear()
         from google.genai import types
 
@@ -1090,10 +1116,12 @@ class GoogleBackend(AIBackend):
                 continue
             genai_contents.append(self.content_from_chatmessage(msg))
 
+        serializable_contents = self._serialize_content(genai_contents)
+            
         # Store the request for debugging
         self._last_request = {
             "model": payload["model"],
-            "contents": [c.model_dump() for c in genai_contents],
+            "contents": [c.model_dump() for c in serializable_contents],
             "generation_config": generation_config.model_dump(),
             "safety_settings": [s.model_dump() for s in self.get_safety_settings()],
         }
@@ -1109,7 +1137,6 @@ class GoogleBackend(AIBackend):
             full_response_text = ""
             # The `stream_response` is an iterable of `GenerateContentResponse` objects.
             # Each `GenerateContentResponse` has a `candidates` list, and each candidate has `content`.
-            # The `content` object has `parts`.
             # We need to extract text from these parts.
             for chunk in stream_response:
                 if self.stream_done.is_set():
@@ -1138,7 +1165,7 @@ class GoogleBackend(AIBackend):
 
         finally:
             self.stream_done.set() # Signal completion
-
+            self._post_generation()
         return False # No HTTP error
     
     def _make_content_from_raw_text(self, text: str) -> 'google.generativeai.types.Content':
