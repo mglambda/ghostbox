@@ -7,6 +7,7 @@ from ghostbox.definitions import *
 from ghostbox.streaming import *
 import traceback # Added for detailed error logging in GoogleBackend
 import base64 # Added for image handling in GoogleBackend
+from google.genai.types import Content, Part # Added for Google tokenize helper
 
 # this list is based on the llamacpp server. IMO most other backends are subsets of this.
 # the sampler values have been adjusted to more sane default options (no more top_p)
@@ -879,6 +880,13 @@ class GoogleBackend(AIBackend):
             raise RuntimeError("Missing API key for google.")
 
         api_str = "" if not(api_key) else " with api key " + api_key[:4] + ("x" * len(api_key[4:]))
+        
+        # Store the model name in _config for later use by tokenize and generate
+        # The 'model' key should be present in kwargs if passed from Plumbing
+        # We also fix it here to ensure it's a supported model name
+        initial_model = kwargs.get('model', GoogleBackend.get_models()[0] if GoogleBackend.get_models() else 'gemini-pro')
+        self._config['model'] = GoogleBackend.fix_model(initial_model)
+
         self.log(f"Initializing Google compatible backend {api_str}. Routing to https://aistudio.google.com. Config is {self._config}")
         # fail early on imports
         try:
@@ -900,7 +908,7 @@ class GoogleBackend(AIBackend):
     def get_models() -> List[str]:
         """Returns a list of names of supported models by google."""
         # This should ideally be dynamic, but for now, hardcode a common one.
-        return ['gemini-2.5-flash', 'gemini-pro']
+        return ['gemini-pro', 'gemini-1.5-flash-latest']
 
     @staticmethod # Reverted to staticmethod
     def fix_model(model: str) -> str:
@@ -972,6 +980,7 @@ class GoogleBackend(AIBackend):
 
         return Content(role=role_map.get(msg.role, "user"), parts=genai_parts)
 
+    # Deleted chat_from_story as it's no longer used.
 
     @staticmethod
     def get_safety_settings() -> List['google.genai.types.SafetySetting']:
@@ -1032,7 +1041,7 @@ class GoogleBackend(AIBackend):
         self.log(f"generate to Google GenAI. Payload: {json.dumps(self._last_request, indent=4)}")
 
         try:
-            model_instance = self.client.get_model(self.fix_model(payload["model"]))
+            model_instance = self.client.get_model(GoogleBackend.fix_model(payload["model"]))
             response = model_instance.generate_content(
                 contents=genai_contents,
                 generation_config=generation_config,
@@ -1101,7 +1110,7 @@ class GoogleBackend(AIBackend):
         self.log(f"generateStreaming to Google GenAI. Payload: {json.dumps(self._last_request, indent=4)}")
 
         try:
-            model_instance = self.client.get_model(self.fix_model(payload["model"]))
+            model_instance = self.client.get_model(GoogleBackend.fix_model(payload["model"]))
             stream_response = model_instance.generate_content(
                 contents=genai_contents,
                 generation_config=generation_config,
@@ -1150,13 +1159,33 @@ class GoogleBackend(AIBackend):
 
         return False # No HTTP error
     
-    def tokenize(self, w):
-        self.log("tokenize not implemented yet for google backend.")
-        return []
+    def _make_content_from_raw_text(self, text: str) -> 'google.generativeai.types.Content':
+        """Helper to create a Content object from a raw string for token counting."""
+        return Content(role="user", parts=[Part(text=text)])
 
-    def detokenize(self, ts):
-        self.log("detokenize not implemented yet for google backend.")
-        return []
+    def tokenize(self, w: str) -> List[int]:
+        self.log(f"Attempting to tokenize {len(w)} characters for Google backend (only token count is supported).")
+        try:
+            # Retrieve the model name from the backend's internal config
+            model_name = self._config.get("model") 
+            if not model_name:
+                self.log("warning: Cannot tokenize: 'model' not found in backend config. Ensure it's set during initialization.")
+                return []
+
+            model_instance = self.client.get_model(model_name) # Use the stored model_name
+            content_to_count = self._make_content_from_raw_text(w)
+            response = model_instance.count_tokens(contents=[content_to_count])
+            token_count = response.total_tokens
+            self.log(f"Token count for '{w[:50]}...' is {token_count}.")
+            # Return a list of placeholder integers so len() works as expected
+            return [0] * token_count
+        except Exception as e:
+            self.log(f"warning: Tokenization (counting) failed for Google backend: {e.__class__.__name__}: {e}\n{traceback.format_exc()}")
+            return []
+
+    def detokenize(self, ts: List[int]) -> str:
+        self.log("warning: Detokenization is not directly supported by the Google GenAI API.")
+        return ""
     
     def health(self):
         return "Google AI Studio API is assumed to be healthy."
@@ -1191,7 +1220,7 @@ class GoogleBackend(AIBackend):
                 original_timings=usage_metadata,
             )
         except Exception as e:
-            self.log(f"warning: Exception while extracting timings from Google API result: {e}\n{traceback.format_exc()}")
+            self.log(f"warning: Exception while extracting timings from Google API result: {e.__class__.__name__}: {e}\n{traceback.format_exc()}")
             return None
     
     def sampling_parameters(self) -> Dict[str, SamplingParameterSpec]:
