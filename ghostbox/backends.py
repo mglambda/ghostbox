@@ -1006,7 +1006,7 @@ class GoogleBackend(AIBackend):
         """Some processing that runs after generating text, shared between generation methods."""
         # Check for block/failure etc and notify the user
         if self._last_result is not None:
-            if (prompt_feedback := self._last_result.get("prompt_feedback", None)) != "":
+            if (prompt_feedback := self._last_result.get("prompt_feedback", None)) != None:
                 printerr(f"warning: Got prompt feedback from server:\n{json.dumps(prompt_feedback, indent=4)}")
             
     def generate(self, payload) -> Optional[Any]:
