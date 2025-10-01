@@ -1008,6 +1008,8 @@ class GoogleBackend(AIBackend):
         
         # Prepare generation_config
         generation_config = types.GenerateContentConfig(
+            system_instruction=payload["system"],
+            safety_settings=self.get_safety_settings(),
             temperature=payload.get("temperature", 0.8),
         )
         if payload.get("max_length", -1) > 0:
@@ -1016,10 +1018,6 @@ class GoogleBackend(AIBackend):
             generation_config.top_p = payload["top_p"]
         if payload.get("top_k") is not None:
             generation_config.top_k = payload["top_k"]
-
-        # Google GenAI's `generate_content` expects `system_instruction` as a direct argument,
-        # not inside `generation_config` or `contents`.
-        system_instruction_text = payload.get("system", "")
 
         # Prepare contents for generate_content
         genai_contents = []
@@ -1035,19 +1033,15 @@ class GoogleBackend(AIBackend):
             "contents": [c.model_dump() for c in genai_contents],
             "generation_config": generation_config.model_dump(),
             "safety_settings": [s.model_dump() for s in self.get_safety_settings()],
-            "system_instruction": system_instruction_text,
-            "stream": False
         }
+        
         self.log(f"generate to Google GenAI. Payload: {json.dumps(self._last_request, indent=4)}")
 
         try:
-            model_instance = self.client.get_model(GoogleBackend.fix_model(payload["model"]))
-            response = model_instance.generate_content(
+            response = self.client.models.generate_content(
                 contents=genai_contents,
-                generation_config=generation_config,
-                safety_settings=self.get_safety_settings(),
-                system_instruction=system_instruction_text,
-                stream=False,
+                config=generation_config,
+                model=self.fix_model(payload["model"])
             )
             self._last_result = response.model_dump()
             return response
@@ -1154,15 +1148,9 @@ class GoogleBackend(AIBackend):
     def tokenize(self, w: str) -> List[int]:
         self.log(f"Attempting to tokenize {len(w)} characters for Google backend (only token count is supported).")
         try:
-            # Retrieve the model name from the backend's internal config
-            model_name = self._config.get("model") 
-            if not model_name:
-                self.log("warning: Cannot tokenize: 'model' not found in backend config. Ensure it's set during initialization.")
-                return []
-
-            model_instance = self.client.get_model(model_name) # Use the stored model_name
             content_to_count = self._make_content_from_raw_text(w)
-            response = model_instance.count_tokens(contents=[content_to_count])
+            response = self.client.models.count_tokens(contents=[content_to_count],
+                                                       model=self.fix_model(self._config.get("model", "")))
             token_count = response.total_tokens
             self.log(f"Token count for '{w[:50]}...' is {token_count}.")
             # Return a list of placeholder integers so len() works as expected
@@ -1179,7 +1167,6 @@ class GoogleBackend(AIBackend):
         return "Google AI Studio API is assumed to be healthy."
 
     def timings(self, result_json=None) -> Optional[Timings]:
-        print(f"debug: {result_json}")
         # Google GenAI responses include usage metadata in the final response.
         # We can extract this to populate Timings.
         if result_json is None:
