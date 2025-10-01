@@ -908,9 +908,9 @@ class GoogleBackend(AIBackend):
     def get_models() -> List[str]:
         """Returns a list of names of supported models by google."""
         # This should ideally be dynamic, but for now, hardcode a common one.
-        return ['gemini-pro', 'gemini-1.5-flash-latest']
+        return ['gemini-2.5-flash','gemini-pro']
 
-    @staticmethod # Reverted to staticmethod
+    @staticmethod
     def fix_model(model: str) -> str:
         """Ensures the given model name is a valid one. Returns a default model with a warning if not."""
         models = GoogleBackend.get_models()
@@ -1077,6 +1077,8 @@ class GoogleBackend(AIBackend):
 
         # Prepare generation_config from payload
         generation_config = types.GenerateContentConfig(
+            system_instruction=payload["system"],
+            safety_settings=self.get_safety_settings(),
             temperature=payload.get("temperature", 0.8),
         )
         if payload.get("max_length", -1) > 0:
@@ -1085,10 +1087,6 @@ class GoogleBackend(AIBackend):
             generation_config.top_p = payload["top_p"]
         if payload.get("top_k") is not None:
             generation_config.top_k = payload["top_k"]
-        
-        # Google GenAI's `generate_content` expects `system_instruction` as a direct argument,
-        # not inside `generation_config` or `contents`.
-        system_instruction_text = payload.get("system", "")
 
         # Prepare contents for generate_content
         genai_contents = []
@@ -1104,19 +1102,14 @@ class GoogleBackend(AIBackend):
             "contents": [c.model_dump() for c in genai_contents],
             "generation_config": generation_config.model_dump(),
             "safety_settings": [s.model_dump() for s in self.get_safety_settings()],
-            "system_instruction": system_instruction_text,
-            "stream": True
         }
         self.log(f"generateStreaming to Google GenAI. Payload: {json.dumps(self._last_request, indent=4)}")
 
         try:
-            model_instance = self.client.get_model(GoogleBackend.fix_model(payload["model"]))
-            stream_response = model_instance.generate_content(
+            stream_response = self.client.models.generate_content_stream(
                 contents=genai_contents,
-                generation_config=generation_config,
-                safety_settings=self.get_safety_settings(),
-                system_instruction=system_instruction_text,
-                stream=True,
+                config=generation_config,
+                model=self.fix_model(payload["model"]),
             )
 
             full_response_text = ""
@@ -1143,11 +1136,6 @@ class GoogleBackend(AIBackend):
                 # This will be overwritten by the final aggregated response if available
                 self._last_result = chunk.model_dump()
 
-            # After iteration, stream_response.result contains the aggregated response
-            if stream_response.result:
-                self._last_result = stream_response.result.model_dump()
-            else:
-                self._last_result = {}
 
         except Exception as e:
             self.last_error = f"Google API streaming error: {e.__class__.__name__}: {e}\n{traceback.format_exc()}"
@@ -1191,6 +1179,7 @@ class GoogleBackend(AIBackend):
         return "Google AI Studio API is assumed to be healthy."
 
     def timings(self, result_json=None) -> Optional[Timings]:
+        print(f"debug: {result_json}")
         # Google GenAI responses include usage metadata in the final response.
         # We can extract this to populate Timings.
         if result_json is None:

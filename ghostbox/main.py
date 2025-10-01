@@ -1942,11 +1942,21 @@ class Plumbing(object):
         self.images[id] = ImageRef(url=url, data=loadImageData(url))
         self._images_dirty = True
 
+    def _get_last_result_tokens(self) -> str:
+        """Get a string with a number in it showing the total tokens for the last resquest/result."""
+        # this is backend dependent
+        if self.getOption("backend") == LLMBackend.google.name:
+            return str(self.lastResult.get("usage_metadata", {}).get("total_token_count", 0))
+        else:
+            return str(self.lastResult.get("usage", {}).get("total_tokens", 0))
+
+        
     def setLastJSON(self, json_result):
         self.lastResult = json_result
         try:
-            current_tokens = str(self.lastResult["usage"]["total_tokens"])
+            current_tokens = self._get_last_result_tokens()
         except:
+            print(f"debug: {traceback.format_exc()}")
             # fail silently, it's not that important
             current_tokens = "?"
 
