@@ -5,6 +5,8 @@ from pydantic import BaseModel
 from ghostbox.util import *
 from ghostbox.definitions import *
 from ghostbox.streaming import *
+import traceback # Added for detailed error logging in GoogleBackend
+import base64 # Added for image handling in GoogleBackend
 
 # this list is based on the llamacpp server. IMO most other backends are subsets of this.
 # the sampler values have been adjusted to more sane default options (no more top_p)
@@ -180,7 +182,6 @@ sampling_parameters = {
         description="Set a time limit in milliseconds for the prediction (a.k.a. text-generation) phase. The timeout will trigger if the generation takes more than the specified time (measured since the first token was generated) and if a new-line character has already been generated. Useful for FIM applications.",
         default_value=0,
     ),
-    # this doesn't even work in llama
     #    "image_data": SamplingParameterSpec(
     #        name="image_data",
     #        description="An array of objects to hold base64-encoded image `data` and its `id`s to be reference in `prompt`. You can determine the place of the image in the prompt as in the following: `USER:[img-12]Describe the image in detail.\nASSISTANT:`. In this case, `[img-12]` will be replaced by the embeddings of the image with id `12` in the following `image_data` array: `{..., \"image_data\": [{\"data\": \"<BASE64_STRING>\", \"id\": 12}]}`. Use `image_data` only with multimodal models, e.g., LLaVA.",
@@ -898,40 +899,78 @@ class GoogleBackend(AIBackend):
     @staticmethod
     def get_models() -> List[str]:
         """Returns a list of names of supported models by google."""
-        return ['gemini-2.5-flash']
+        # This should ideally be dynamic, but for now, hardcode a common one.
+        return ['gemini-2.5-flash', 'gemini-pro']
 
-    @staticmethod
+    @staticmethod # Reverted to staticmethod
     def fix_model(model: str) -> str:
         """Ensures the given model name is a valid one. Returns a default model with a warning if not."""
         models = GoogleBackend.get_models()
         if model not in models:
-            default_model = models[0]
-            printerr(f"warning: Model {model} not supported by google. Defaulting to {default_model}")
+            default_model = models[0] if models else 'gemini-pro' # Fallback if get_models is empty
+            printerr(f"warning: Model {model} not supported by Google. Defaulting to {default_model}")
             return default_model
         return model
 
     def content_from_chatmessage(self, msg: ChatMessage) -> 'google.genai.types.Content':
-        from google.genai.types import Content, Part
-        # FIXME: we don't deal with system here but we should support tool etc in the future
-        # FIXME: also image handling
-        role_mapping = {"assistant": "model",
-                        "user": "user"}
-        
-        parts = [Part(text=msg.get_text())]
-        return Content(role=role_mapping.get(msg.role, "user"),
-                       parts=parts)
+        from google.genai.types import Content, Part, FunctionCall, FunctionResponse
+        import base64
 
-    def chat_from_story(self, story: List[ChatMessage], config: 'google.genai.types.GenerateContentConfig', model: Optional[str] = None) -> Tuple['google.genai.chats.Chat', 'google.genai.types.Part']:
-        """Given a chat history and a config, generates a proper google chat history and a prompt.
-        This expects the entire chat history as the story parameter, including the current user prompt as the last message, which will be split out and returned as the second return value.
-        System messages are filtered out and should be put in the config object."""
-        from google.genai.types import Content, GenerateContentConfig
-        history = [self.content_from_chatmessage(msg) for msg in story[:-1] if msg.role != "system"]
-        current_prompt = self.content_from_chatmessage(story[-1]) if story else ""
-        chat = self.client.chats.create(model=self.fix_model(model),
-                                        config=config,
-                                        history=history)
-        return chat, current_prompt
+        # Google GenAI roles: 'user', 'model', 'tool'
+        # System messages are usually handled by system_instruction, but if they appear in history, they are treated as user messages by GenAI.
+        role_map = {"user": "user", "assistant": "model", "tool": "tool", "system": "user"} 
+
+        genai_parts = []
+
+        # Handle text content
+        if isinstance(msg.content, str) and msg.content:
+            genai_parts.append(Part(text=msg.content))
+        elif isinstance(msg.content, list): # Multimodal content
+            for item in msg.content:
+                if item.type == "text" and item.get_text():
+                    genai_parts.append(Part(text=item.get_text()))
+                elif item.type == "image_url" and item.image_url and item.image_url.url:
+                    image_url_str = item.image_url.url
+                    try:
+                        # Expecting data URI: data:image/jpeg;base64,...
+                        mime_type_part, base64_data_part = image_url_str.split(",", 1)
+                        mime_type = mime_type_part.split(':')[1]
+                        image_bytes = base64.b64decode(base64_data_part)
+                        genai_parts.append(Part(inline_data=types.Blob(mime_type=mime_type, data=image_bytes)))
+                    except Exception as e:
+                        self.log(f"warning: Could not parse image_url for Google GenAI: {image_url_str}. Error: {e}")
+                        # Skip this image part if parsing fails
+                        pass
+        
+        # Handle tool calls (assistant requesting a tool)
+        if msg.role == "assistant" and msg.tool_calls:
+            for tool_call in msg.tool_calls:
+                try:
+                    function_args = json.loads(tool_call.function.arguments)
+                    genai_parts.append(Part(function_call=FunctionCall(name=tool_call.function.name, args=function_args)))
+                except json.JSONDecodeError:
+                    self.log(f"warning: Could not decode tool arguments for Google GenAI: {tool_call.function.arguments}")
+                    genai_parts.append(Part(text=f"Assistant requested tool {tool_call.function.name} with invalid arguments: {tool_call.function.arguments}"))
+        
+        # Handle tool results (tool role message)
+        if msg.role == "tool" and msg.tool_name and msg.content is not None:
+            tool_output = msg.content
+            if isinstance(tool_output, (dict, list)):
+                tool_output = json.dumps(tool_output) # Convert dict/list to JSON string
+            
+            genai_parts.append(Part(function_response=FunctionResponse(name=msg.tool_name, response={"result": tool_output})))
+            # Note: GenAI's FunctionResponse `response` field is a dict.
+            # We wrap the tool's content in a "result" key. This might need adjustment based on actual tool output structure.
+
+        # Ensure at least one part if message has content but no specific parts were added
+        if not genai_parts and msg.get_text():
+            genai_parts.append(Part(text=msg.get_text()))
+        
+        # If still no parts, add an empty text part to avoid API errors for empty content
+        if not genai_parts:
+            genai_parts.append(Part(text=""))
+
+        return Content(role=role_map.get(msg.role, "user"), parts=genai_parts)
 
 
     @staticmethod
@@ -955,27 +994,59 @@ class GoogleBackend(AIBackend):
         ]
 
         
-    def generate(self, payload):
-        # we don't really make a http request but for debugging purposes we still construct a request object
+    def generate(self, payload) -> Optional[Any]:
         from google.genai import types
-        config=types.GenerateContentConfig(
-            system_instruction=payload["system"],
-            safety_settings=self.get_safety_settings(),
-            temperature=payload["temperature"],
-        )
         
-        google_payload = {
-            "story": payload["story"],
-            "config": config,
-            "model":payload["model"]
-        }
+        # Prepare generation_config
+        generation_config = types.GenerateContentConfig(
+            temperature=payload.get("temperature", 0.8),
+        )
+        if payload.get("max_length", -1) > 0:
+            generation_config.max_output_tokens = payload["max_length"]
+        if payload.get("top_p") is not None:
+            generation_config.top_p = payload["top_p"]
+        if payload.get("top_k") is not None:
+            generation_config.top_k = payload["top_k"]
 
-        self.log("generate with payload {google_payload}")
-        self._last_request = google_payload        
-        chat, current_prompt = self.chat_from_story(**google_payload)
-        response = chat.send_message(current_prompt.parts)
-        self._last_result = response.model_dump()
-        return response
+        # Google GenAI's `generate_content` expects `system_instruction` as a direct argument,
+        # not inside `generation_config` or `contents`.
+        system_instruction_text = payload.get("system", "")
+
+        # Prepare contents for generate_content
+        genai_contents = []
+        for msg in payload["story"]:
+            # System messages are passed via `system_instruction` argument, not in `contents` list.
+            if msg.role == "system":
+                continue
+            genai_contents.append(self.content_from_chatmessage(msg))
+
+        # Store the request for debugging
+        self._last_request = {
+            "model": payload["model"],
+            "contents": [c.model_dump() for c in genai_contents],
+            "generation_config": generation_config.model_dump(),
+            "safety_settings": [s.model_dump() for s in self.get_safety_settings()],
+            "system_instruction": system_instruction_text,
+            "stream": False
+        }
+        self.log(f"generate to Google GenAI. Payload: {json.dumps(self._last_request, indent=4)}")
+
+        try:
+            model_instance = self.client.get_model(self.fix_model(payload["model"]))
+            response = model_instance.generate_content(
+                contents=genai_contents,
+                generation_config=generation_config,
+                safety_settings=self.get_safety_settings(),
+                system_instruction=system_instruction_text,
+                stream=False,
+            )
+            self._last_result = response.model_dump()
+            return response
+        except Exception as e:
+            self.last_error = f"Google API error: {e.__class__.__name__}: {e}\n{traceback.format_exc()}"
+            self.log(self.last_error)
+            return None
+
 
     def handleGenerateResult(self, result):
         return self.handleGenerateResultGoogle(result)
@@ -985,61 +1056,100 @@ class GoogleBackend(AIBackend):
     def handleGenerateResultGoogle(result):
         # keep it simple
         try:
+            # result.text aggregates all text parts from all candidates
             return result.text
-        except:
-            self.log(f"warning: Exception while unpacking result from google API. Traceback:\n{traceback.format_exc()}\n")
+        except Exception as e:
+            printerr(f"warning: Exception while unpacking result from Google API. Traceback:\n{traceback.format_exc()}\n")
             return None
-            
-    @staticmethod
-    def makeOpenAICallback(callback, last_result_callback=lambda x: x):
-        def openAICallback(d):
-            last_result_callback(d)
-            # FIXME: handle reasoning here
-            choices = d["choices"]
-            if not(choices):
-                return
-            choice = choices[0]
 
-            maybeChunk = choice["delta"].get("content", None)
-            if maybeChunk is not None:
-                callback(maybeChunk)
-
-        return openAICallback
-
-    def generateStreaming(self, payload, callback=lambda w: print(w)):
+    def generateStreaming(self, payload, callback=lambda w: print(w)) -> bool:
         self.stream_done.clear()
-        headers = {
-            "Authorization": f"Bearer {self.api_key}",
-            "Content-Type": "application/json",
-        }
+        from google.genai import types
 
-        data = payload | {"max_tokens": payload["max_length"], "stream": True, "stream_options": {"include_usage": True}}
-        self._last_request = data
-
-        def one_line_lambdas_for_python(r):
-            self._last_result = r
-
-
-        final_endpoint = self.endpoint + "/v1/chat/completions"
-        self.log(f"generateStreaming to {final_endpoint}.")
-        self.log(f"Payload: {json.dumps(data, indent=4)}")        
-        response = streamPrompt(
-            self.makeOpenAICallback(
-                callback, last_result_callback=one_line_lambdas_for_python
-            ),
-            self.stream_done,
-            final_endpoint,
-            json=data,
-            headers=headers,
+        # Prepare generation_config from payload
+        generation_config = types.GenerateContentConfig(
+            temperature=payload.get("temperature", 0.8),
         )
-        if response.status_code != 200:
-            self.last_error = (
-                f"HTTP request with status code {response.status_code}: {response.text}"
-            )
-            self.stream_done.set()
-            return True
-        return False
+        if payload.get("max_length", -1) > 0:
+            generation_config.max_output_tokens = payload["max_length"]
+        if payload.get("top_p") is not None:
+            generation_config.top_p = payload["top_p"]
+        if payload.get("top_k") is not None:
+            generation_config.top_k = payload["top_k"]
+        
+        # Google GenAI's `generate_content` expects `system_instruction` as a direct argument,
+        # not inside `generation_config` or `contents`.
+        system_instruction_text = payload.get("system", "")
 
+        # Prepare contents for generate_content
+        genai_contents = []
+        for msg in payload["story"]:
+            # System messages are passed via `system_instruction` argument, not in `contents` list.
+            if msg.role == "system":
+                continue
+            genai_contents.append(self.content_from_chatmessage(msg))
+
+        # Store the request for debugging
+        self._last_request = {
+            "model": payload["model"],
+            "contents": [c.model_dump() for c in genai_contents],
+            "generation_config": generation_config.model_dump(),
+            "safety_settings": [s.model_dump() for s in self.get_safety_settings()],
+            "system_instruction": system_instruction_text,
+            "stream": True
+        }
+        self.log(f"generateStreaming to Google GenAI. Payload: {json.dumps(self._last_request, indent=4)}")
+
+        try:
+            model_instance = self.client.get_model(self.fix_model(payload["model"]))
+            stream_response = model_instance.generate_content(
+                contents=genai_contents,
+                generation_config=generation_config,
+                safety_settings=self.get_safety_settings(),
+                system_instruction=system_instruction_text,
+                stream=True,
+            )
+
+            full_response_text = ""
+            # The `stream_response` is an iterable of `GenerateContentResponse` objects.
+            # Each `GenerateContentResponse` has a `candidates` list, and each candidate has `content`.
+            # The `content` object has `parts`.
+            # We need to extract text from these parts.
+            for chunk in stream_response:
+                if self.stream_done.is_set():
+                    self.log("Streaming stopped by external signal.")
+                    break
+                
+                # A chunk might have multiple candidates, usually just one.
+                # A candidate's content might have multiple parts.
+                if chunk.candidates:
+                    candidate_content = chunk.candidates[0].content
+                    for part in candidate_content.parts:
+                        if part.text:
+                            callback(part.text)
+                            full_response_text += part.text
+                        # For now, we only stream text. Tool_code or tool_response parts are not streamed as raw text.
+                
+                # Store the last chunk's model_dump for _last_result
+                # This will be overwritten by the final aggregated response if available
+                self._last_result = chunk.model_dump()
+
+            # After iteration, stream_response.result contains the aggregated response
+            if stream_response.result:
+                self._last_result = stream_response.result.model_dump()
+            else:
+                self._last_result = {}
+
+        except Exception as e:
+            self.last_error = f"Google API streaming error: {e.__class__.__name__}: {e}\n{traceback.format_exc()}"
+            self.log(self.last_error)
+            return True # Indicate error
+
+        finally:
+            self.stream_done.set() # Signal completion
+
+        return False # No HTTP error
+    
     def tokenize(self, w):
         self.log("tokenize not implemented yet for google backend.")
         return []
@@ -1052,26 +1162,58 @@ class GoogleBackend(AIBackend):
         return "Google AI Studio API is assumed to be healthy."
 
     def timings(self, result_json=None) -> Optional[Timings]:
-        self.log("timings not implemented yet for google backend.")
-        return None
+        # Google GenAI responses include usage metadata in the final response.
+        # We can extract this to populate Timings.
+        if result_json is None:
+            if (json_data := self._last_result) is None:
+                return None
+        else:
+            json_data = result_json
+
+        try:
+            usage_metadata = json_data.get("usage_metadata", {})
+            prompt_token_count = usage_metadata.get("prompt_token_count", 0)
+            candidates_token_count = usage_metadata.get("candidates_token_count", 0)
+            total_token_count = usage_metadata.get("total_token_count", 0)
+
+            # Google GenAI does not directly provide ms timings per token/prompt.
+            # We can only infer total tokens.
+            # For now, set ms timings to 0 or placeholder.
+            return Timings(
+                prompt_n=prompt_token_count,
+                predicted_n=candidates_token_count,
+                cached_n=None, # Not directly available
+                truncated=False, # Not directly available
+                prompt_ms=0.0,
+                predicted_ms=0.0,
+                predicted_per_second=0.0,
+                predicted_per_token_ms=0.0,
+                original_timings=usage_metadata,
+            )
+        except Exception as e:
+            self.log(f"warning: Exception while extracting timings from Google API result: {e}\n{traceback.format_exc()}")
+            return None
     
     def sampling_parameters(self) -> Dict[str, SamplingParameterSpec]:
-        # I don't like doing this everytime
         if self._memoized_params is not None:
             return self._memoized_params
 
-        supported = supported_parameters.keys()
-        sometimes = sometimes_parameters.keys()
-        d = {hp.name: hp for hp in sampling_parameters.values() if hp.name in supported}
-        for param in sometimes:
-            sp = sampling_parameters[param]
-            d[param] = SamplingParameterSpec(
-                name=sp.name,
-                default_value=sp.default_value,
-                description=sp.description
-                + "\nNote: May not be supported in this backend. For full support, try out llama.cpp https://github.com/ggml-org/llama.cpp",
-            )
+        # Google GenAI's `GenerateContentConfig` supports:
+        # temperature: float (0.0 - 1.0)
+        # top_p: float (0.0 - 1.0)
+        # top_k: int (positive)
+        # max_output_tokens: int (positive) -> maps to Ghostbox's max_length
+        # stop_sequences: List[str] -> maps to Ghostbox's stop
 
-            self._memoized_params = d
-            return d
-        
+        google_supported_params = {
+            "temperature": sampling_parameters["temperature"],
+            "top_p": sampling_parameters["top_p"],
+            "top_k": sampling_parameters["top_k"],
+            "max_length": sampling_parameters["max_length"], 
+            "stop": sampling_parameters["stop"],
+        }
+            
+        self._memoized_params = google_supported_params
+        return google_supported_params
+
+
