@@ -880,13 +880,7 @@ class GoogleBackend(AIBackend):
             raise RuntimeError("Missing API key for google.")
 
         api_str = "" if not(api_key) else " with api key " + api_key[:4] + ("x" * len(api_key[4:]))
-        
-        # Store the model name in _config for later use by tokenize and generate
-        # The 'model' key should be present in kwargs if passed from Plumbing
-        # We also fix it here to ensure it's a supported model name
-        initial_model = kwargs.get('model', GoogleBackend.get_models()[0] if GoogleBackend.get_models() else 'gemini-pro')
-        self._config['model'] = GoogleBackend.fix_model(initial_model)
-
+       
         self.log(f"Initializing Google compatible backend {api_str}. Routing to https://aistudio.google.com. Config is {self._config}")
         # fail early on imports
         try:
@@ -897,6 +891,12 @@ class GoogleBackend(AIBackend):
             raise RuntimeError("Aborting due to failed imports.")
         
         self._memoized_params = None
+        # Store the model name in _config for later use by tokenize and generate
+        # The 'model' key should be present in kwargs if passed from Plumbing
+        # We also fix it here to ensure it's a supported model name
+        initial_model = kwargs.get('model', "")
+        self._config['model'] = self.fix_model(initial_model)
+        
                                                                             
     def getName(self):
         return LLMBackend.google.name
@@ -904,18 +904,16 @@ class GoogleBackend(AIBackend):
     def getMaxContextLength(self):
         return -1
 
-    @staticmethod
-    def get_models() -> List[str]:
-        """Returns a list of names of supported models by google."""
-        # This should ideally be dynamic, but for now, hardcode a common one.
-        return ['gemini-2.5-flash','gemini-2.0-flash','gemini-2.5-pro']
 
-    @staticmethod
-    def fix_model(model: str) -> str:
+    def get_models(self) -> List[str]:
+        """Returns a list of names of supported models by google."""
+        return self.client.models.list()
+
+    def fix_model(self, model: str) -> str:
         """Ensures the given model name is a valid one. Returns a default model with a warning if not."""
-        models = GoogleBackend.get_models()
+        models = [model.name for model in self.get_models()]
         if model not in models:
-            default_model = models[0] if models else 'gemini-pro' # Fallback if get_models is empty
+            default_model = models[0] if len(models) > 0 else "gemini-2.5-flash"
             printerr(f"warning: Model {model} not supported by Google. Defaulting to {default_model}")
             return default_model
         return model
@@ -950,7 +948,20 @@ class GoogleBackend(AIBackend):
                         self.log(f"warning: Could not parse image_url for Google GenAI: {image_url_str}. Error: {e}")
                         # Skip this image part if parsing fails
                         pass
-        
+                elif item.type == "video_url" and item.video_url and item.video_url.url:
+                    video_url_str = item.video_url.url
+                    try:
+                        # Assuming data URI: data:video/mp4;base64,...
+                        mime_type_part, base64_data_part = video_url_str.split(",", 1)
+                        mime_type = mime_type_part.split(';')[0].split(':')[1]
+                        video_bytes = base64.b64decode(base64_data_part)
+                        genai_parts.append(Part(inline_data=Blob(mime_type=mime_type, data=video_bytes)))
+                    except Exception as e:
+                        self.log(f"warning: Could not parse video_url for Google GenAI: {video_url_str}. Error: {e}")
+                        # Skip this video part if parsing fails
+                        pass
+
+                    
         # Handle tool calls (assistant requesting a tool)
         if msg.role == "assistant" and msg.tool_calls:
             for tool_call in msg.tool_calls:
@@ -1044,6 +1055,8 @@ class GoogleBackend(AIBackend):
         }
         
         self.log(f"generate to Google GenAI. Payload: {json.dumps(self._last_request, indent=4)}")
+        # ensure the model used here and the one for tokenization is the same
+        self._config["model"] = self.fix_model(payload["model"])
 
         try:
             response = self.client.models.generate_content(
@@ -1093,7 +1106,7 @@ class GoogleBackend(AIBackend):
 
     def generateStreaming(self, payload, callback=lambda w: print(w)):
         self.stream_done.clear()
-        from google.genai import types
+        from google.genai import types, errors
 
         # Prepare generation_config from payload
         generation_config = types.GenerateContentConfig(
@@ -1126,7 +1139,9 @@ class GoogleBackend(AIBackend):
             "safety_settings": [s.model_dump() for s in self.get_safety_settings()],
         }
         self.log(f"generateStreaming to Google GenAI. Payload: {json.dumps(self._last_request, indent=4)}")
-
+        # ensure the model used here and the one for tokenization is the same
+        self._config["model"] = self.fix_model(payload["model"])
+        
         try:
             stream_response = self.client.models.generate_content_stream(
                 contents=genai_contents,
@@ -1159,8 +1174,8 @@ class GoogleBackend(AIBackend):
 
 
         except Exception as e:
-            self.last_error = f"Google API streaming error: {e.__class__.__name__}: {e}\n{traceback.format_exc()}"
-            self.log(self.last_error)
+            self.last_error = f"Google API streaming error: {e.__class__.__name__}: {e}"
+            self.log(self.last_error + f"Full Traceback:\n{traceback.format_exc()}")
             return True # Indicate error
 
         finally:

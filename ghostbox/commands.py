@@ -174,6 +174,20 @@ def showVoices(prog, argv):
     return "\n".join(getVoices(prog))
 
 
+def showModels(prog, argv):
+    """
+    List all available models for the backend. For most local backends, this is not supported.
+    """
+    if prog.getOption("backend") == LLMBackend.google.name:
+        w = "Name\tModel\tDescription"
+        for model in prog.getBackend().get_models():
+            w += f"\n{model.display_name}\t{model.name}\t{model.description}"
+        return w
+
+    return "Model listing not supported by backend."
+    
+
+
 def toggleMode(prog, argv):
     """[MODE_NAME}
     Put the program into the specified mode, or show the current mode if MODE_NAME is omitted.

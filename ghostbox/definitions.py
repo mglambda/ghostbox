@@ -46,6 +46,12 @@ class ImageURL(BaseModel):
     url: str
 
 
+class VideoURL(BaseModel):
+    # in keeping with image, this may be a URL (e.g. filepath) or base64 encoded data.
+    # in the case of video, I suppose raw data is somewhat less likely.
+    url: str
+    
+
 class ChatContentComplex(BaseModel):
     """Contentfield of a ChatMessage, at least when the content is not a mere string."""
 
@@ -54,6 +60,7 @@ class ChatContentComplex(BaseModel):
     content: str
     text: Optional[str] = None 
     image_url: Optional[ImageURL] = None
+    video_url: Optional[VideoURL] = None    
 
     def get_text(self) -> str:
         """Simple helper to extract text from a complex message."""
@@ -99,6 +106,7 @@ class ChatMessage(BaseModel):
     def ser_model(self) -> Dict[str, Any]:
         # we basically want exclude_none=True by default
         return {k:v for k, v in dict(self).items() if v is not None}
+    
     @staticmethod
     def make_image_message(text: str, images: List[ImageRef], **kwargs) -> 'ChatMessage':
         from ghostbox.util import getImageExtension
@@ -145,7 +153,7 @@ PromptFormatTemplateSpecialValue = Enum(
 ArgumentType = Enum("ArgumentType", "Porcelain Plumbing")
 ArgumentGroup = Enum(
     "ArgumentGroup",
-    "General Generation Interface Characters Templates TTS Audio Images Tools Backend SamplingParameters LlamaCPP OpenAI",
+    "General Generation Interface Characters Templates TTS Audio Images Tools Backend SamplingParameters LlamaCPP OpenAI Google",
 )
 
 

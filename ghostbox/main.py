@@ -209,6 +209,7 @@ cmds = [
     ("/lsoptions", showOptions),
     ("/lschars", showChars),
     ("/lsvoices", showVoices),
+    ("/lsmodels", showModels),    
     ("/lsvars", showVars),
     ("/mode", toggleMode),
     ("/hide", hide),
@@ -345,14 +346,17 @@ class Plumbing(object):
             self.backend = OpenAIBackend(api_key, **kwargs)
             self.setOption("prompt_format", "auto")
         elif backend == LLMBackend.google.name:
-            # check the model
-            self.setOption("model", GoogleBackend.fix_model(self.getOption("model")))
-            
             google_api_key = self.getOption("google_api_key")
             self.backend = GoogleBackend(
                 api_key = google_api_key if google_api_key else api_key
             )
-            self.setOption("prompt_format", "auto")            
+            self.setOption("prompt_format", "auto")
+            if not(self.getOption("model")):
+                self.setOption("model", self.getOption("google_prefered_model"))
+            
+            # check the model
+            self.setOption("model", self.getBackend().fix_model(self.getOption("model")))
+            
         elif backend == LLMBackend.generic.name:
             self.backend = OpenAIBackend(api_key, endpoint=endpoint, **kwargs)
             self.setOption("prompt_format", "auto")
@@ -1668,6 +1672,16 @@ class Plumbing(object):
             v = mkChatPrompt(self.session.getVar("chat_ai"), space=False)
         return (w, v)
 
+    def _on_generation_error(self, last_error: str):
+        """Triggers when there is a server, network, or other error during backend generation."""
+        # FIXME: in the future, allow API users to configure hooks here
+        printerr("error: " + last_error)
+        self.verbose("Additional information (like /lastrequest):\n" + json.dumps(self.getBackend().getLastRequest(), indent=4))
+        # generation error means there was no AI message. So sometimes we drop the last history item (usually this makes sense)
+        if self.getOption("history_drop_on_generation_error"):
+            self.session.stories.get().drop()
+            self.verbose("Dropped last prompt due to error. You'll have to repeat it manually. Toggle history_drop_on_generation_error to disable this.")
+                
     def communicate(self, prompt_text, stream_callback=None):
         """Sends prompt_text to the backend and returns results."""
         backend = self.getBackend()
@@ -1697,7 +1711,7 @@ class Plumbing(object):
                     token, user_callback=stream_callback, only_once=only_once
                 ),
             ):
-                printerr("error: " + backend.getLastError())
+                self._on_generation_error(backend.getLastError())
                 return ""
             backend.waitForStream()
             self.setLastJSON(backend.getLastJSON())
@@ -1707,13 +1721,7 @@ class Plumbing(object):
             self.setLastJSON(backend.getLastJSON())
 
         if not (result):
-            printerr(
-                "error: Backend yielded no result. Reason: " + backend.getLastError()
-            )
-            self.verbose(
-                "Additional information (last request): \n"
-                + json.dumps(backend.getLastRequest(), indent=4)
-            )
+            self_on_generation_error(backend.getLastError())
             return ""
         return result
 

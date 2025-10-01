@@ -164,8 +164,15 @@ def makeTaggedParser(default_params) -> TaggedArgumentParser:
         type=str,
         default="",
         help="API key for google's AI Studio. https://aistudio.google.com. If this value is set, it will override the --api_key when using google's api.",
-        tag=mktag(type=AT.Plumbing, group=AG.OpenAI),
-    )    
+        tag=mktag(type=AT.Plumbing, group=AG.Google),
+    )
+    parser.add_argument(
+        "--google_prefered_model",
+        type=str,
+        default="models/gemini-2.5-flash",
+        help="Prefered model to use with google backend. This will only be used if --model is not set.",
+        tag=mktag(type=AT.Plumbing, group=AG.Google),
+    )        
     parser.add_argument(
         "--max_length",
         type=int,
@@ -749,6 +756,13 @@ def makeTaggedParser(default_params) -> TaggedArgumentParser:
         help="Prevents printing and TTS vocalization of generations. Often used with the API when you want to handle generation results yourself and don't want printing to console.",
         tag=mktag(type=AT.Porcelain, group=AG.Interface),
     )
+    parser.add_argument(
+        "--history_drop_on_generation_error",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Drop the last user message in history when encountering a generation error (no message from the AI). This means you have to resend your prompt manually, but it keeps the chat history clean.",
+        tag=mktag(type=AT.Porcelain, group=AG.Interface),
+    )    
     parser.add_argument(
         "--stderr",
         action=argparse.BooleanOptionalAction,
