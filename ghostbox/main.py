@@ -374,6 +374,8 @@ class Plumbing(object):
                 )
 
             self.backend = OpenAILegacyBackend(api_key, endpoint=endpoint, **kwargs)
+        elif backend == LLMBackend.dummy.name:
+            self.backend = DummyBackend()
         else:
             # Handle other backends...
             pass

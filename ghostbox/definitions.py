@@ -254,3 +254,6 @@ api_default_options = {
     "max_context_length": 2**15,
     "__api__": True # hidden option indicating that ghsotbox was started from Ghostbox class
 }
+
+class BrokenBackend(Exception):
+    pass

@@ -52,16 +52,25 @@ def from_openai_official():
     return Ghostbox(backend=LLMBackend.openai, **kwargs)
 
 
-def from_google():
+def from_google(**kwargs):
     """Returns a Ghostbox instance that connects to the powerful Google AI Studio API at their official servers.
     """
     return Ghostbox(backend=LLMBackend.google, **kwargs)
 
+def from_dummy(**kwargs) -> Ghostbox:
+    """Returns a non-functional dummy ghostbox object.
+    Useful if something goes wrong and you still want to clean up."""
+    return Ghostbox(endpoint="", backend="dummy", **kwargs)
+
 class Ghostbox:
-    def __init__(self, endpoint: str, backend: LLMBackend, **kwargs):
+    def __init__(self, endpoint: str, backend: LLMBackend | str, **kwargs):
         self._ct = None  # continuous transcriber
         kwargs["endpoint"] = endpoint
-        kwargs["backend"] = backend.name
+        try:
+            backend_str = backend.name
+        except AttributeError:
+            backend_str = backend
+        kwargs["backend"] = backend_str
 
         default_options, tags = makeDefaultOptions()
         options = (

@@ -376,7 +376,41 @@ class AIBackend(ABC):
         """
         pass
 
+class DummyBackend(AIBackend):
 
+    def __init__(self, endpoint: str ="http://localhost:8080", **kwargs):
+        super().__init__(endpoint, **kwargs)
+
+    def getName(self) -> str:
+        return "dummy"
+
+    def getMaxContextLength(self) -> int:
+        return -1
+
+    def generate(self, payload) -> None:
+        return None
+
+    def handleGenerateResult(self, result):
+        return None
+
+    def generateStreaming(self, payload) -> None:
+        return None
+    def timings(self) -> Optional[Timings]:
+        return None
+    
+    
+    def health(self) -> str:
+        return "This is a dummy backend. It's fine."
+
+    def tokenize(self, w) -> List[int]:
+        return []
+
+    def detokenize(self, tokens) -> str:
+        return ""
+    
+    def sampling_parameters(self):
+        return {}
+    
 class LlamaCPPBackend(AIBackend):
     """Bindings for the formidable Llama.cpp based llama-server program."""
 
@@ -877,7 +911,7 @@ class GoogleBackend(AIBackend):
         self.api_key = api_key
         if not(self.api_key):
             printerr("error: Google AI Studio requires an API key. Please set it with either the --google_api_key or the general --api_key option. You can get an API key at https://aistudio.google.com")
-            raise RuntimeError("Missing API key for google.")
+            raise BrokenBackend("Missing API key for google.")
 
         api_str = "" if not(api_key) else " with api key " + api_key[:4] + ("x" * len(api_key[4:]))
        
