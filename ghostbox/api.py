@@ -52,6 +52,11 @@ def from_openai_official():
     return Ghostbox(backend=LLMBackend.openai, **kwargs)
 
 
+def from_google():
+    """Returns a Ghostbox instance that connects to the powerful Google AI Studio API at their official servers.
+    """
+    return Ghostbox(backend=LLMBackend.google, **kwargs)
+
 class Ghostbox:
     def __init__(self, endpoint: str, backend: LLMBackend, **kwargs):
         self._ct = None  # continuous transcriber
