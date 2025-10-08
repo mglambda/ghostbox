@@ -1068,7 +1068,12 @@ class GoogleBackend(AIBackend):
             generation_config.top_p = payload["top_p"]
         if payload.get("top_k") is not None:
             generation_config.top_k = payload["top_k"]
-        
+
+        # structured output
+        if payload["response_format"] != "text" and payload["response_format"] != "raw":
+            generation_config.response_mime_type = "application/json"
+            generation_config.response_json_schema = payload["response_format"]["schema"]
+            
         return generation_config
 
     def _prepare_generation_contents(self, payload) -> Tuple[Any, Any]:
