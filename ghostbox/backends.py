@@ -1053,11 +1053,10 @@ class GoogleBackend(AIBackend):
         if self._last_result is not None:
             if (prompt_feedback := self._last_result.get("prompt_feedback", None)) != None:
                 printerr(f"warning: Got prompt feedback from server:\n{json.dumps(prompt_feedback, indent=4)}")
-            
-    def generate(self, payload) -> Optional[Any]:
-        from google.genai import types
-        
-        # Prepare generation_config
+
+    def _prepare_generation_config(self, payload):
+        """Prepare google's generate config for generation."""
+        from google.genai import types, errors        
         generation_config = types.GenerateContentConfig(
             system_instruction=payload["system"],
             safety_settings=self.get_safety_settings(),
@@ -1069,8 +1068,13 @@ class GoogleBackend(AIBackend):
             generation_config.top_p = payload["top_p"]
         if payload.get("top_k") is not None:
             generation_config.top_k = payload["top_k"]
+        
+        return generation_config
 
-        # Prepare contents for generate_content
+    def _prepare_generation_contents(self, payload) -> Tuple[Any, Any]:
+        """Prepare contents for google's generate_content method based on a payload.
+        returns a pair of genai contents (for google) and serializable contents (for debugging/logging)."""
+        from google.genai import types, errors                
         genai_contents = []
         for msg in payload["story"]:
             # System messages are passed via `system_instruction` argument, not in `contents` list.
@@ -1079,6 +1083,13 @@ class GoogleBackend(AIBackend):
             genai_contents.append(self.content_from_chatmessage(msg))
 
         serializable_contents = self._serialize_content(genai_contents)
+        return genai_contents, serializable_contents
+    
+    def generate(self, payload) -> Optional[Any]:
+        from google.genai import types
+        
+        generation_config = self._prepare_generation_config(payload)
+        genai_contents, serializable_contents = self._prepare_generation_contents(payload)
             
         # Store the request for debugging
         self._last_request = {
@@ -1142,28 +1153,8 @@ class GoogleBackend(AIBackend):
         self.stream_done.clear()
         from google.genai import types, errors
 
-        # Prepare generation_config from payload
-        generation_config = types.GenerateContentConfig(
-            system_instruction=payload["system"],
-            safety_settings=self.get_safety_settings(),
-            temperature=payload.get("temperature", 0.8),
-        )
-        if payload.get("max_length", -1) > 0:
-            generation_config.max_output_tokens = payload["max_length"]
-        if payload.get("top_p") is not None:
-            generation_config.top_p = payload["top_p"]
-        if payload.get("top_k") is not None:
-            generation_config.top_k = payload["top_k"]
-
-        # Prepare contents for generate_content
-        genai_contents = []
-        for msg in payload["story"]:
-            # System messages are passed via `system_instruction` argument, not in `contents` list.
-            if msg.role == "system":
-                continue
-            genai_contents.append(self.content_from_chatmessage(msg))
-
-        serializable_contents = self._serialize_content(genai_contents)
+        generation_config = self._prepare_generation_config(payload)
+        genai_contents, serializable_contents = self._prepare_generation_contents(payload)
             
         # Store the request for debugging
         self._last_request = {

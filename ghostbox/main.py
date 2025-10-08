@@ -1723,7 +1723,7 @@ class Plumbing(object):
             self.setLastJSON(backend.getLastJSON())
 
         if not (result):
-            self_on_generation_error(backend.getLastError())
+            self._on_generation_error(backend.getLastError())
             return ""
         return result
 
