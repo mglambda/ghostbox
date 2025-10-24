@@ -278,14 +278,14 @@ class Ghostbox:
             self.text_async(prompt_text, callback=callback)
         return
 
-    def new(
+    def new[T](
         self,
-        pydantic_class,
+        pydantic_class: T,
         text_prompt: str,
         timeout: Optional[float] = None,
         retries: int = 0,
         options: Dict[str, Any] = {},
-    ) -> Any:
+    ) -> T:
         """Given a subclass of pydantic.BaseModel, returns a python object of that type, with its fields filled in by the LLM backend with adherence to a given text prompt.
         This function will block until either generation finishes or a provided timeout is reached.
         This function may raise a pydantic error if the object cannot be validated. Although the LLM will be forced to adhere to the pydantic data model, this can still happen occasionally, for example, in the case of refusals. Either use the retries argument, or wrap a call to new in a try block accordingly.
@@ -622,7 +622,7 @@ class Ghostbox:
         #self.set_char(self.character_folder, [])
         self.__dict__["_plumbing"].session.stories.reset()
 
-    def history(self) -> List[ChatMessage]:
+    def get_history(self) -> List[ChatMessage]:
         """Returns the current chat history for this ghostbox instance.
         :return: The chat history.
         """

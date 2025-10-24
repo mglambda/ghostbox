@@ -27,6 +27,7 @@ __all__ = [
     "from_openai_legacy",
     "from_llamacpp",
     "from_openai_official",
+    "from_google",
     "Ghostbox",
     "ChatMessage",
     "LLMBackend",

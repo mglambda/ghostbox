@@ -1956,7 +1956,10 @@ class Plumbing(object):
         """Get a string with a number in it showing the total tokens for the last resquest/result."""
         # this is backend dependent
         if self.getOption("backend") == LLMBackend.google.name:
-            return str(self.lastResult.get("usage_metadata", {}).get("total_token_count", 0))
+            try:
+                return str(self.lastResult.get("usage_metadata", {}).get("total_token_count", 0))
+            except AttributeError:
+                return "0"
         else:
             return str(self.lastResult.get("usage", {}).get("total_tokens", 0))
 
