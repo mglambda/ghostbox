@@ -53,14 +53,15 @@ def from_openai_official():
 
 
 def from_google(**kwargs):
-    """Returns a Ghostbox instance that connects to the powerful Google AI Studio API at their official servers.
-    """
+    """Returns a Ghostbox instance that connects to the powerful Google AI Studio API at their official servers."""
     return Ghostbox(backend=LLMBackend.google, **kwargs)
+
 
 def from_dummy(**kwargs) -> Ghostbox:
     """Returns a non-functional dummy ghostbox object.
     Useful if something goes wrong and you still want to clean up."""
     return Ghostbox(endpoint="", backend="dummy", **kwargs)
+
 
 class Ghostbox:
     def __init__(self, endpoint: str, backend: LLMBackend | str, **kwargs):
@@ -132,6 +133,10 @@ class Ghostbox:
         for k, v in injections.items():
             self._plumbing.session.setVar(k, v)
         return self
+
+    def get_var(self, injection_key: str) -> Optional[str]:
+        """Retrieve the value of an injection variable if it was set, or return None otherwise."""
+        return self._plumbing.session.getVar(injection_key, default=None)
 
     def __getattr__(self, k):
         # we intentionally avoid getOption because we want the api to crash if k not found
@@ -347,7 +352,7 @@ class Ghostbox:
                 except json.decoder.JSONDecodeError as e:
                     if retries == 0:
                         raise e
-                    retries -= 1                    
+                    retries -= 1
 
     # images
     @contextmanager
@@ -619,7 +624,7 @@ class Ghostbox:
     def clear_history(self) -> None:
         """Resets the chat history."""
         # changed recently because the old way was resetting options which is surprising
-        #self.set_char(self.character_folder, [])
+        # self.set_char(self.character_folder, [])
         self.__dict__["_plumbing"].session.stories.reset()
 
     def get_history(self) -> List[ChatMessage]:
