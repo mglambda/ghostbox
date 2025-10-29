@@ -25,6 +25,13 @@ def from_generic(endpoint="http://localhost:8080", **kwargs):
     """
     return Ghostbox(backend=LLMBackend.generic, endpoint=endpoint, **kwargs)
 
+def from_deepseek(**kwargs):
+    """Returns a ghostbox instance that connects to the https:://deepseek.com api endpoints.
+    You will need to set your deepseek_api_key or api_key variable to the APi key provided by deepseek.
+    """
+    return Ghostbox(backend=LLMBackend.deepseek, **kwargs)
+
+
 
 def from_openai_legacy(endpoint="http://localhost:8080", **kwargs):
     """Returns a Ghostbox instance that connects to an OpenAI API compatible endpoint using the legacy /v1/completions interface.
@@ -258,6 +265,7 @@ class Ghostbox:
     ) -> str:
         """Given a prompt, returns structured output as a string that is json deserializable.
         Output is structured but somewhat unpredictable, unless you provide a json schema. If you are thinking about using pydantic objects and using their model_json_schema method, consider using the ghostbox.new method directly.
+        Note: To provide support for thinking models, this automatically sets grammar_lazy to True and grammar_triggers to trigger on a left brace. This means that json arrays aren't supported unless you explicitly provide options with grammar_lazy = False or grammar_triggers = [].
         :param prompt_text: The prompt text as natural language.
         :param schema: A dict representing a json schema, which will further restrict the generation.
         :param timeout: Number of seconds to wait before generation is canceled.
@@ -267,7 +275,11 @@ class Ghostbox:
         noises = json.loads(box.json("Can you list some animal noises? Please give key/value pairs."))
         noises is now e.g. {"dog": "woof", "cat":"meow", ...}
         """
-        with self.options(response_format=self._make_json_schema(schema), **options):
+        combined_options = {
+            "response_format": self._make_json_schema(schema),
+        } | options
+
+        with self.options(**combined_options):
             return self.text(prompt_text, timeout=timeout)
 
     def json_async(
@@ -607,7 +619,7 @@ class Ghostbox:
         story = self._plumbing.session.stories.get()
         for item in chat_history:
             if type(item) == ChatMessage:
-                story.appendMessage(item)
+                story.addMessage(item)
             else:
                 # try to parse the item as ChatMessage
                 try:
@@ -621,11 +633,20 @@ class Ghostbox:
 
         return self
 
-    def clear_history(self) -> None:
+    def clear_history(self) -> Self:
         """Resets the chat history."""
         # changed recently because the old way was resetting options which is surprising
         # self.set_char(self.character_folder, [])
         self.__dict__["_plumbing"].session.stories.reset()
+
+        return self
+    def set_history(self, new_history: List[ChatMessage]) -> Self:
+        """Wipe the old chat history and set it to a provided one.
+            Note: This is a helper method. Calling it is synonymous to doing box.set_char(character_folder=box.character_folder, chat_history=new_history)."""
+        return self.set_char(
+            character_folder = self._plumbing.getOption("character_folder"),
+            chat_history = new_history
+        )
 
     def get_history(self) -> List[ChatMessage]:
         """Returns the current chat history for this ghostbox instance.

@@ -148,6 +148,31 @@ sampling_parameters = {
         description="Set grammar for grammar-based sampling.",
         default_value=None,
     ),
+    "grammar_lazy": SamplingParameterSpec(
+        name="grammar_lazy",
+        description="This parameter controls whether the grammar (specified by `grammar` or `json_schema`) is applied strictly from the beginning of generation, or if its activation is deferred until a specific trigger is encountered.",
+        default_value=False,
+    ),
+    "grammar_triggers": SamplingParameterSpec(
+        name="grammar_triggers",
+        description="This parameter defines the conditions under which a lazy grammar (when `grammar_lazy` is `true`) should become active. Each object in the array represents a single trigger.",
+        default_value=[],
+    ),
+    "preserved_tokens": SamplingParameterSpec(
+        name="preserved_tokens",
+        description="A list of token pieces to be preserved during sampling and grammar processing.",
+        default_value=[],
+    ),
+    "enable_thinking": SamplingParameterSpec(
+        name="enable_thinking",
+        description="Turn on reasoning for thinking models, disable it otherwise (if possible).",
+        default_value=True,
+    ),        
+    "chat_template_kwargs": SamplingParameterSpec(
+        name="chat_template_kwargs",
+        description="This parameter allows you to pass arbitrary key-value arguments directly to the Jinja chat template used for prompt formatting. These arguments can be used within the Jinja template to control conditional logic, insert dynamic content, or modify the template's behavior.",
+        default_value={},
+    ),    
     "json_schema": SamplingParameterSpec(
         name="json_schema",
         description='Set a JSON schema for grammar-based sampling (e.g. `{"items": {"type": "string"}, "minItems": 10, "maxItems": 100}` of a list of strings, or `{}` for any JSON). See [tests](../../tests/test-json-schema-to-grammar.cpp) for supported features.',
@@ -249,7 +274,7 @@ supported_parameters = {
 }
 sometimes_parameters = {
     p: sampling_parameters[p]
-    for p in "cache_prompt xtc_probability dry_multiplier min_p mirostat mirostat_tau mirostat_eta samplers".split(
+    for p in "cache_prompt xtc_probability dry_multiplier min_p mirostat mirostat_tau mirostat_eta samplers grammar_lazy grammar_triggers preserved_tokens chat_template_kwargs enable_thinking".split(
         " "
     )
 }
@@ -273,7 +298,10 @@ sampling_parameter_tags["top_p"].type = ArgumentType.Porcelain
 
 
 # These don't fit anywhere else and don't really need documentation
-special_parameters = {"response_format": {"type": "text"}}
+special_parameters = {"response_format": {"type": "text"},
+                      "llamacpp_thinking_json_fix": True,
+                      "model": ""}
+
 
 
 class AIBackend(ABC):
@@ -376,6 +404,11 @@ class AIBackend(ABC):
         """
         pass
 
+    def get_models(self) -> List[ModelStats]:
+        """List the models supported by this backend.
+        Mostly used with cloud providers. Many backends will return an empty list, which indicates that there isn't any model information available."""
+        return []
+
 class DummyBackend(AIBackend):
 
     def __init__(self, endpoint: str ="http://localhost:8080", **kwargs):
@@ -429,6 +462,61 @@ class LlamaCPPBackend(AIBackend):
     def getMaxContextLength(self):
         return -1
 
+
+    @staticmethod
+    def _alter_system_msg(llama_payload: Dict[str, Any], alter_function: Callable[[str], str]) -> None:
+        """Apply the alter_function to the system prompt.
+        alter_function must be reentrant."""
+        
+        try:
+            llama_payload["system"] = alter_function(llama_payload["system"])
+        except KeyError:
+            # no biggie
+            pass
+
+        try:
+            for message in llama_payload["messages"]:
+                if message["role"] == "system":
+                    message["content"] = alter_function(message["content"])
+        except KeyError:
+            pass
+        
+    @staticmethod
+    def _fix_thinking_json(llama_payload: Dict[str, Any]) -> None:
+        """Destructively modifies the llama_payload dict to disable structured output and contain the json schema in the prompt instead.
+        This works in conjunction with handleGeneratePayload to work around llama.cpp's inability to deal with thinking and structured output, by just instructing the model to generate json and then trying to parse it."""
+        response_format = llama_payload["response_format"]
+        if not(isinstance(response_format, dict)):
+            return
+
+        if response_format.get("type", None) != "json_object":
+            return
+
+        if (schema := response_format.get("schema", None)) == None:
+            return
+
+        schema_str = json.dumps(schema)
+        def append_schema(system_msg: str):
+            return system_msg + f"""
+Only respond with correct JSON. The JSON you output must adhere to the following schema:
+
+```json
+        {schema_str}
+```        
+"""
+
+        printerr("debug: applying")
+        LlamaCPPBackend._alter_system_msg(llama_payload, append_schema)
+        # keep llamacpp from applying grammar
+        llama_payload["response_format"] = "text"
+        #llama_payload["thinking_forced_open"] = True
+        #            "chat_template_kwargs": {"enable_thinking": True},
+        try:
+            llama_payload["chat_template_kwargs"] |= {"enable_thinking":True}
+        except KeyError:
+            pass
+        
+        
     def generate(self, payload):
         # adjust slightly for our renames
         llama_payload = payload | {"n_predict": payload["max_length"]}
@@ -447,6 +535,11 @@ class LlamaCPPBackend(AIBackend):
             # i.e. we can just cache the inevitable streaming, non-tool generation that follows tool use.
             # however this will still suck for multi-turn tool use
             llama_payload |= {"cache_prompt": False}
+
+        if llama_payload["llamacpp_thinking_json_fix"] and llama_payload["enable_thinking"]:
+            self.log(f"Applying thinking json fix.")
+            self._fix_thinking_json(llama_payload)
+            
         self._last_request = llama_payload
         final_endpoint = self.endpoint + endpoint_suffix
         self.log(f"generate to {final_endpoint}")
@@ -499,6 +592,8 @@ class LlamaCPPBackend(AIBackend):
             endpoint_suffix = "/completion"
             final_callback = self._makeLlamaCallback(callback)
 
+        if llama_payload["llamacpp_thinking_json_fix"] and llama_payload["enable_thinking"]:
+            self.log(f"warning: llamacpp_thinking_json_fix is not supported with stream = True. Defaulting to using a grammar, which may disable reasoning.")
         self._last_request = llama_payload
 
         final_endpoint = self.endpoint + endpoint_suffix
@@ -939,13 +1034,22 @@ class GoogleBackend(AIBackend):
         return -1
 
 
-    def get_models(self) -> List[str]:
+    def _get_models(self) -> List[Any]:
         """Returns a list of names of supported models by google."""
         return self.client.models.list()
 
+    def get_models(self) -> List[ModelStats]:
+        models = self._get_models()
+        return [ModelStats(
+            name = model.name,
+            display_name = model.display_name,
+            description = model.description
+        )
+                for model in models]
+    
     def fix_model(self, model: str) -> str:
         """Ensures the given model name is a valid one. Returns a default model with a warning if not."""
-        models = [model.name for model in self.get_models()]
+        models = [model.name for model in self._get_models()]
         if model not in models:
             default_model = models[0] if len(models) > 0 else "gemini-2.5-flash"
             printerr(f"warning: Model {model} not supported by Google. Defaulting to {default_model}")
@@ -1294,3 +1398,64 @@ class GoogleBackend(AIBackend):
         return google_supported_params
 
 
+
+class DeepseekBackend(OpenAIBackend):
+    """Backend for the deepseek cloud LLM provider.
+        This is a razor thin wrapper around the OpenAI ctype. It exists mostly to provide a list of model and to be future proof.
+        """
+
+    def __init__(self, api_key: str, endpoint:str="https://api.deepseek.com", **kwargs):
+        super().__init__(api_key, endpoint, **kwargs)        
+
+    def getName(self) -> str:
+        return "Deepseek"
+
+    @staticmethod
+    def _fix_payload(deepseek_payload: Dict[str, Any]) -> None:
+        """Modify a payload to be more pallatable to the deepseek API."""
+        # FIXME: figure out the enum they expect
+        if isinstance(deepseek_payload["response_format"], str):
+            del deepseek_payload["response_format"]
+
+            # clamp the length
+            n = deepseek_payload["max_length"]
+            deepseek_payload["max_length"] = min(8192, max(1, n))
+
+
+        if deepseek_payload["top_p"] <= 0.0 or deepseek_payload["top_p"] > 1.0:
+            deepseek_payload["top_p"] = 0.95
+                
+    def generate(self, payload: Dict[str, Any]) -> Any:
+        self._fix_payload(payload)
+        return super().generate(payload)
+
+    def generateStreaming(self, payload: Dict[str, Any], callback=lambda w: print(w)) -> None:
+        self._fix_payload(payload)
+        super().generateStreaming(payload, callback)
+        
+    
+    def get_models(self) -> List[ModelStats]:
+        headers = {
+            "Authorization": f"Bearer {self.api_key}",
+            "Content-Type": "application/json",
+        }
+        response = requests.get("https://api.deepseek.com/models", headers=headers)
+        if response.status_code != 200:
+            self.log(f"Got status code {response.status_code} during model query.")
+            return []
+
+        try:
+            data = response.json()["data"]
+            return [ModelStats(
+                name=record["id"],
+                display_name=record["id"]
+            )
+                    for record in data]
+        except Exception as e:
+            self.log(f"Couldn't get deepseek models. Reason: {e}")
+        return []
+    
+    
+            
+
+        

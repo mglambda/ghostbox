@@ -178,9 +178,10 @@ def showModels(prog, argv):
     """
     List all available models for the backend. For most local backends, this is not supported.
     """
-    if prog.getOption("backend") == LLMBackend.google.name:
+    models = prog.getBackend().get_models()
+    if models:
         w = "Name\tModel\tDescription"
-        for model in prog.getBackend().get_models():
+        for model in models:
             w += f"\n{model.display_name}\t{model.name}\t{model.description}"
         return w
 

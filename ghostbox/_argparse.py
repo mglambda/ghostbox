@@ -167,6 +167,13 @@ def makeTaggedParser(default_params) -> TaggedArgumentParser:
         tag=mktag(type=AT.Plumbing, group=AG.Google),
     )
     parser.add_argument(
+        "--deepseek_api_key",
+        type=str,
+        default="",
+        help="API key for Deepseek https://deepseek.com",
+        tag=mktag(type=AT.Plumbing, group=AG.Backend),
+    )    
+    parser.add_argument(
         "--google_prefered_model",
         type=str,
         default="models/gemini-2.5-flash",
@@ -212,9 +219,18 @@ def makeTaggedParser(default_params) -> TaggedArgumentParser:
         tag=mktag(type=AT.Plumbing, group=AG.Backend),
     )
     parser.add_argument(
+        "--llamacpp_thinking_json_fix",
+        action=argparse.BooleanOptionalAction,
+        type=bool,
+        default=True,
+        help="Llama.cpp does (currently, october 2025) not support structured output (e.g. via a json schema) with simultaneous reasoning. This can degrade the output quality. If this is enabled, ghostbox attempts a workaround to retrieve correct json while still letting the model go through it's reasoning. If this option is disabled, the json schema uses the default method of having llama.cpp generate a grammar, which forces the model to adhere to the schema exactly.",
+        tag=mktag(type=AT.Plumbing, group=AG.Backend),
+    )
+    parser.add_argument(
         "-m",
         "--model",
         type=str,
+        default="",
         help="LLM to use for requests. This only works if the backend supports choosing models.",
         tag=mktag(type=AT.Porcelain, group=AG.Backend, very_important=True),
     )

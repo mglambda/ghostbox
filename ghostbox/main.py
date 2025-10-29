@@ -353,10 +353,20 @@ class Plumbing(object):
             self.setOption("prompt_format", "auto")
             if not(self.getOption("model")):
                 self.setOption("model", self.getOption("google_prefered_model"))
-            
+        elif backend == LLMBackend.deepseek.name:
+            deepseek_api_key = self.getOption("deepseek_api_key")
+            self.backend = DeepseekBackend(
+                api_key = deepseek_api_key if deepseek_api_key else api_key
+            )
+            self.setOption("prompt_format", "auto")
+                
             # check the model
-            self.setOption("model", self.getBackend().fix_model(self.getOption("model")))
-            
+            if not(self.getOption("model")):
+                self.setOption(
+                    "model",
+                    models[0].name if (models := self.getBackend().get_models()) != [] else "none"
+                )
+
         elif backend == LLMBackend.generic.name:
             self.backend = OpenAIBackend(api_key, endpoint=endpoint, **kwargs)
             self.setOption("prompt_format", "auto")
@@ -2223,7 +2233,7 @@ class Plumbing(object):
 
 def get_api_keys(config_file: str, args: Dict[Any, Any]) -> Dict[str, Any]:
     """Loads api keys from various sources."""
-    key_names = ["api_key","google_api_key"]
+    key_names = ["api_key","google_api_key", "deepseek_api_key"]
     arg_keys = {k:v for k, v in args.items() if k in key_names and v != ""}
     
     try:

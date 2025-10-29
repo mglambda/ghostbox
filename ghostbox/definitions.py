@@ -105,7 +105,7 @@ class ChatMessage(BaseModel):
     @model_serializer
     def ser_model(self) -> Dict[str, Any]:
         # we basically want exclude_none=True by default
-        return {k:v for k, v in dict(self).items() if v is not None}
+        return {k:v for k, v in dict(self).items() if v is not None and v != []}
     
     @staticmethod
     def make_image_message(text: str, images: List[ImageRef], **kwargs) -> 'ChatMessage':
@@ -134,7 +134,7 @@ class ChatMessage(BaseModel):
         return ChatMessage(role="user", content=complex_content_list, **kwargs)
 
 
-LLMBackend = Enum("LLMBackend", "generic legacy llamacpp koboldcpp openai google dummy")
+LLMBackend = Enum("LLMBackend", "generic legacy llamacpp koboldcpp openai google deepseek dummy")
 
 # these are the models supported by ghostbox-tts
 TTSModel = Enum("TTSModel", "zonos kokoro xtts polly orpheus")
@@ -257,3 +257,23 @@ api_default_options = {
 
 class BrokenBackend(Exception):
     pass
+
+
+class ModelStats(BaseModel):
+    """Model information, like name and so on (example: 'gemini-2.5-flash'). Usually used with cloud providers."""
+
+    name: str = Field(
+        description = "The exact name of the model."
+    )
+
+    display_name: str = Field(
+        default = "",
+        description = "A more user friendly rendition of the model name."
+    )
+
+    description: str = Field(
+        default = "",
+        description = "Short description of the model's capabilities."
+    )
+        
+        
