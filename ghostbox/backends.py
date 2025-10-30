@@ -484,7 +484,9 @@ class LlamaCPPBackend(AIBackend):
     @staticmethod
     def _fix_thinking_json(llama_payload: Dict[str, Any]) -> None:
         """Destructively modifies the llama_payload dict to disable structured output and contain the json schema in the prompt instead.
-        This works in conjunction with handleGeneratePayload to work around llama.cpp's inability to deal with thinking and structured output, by just instructing the model to generate json and then trying to parse it."""
+        Also sets the grammar to an experimental thinking json grammar, which allows the model to think and then only accepts general json syntax, i.e. general and not specifically the schema.
+        """        
+
         response_format = llama_payload["response_format"]
         if not(isinstance(response_format, dict)):
             return
@@ -505,12 +507,12 @@ When responding to the user, think step by step before giving a response. Your f
 ```        
 """
 
-        printerr("debug: applying")
         LlamaCPPBackend._alter_system_msg(llama_payload, append_schema)
         # keep llamacpp from applying grammar
         llama_payload["response_format"] = "text"
-        #llama_payload["thinking_forced_open"] = True
-        #            "chat_template_kwargs": {"enable_thinking": True},
+        # enable our own grammar
+        llama_payload["grammar"] = getJSONThinkingGrammar()
+        
         try:
             llama_payload["chat_template_kwargs"] |= {"enable_thinking":True}
         except KeyError:
@@ -536,6 +538,11 @@ When responding to the user, think step by step before giving a response. Your f
             # however this will still suck for multi-turn tool use
             llama_payload |= {"cache_prompt": False}
 
+        # slight adjustment. I'm still unclear wether llama server supports this directly
+        if "enable_thinking" in llama_payload:
+            old = llama_payload.get("chat_template_kwargs", {})
+            llama_payload["chat_template_kwargs"] = old | {"enable_thinking": llama_payload["enable_thinking"]}
+            
         if llama_payload["llamacpp_thinking_json_fix"] and llama_payload["enable_thinking"] and isinstance(llama_payload["response_format"], dict):
             self.log(f"Applying thinking json fix.")
             self._fix_thinking_json(llama_payload)
@@ -554,7 +561,6 @@ When responding to the user, think step by step before giving a response. Your f
 
 
         if self._config["llamacpp_use_chat_completion_endpoint"]:
-            printerr(f"debug result:\n{json.dumps(self._last_result, indent=4)}")            
             # this one wants more oai like results
             # FIXME: as of september 2025 this returns a weirdly structured message. the fixme is more a reminder to investigate
             llama_msg = OpenAIBackend.handleGenerateResultOpenAI(result.json())

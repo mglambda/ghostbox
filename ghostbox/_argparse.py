@@ -223,7 +223,7 @@ def makeTaggedParser(default_params) -> TaggedArgumentParser:
         action=argparse.BooleanOptionalAction,
         type=bool,
         default=True,
-        help="Llama.cpp does (currently, october 2025) not support structured output (e.g. via a json schema) with simultaneous reasoning. This can degrade the output quality. If this is enabled, ghostbox attempts a workaround to retrieve correct json while still letting the model go through it's reasoning. If this option is disabled, the json schema uses the default method of having llama.cpp generate a grammar, which forces the model to adhere to the schema exactly.",
+        help="Llama.cpp does (currently, october 2025) not support structured output (e.g. via a json schema) with simultaneous reasoning. This can degrade the output quality. If this is enabled, ghostbox attempts a workaround to retrieve correct json while still letting the model go through it's reasoning. If this option is disabled, the json schema uses the default method of having llama.cpp generate a grammar, which forces the model to adhere to the schema exactly. Note that this is only relevant if enable_thinking is true",
         tag=mktag(type=AT.Plumbing, group=AG.Backend),
     )
     parser.add_argument(
