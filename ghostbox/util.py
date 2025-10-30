@@ -303,6 +303,37 @@ number ::= ("-"? ([0-9] | [1-9] [0-9]*)) ("." [0-9]+)? ([eE] [-+]? [0-9]+)? ws
 ws ::= ([ \t\n] ws)?
 """
 
+def getJSONThinkingGrammar() -> str:
+    return r"""root        ::= "<think>" think-content "</think>" ws json-value
+
+# Think content rules (any characters except </think>)
+think-content ::= ( normal-char | safe-lt )*
+normal-char    ::= [^<]
+safe-lt        ::= "<" ( [^/] | "/" [^t] | "/t" [^h] | "/th" [^i] | "/thi" [^n] | "/thin" [^k] | "/think" [^>] )
+
+# Original JSON rules below (only changed 'value' -> 'json-value' for clarity)
+json-value  ::= object | array | string | number | ("true" | "false" | "null") ws
+
+object      ::= "{" ws (
+            string ":" ws json-value
+    ("," ws string ":" ws json-value)*
+  )? "}" ws
+
+array       ::= "[" ws (
+            json-value
+    ("," ws json-value)*
+  )? "]" ws
+
+string      ::= "\"" (
+    [^"\\\x7F\x00-\x1F] |
+    "\\" (["\\bfnrt] | "u" [0-9a-fA-F]{4}) # escapes
+  )* "\"" ws
+
+number      ::= ("-"? ([0-9] | [1-9][0-9]{0,15})) ("." [0-9]+)? ([eE][-+]?[0-9]+)? ws
+
+ws          ::= ( " " | "\n" [ \t]{0,20} )*
+"""
+
 
 def loadImageData(image_path):
     with open(image_path, "rb") as image_file:

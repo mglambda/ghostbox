@@ -167,11 +167,11 @@ sampling_parameters = {
         name="enable_thinking",
         description="Turn on reasoning for thinking models, disable it otherwise (if possible).",
         default_value=True,
-    ),        
+    ),            
     "chat_template_kwargs": SamplingParameterSpec(
         name="chat_template_kwargs",
         description="This parameter allows you to pass arbitrary key-value arguments directly to the Jinja chat template used for prompt formatting. These arguments can be used within the Jinja template to control conditional logic, insert dynamic content, or modify the template's behavior.",
-        default_value={},
+        default_value={"enable_thinking": True},
     ),    
     "json_schema": SamplingParameterSpec(
         name="json_schema",
@@ -498,7 +498,7 @@ class LlamaCPPBackend(AIBackend):
         schema_str = json.dumps(schema)
         def append_schema(system_msg: str):
             return system_msg + f"""
-Only respond with correct JSON. The JSON you output must adhere to the following schema:
+When responding to the user, think step by step before giving a response. Your final response should adhere to the following JSON schema: The JSON you output must adhere to the following schema:
 
 ```json
         {schema_str}
@@ -536,7 +536,7 @@ Only respond with correct JSON. The JSON you output must adhere to the following
             # however this will still suck for multi-turn tool use
             llama_payload |= {"cache_prompt": False}
 
-        if llama_payload["llamacpp_thinking_json_fix"] and llama_payload["enable_thinking"]:
+        if llama_payload["llamacpp_thinking_json_fix"] and llama_payload["enable_thinking"] and isinstance(llama_payload["response_format"], dict):
             self.log(f"Applying thinking json fix.")
             self._fix_thinking_json(llama_payload)
             
@@ -552,12 +552,13 @@ Only respond with correct JSON. The JSON you output must adhere to the following
             return None
         self._last_result = result.json()
 
+
         if self._config["llamacpp_use_chat_completion_endpoint"]:
+            printerr(f"debug result:\n{json.dumps(self._last_result, indent=4)}")            
             # this one wants more oai like results
             # FIXME: as of september 2025 this returns a weirdly structured message. the fixme is more a reminder to investigate
             llama_msg = OpenAIBackend.handleGenerateResultOpenAI(result.json())
             return llama_msg
-
 
         # handling the /completion endpoint
         if (payload := result.json()["content"]) is not None:

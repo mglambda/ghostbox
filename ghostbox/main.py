@@ -442,7 +442,8 @@ class Plumbing(object):
                     else:
                         continue
                 else:
-                    d[param] = self.getOption(param)
+                    if (v := self.getOption(param)) is not None:
+                        d[param] = v
 
         # some special ones
         for k, v in special_parameters.items():

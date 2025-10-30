@@ -677,3 +677,7 @@ class Ghostbox:
     def get_last_result(self) -> Dict[str, Any]:
         """Returns the last result that was retrieved from the server. The dict may be empty if no result was received yet."""
         return self._plumbing.getBackend().getLastJSON()
+
+
+    def get_options(self) -> Dict[str, Any]:
+        return self._plumbing.options
