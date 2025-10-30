@@ -227,6 +227,14 @@ def makeTaggedParser(default_params) -> TaggedArgumentParser:
         tag=mktag(type=AT.Plumbing, group=AG.Backend),
     )
     parser.add_argument(
+        "--llamacpp_auto_enable_thinking",
+        action=argparse.BooleanOptionalAction,
+        type=bool,
+        default=True,
+        help="If true, will query the llama.cpp server to determine if a thinking model is in use, and attempt to set the enable_thinking option accordingly. Ignored for other backends.",
+        tag=mktag(type=AT.Plumbing, group=AG.Backend),
+    )    
+    parser.add_argument(
         "-m",
         "--model",
         type=str,

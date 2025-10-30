@@ -462,6 +462,15 @@ class Plumbing(object):
                 if "grammar" in d:
                     del d["grammar"]
 
+        # props is only supported by llama.cpp and it can help with some things
+        if self.getOption("backend") == LLMBackend.llamacpp.name:
+            if self.getOption("llamacpp_auto_enable_thinking"):
+                if (enable_thinking := self.getBackend().has_thinking_model()) is not None:
+                    self.verbose(f"Setting enable_thinking to {enable_thinking} due to automatic detection.")
+                    self.setOption("enable_thinking", enable_thinking)
+                else:
+                    printerr(f"warning: Could not determine wether llama.cpp is using a thinking model. Leaving enable_thinking at default. Disable llamacpp_auto_enable_thinking to supress this warning.")
+                    
         # these are currently exclusive to google ai studio
         if self.getOption("backend") == LLMBackend.google.name:
             d["model"] = self.getOption("model")

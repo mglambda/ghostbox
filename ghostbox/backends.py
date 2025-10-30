@@ -675,7 +675,31 @@ When responding to the user, think step by step before giving a response. Your f
         # llamacpp params are the default
         return sampling_parameters
 
+    def props(self) -> Dict[str, Any]:
+        """Llama.cpp specific /props endpoint, giving server and model properties."""
+        response = requests.get(self.endpoint + "/props")
+        if response.status_code != 200:
+            self.log(f"Couldn't get /props. Reason: {response.text}, text: {response.text}")
+            return {}
 
+        try:
+            return response.json()
+        except Exception as e:
+            self.log(f"Couldn't parse json from /props endpoint. Reason: {e}")
+        return {}
+
+    def has_thinking_model(self) -> Optional[bool]:
+        """Llama.cpp only. Queries the jinja template to determine if the model that llama is running suports thinking.
+        Returns true if thinking is enabled, false if not, and none if it can't be determined."""
+        
+        props = self.props()
+        if not props or "chat_template" not in props:
+            return None
+
+        template_str = props["chat_template"]
+        if "enable_thinking" in template_str:
+            return True
+        return False
 class OpenAILegacyBackend(AIBackend):
     """Backend for the official OpenAI API. The legacy version routes to /v1/completions, instead of the regular /v1/chat/completion."""
 
