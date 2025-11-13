@@ -75,6 +75,13 @@ def makeTaggedParser(default_params) -> TaggedArgumentParser:
         tag=mktag(type=AT.Plumbing, group=AG.General),
     )
     parser.add_argument(
+        "--history_retroactive_vars",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help="If true, vars that you can set with e.g. Ghostbox.set_vars will be kept in the history in their raw magic string form, and replaced only before being sent to the backend. This allows you to retroactively change the content of past prompts.",
+        tag=mktag(type=AT.Plumbing, group=AG.General),
+    )    
+    parser.add_argument(
         "--history_force_alternating_roles",
         action=argparse.BooleanOptionalAction,
         default=True,

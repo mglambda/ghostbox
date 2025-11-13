@@ -474,10 +474,11 @@ class Plumbing(object):
         # these are currently exclusive to google ai studio
         if self.getOption("backend") == LLMBackend.google.name:
             d["model"] = self.getOption("model")
-            d["system"] = self.session.getSystem()
+            d["system"] = self.session.getSystem(history_retroactive_vars=self.getOption("history_retroactive_vars"))
             if self.getOption("tts_modify_system_msg"):
                 d["system"] += self._getTTSSpecialMsg()
-            d["story"] = self.session.stories.get().data
+            #d["story"] = self.session.stories.get().data
+            d["story"] = self.session.get_messages(history_retroactive_vars=self.getOption("history_retroactive_vars"))
                     
         if (
             self.getOption("backend") == LLMBackend.generic.name
@@ -487,13 +488,13 @@ class Plumbing(object):
         ):
             # openai chat/completion needs the 'messages' key
             # we also do this for llama in "auto" template mode
-            d["system"] = self.session.getSystem()
+            d["system"] = self.session.getSystem(history_retroactive_vars=self.getOption("history_retroactive_vars"))
             if self.getOption("tts_modify_system_msg"):
                 d["system"] += self._getTTSSpecialMsg()
 
             d["messages"] = [
                 {"role": "system", "content": d["system"]}
-            ] + copy.deepcopy(self.session.stories.get().to_json())
+            ] + self.session.get_messages_json(history_retroactive_vars=self.getOption("history_retroactive_vars"))
             # FIXME: I don't even know if this does something right now
             self.images_dirty = False
 
@@ -1574,13 +1575,18 @@ class Plumbing(object):
 
         # dynamic vars must come before other vars for security reasons
         w = prog.expandDynamicFileVars(w)
-        w = prog.session.expandVars(w)
+        if not(prog.getOption("history_retroactive_vars")):
+            w = prog.session.expandVars(w)
         (w, ai_hint) = prog.adjustForChat(w)
 
         # tool_hint = agency.makeToolInstructionMsg() if prog.getOption("use_tools") else ""
 
         # user may also provide a hint. unclear how to best append it, we put it at the end
-        user_hint = prog.session.expandVars(prog.getOption("hint"))
+        if not(prog.getOption("history_retroactive_vars")):        
+            user_hint = prog.session.expandVars(prog.getOption("hint"))
+        else:
+            user_hint = prog.getOption("hint")
+            
         if user_hint and prog.getOption("warn_hint"):
             printerr(
                 "warning: Hint is set. Try /raw to see what you're sending. Use /set hint '' to disable the hint, or /set warn_hint False to suppress this message."

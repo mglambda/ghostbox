@@ -61,7 +61,7 @@ def from_openai_official():
 
 def from_google(**kwargs):
     """Returns a Ghostbox instance that connects to the powerful Google AI Studio API at their official servers."""
-    return Ghostbox(backend=LLMBackend.google, **kwargs)
+    return Ghostbox(backend=LLMBackend.google, endpoint="",**kwargs)
 
 
 def from_dummy(**kwargs) -> Ghostbox:
@@ -653,7 +653,7 @@ class Ghostbox:
         :return: The chat history.
         """
         return self._plumbing.session.stories.get().getData()
-
+        
     def save(self, filename: str = "") -> str:
         """Save chat history and session variables to a file.
         Note: Currently only saves history.

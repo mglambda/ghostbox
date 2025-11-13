@@ -67,9 +67,11 @@ class Session(object):
     def getVars(self):
         return {k: self.expandVars(v) for (k, v) in self.fileVars.items()}
 
-    def getSystem(self):
-        return self.getVar("system_msg")
-
+    def getSystem(self, history_retroactive_vars: bool = False):
+        if not history_retroactive_vars:
+            return self.getVar("system_msg")
+        return self.expandVars(self.getVar("system_msg"))
+    
     def expandVars(self, w, depth=3):
         """Expands all variables of the form {{VAR}} in a given string w, if VAR is a key in fileVars. By default, will recursively expand replacements to a depth of 3."""
         for i in range(0, depth):
@@ -147,3 +149,22 @@ class Session(object):
             printerr(traceback.format_exc())
             return
         return result
+
+    # new methods
+    def get_messages(self, history_retroactive_vars: bool = False) -> List[ChatMessage]:
+        """Returns the current active story as a list of chat messages."""
+        msgs = self.stories.get().getData()
+        # if retroactive is on we expand here, otherwise vars have been expanded when they got added
+        if not history_retroactive_vars:
+            return msgs
+
+        # ok we have to expand contents
+        return [msg.map_content(self.expandVars) for msg in msgs]
+
+    def get_messages_json(self, history_retroactive_vars: bool = False) -> List[Dict[str, Any]]:
+        return [msg.model_dump() for msg in self.get_messages(history_retroactive_vars=history_retroactive_vars)]
+
+
+
+        
+        

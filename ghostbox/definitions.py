@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 from enum import Enum
 from pydantic import BaseModel, Field, model_serializer
+import copy
 from pydantic.types import Json
 from typing import *
 
@@ -101,7 +102,23 @@ class ChatMessage(BaseModel):
         elif type(self.content) == dict:
             return str(self.content)
         return ""
-    
+
+    def map_content(self, map_function: Callable[[str], str]) -> 'ChatMessage':
+        """Returns a copy of the chat message with map_function applied to its contents."""
+        msg = copy.deepcopy(self)
+        match msg.content:
+            case None:
+                pass
+            case str() as w:
+                msg.content = map_function(w)
+            case list():
+                for i in range(len(msg.content)):
+                    msg.content[i].content = map_function(msg.content[i].content)
+            case dict():
+                # this actually never happens
+                raise RuntimeError("Dict not supported for ChatMessage content.")
+        return msg
+                    
     @model_serializer
     def ser_model(self) -> Dict[str, Any]:
         # we basically want exclude_none=True by default
