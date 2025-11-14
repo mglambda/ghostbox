@@ -1226,7 +1226,7 @@ class GoogleBackend(AIBackend):
         return genai_contents, serializable_contents
     
     def generate(self, payload) -> Optional[Any]:
-        from google.genai import types
+        from google.genai import types, errors
         
         generation_config = self._prepare_generation_config(payload)
         genai_contents, serializable_contents = self._prepare_generation_contents(payload)
@@ -1252,6 +1252,9 @@ class GoogleBackend(AIBackend):
             self._last_result = response.model_dump()
             self._post_generation()
             return response
+        except errors.APIError as e:
+            self.last_error = f"Google API error: {e.code}, {e.message}"
+            return None
         except Exception as e:
             self.last_error = f"Google API error: {e.__class__.__name__}: {e}\n{traceback.format_exc()}"
             self.log(self.last_error)
@@ -1337,9 +1340,11 @@ class GoogleBackend(AIBackend):
                 # This will be overwritten by the final aggregated response if available
                 self._last_result = chunk.model_dump()
 
-
+        except errors.APIError as e:
+            self.last_error = f"Google API error: {e.code}, {e.message}"
+            return True
         except Exception as e:
-            self.last_error = f"Google API streaming error: {e.__class__.__name__}: {e}"
+            self.last_error = f"Google API error: {e.__class__.__name__}: {e}"
             self.log(self.last_error + f"Full Traceback:\n{traceback.format_exc()}")
             return True # Indicate error
 

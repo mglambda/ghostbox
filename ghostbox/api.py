@@ -173,6 +173,11 @@ class Ghostbox:
         """
         return self._plumbing.getBackend().timings()
 
+    def get_last_error(self) -> str:
+        """Returns the last error encountered by the backend.
+        These are often more informative than e.g. json parse errors but completely depend on the backend."""
+        return self._plumbing.getBackend().getLastError()
+    
     # Generation
 
     def on_interaction(self, interaction_callback: Callable[[], None]) -> Ghostbox:
