@@ -128,12 +128,14 @@ class Ghostbox:
         with self.options({name: value}):
             yield self
 
-    def set(option_name: str, value) -> None:
+    def set(self, option_name: str, value) -> None:
         if option_name in self.__dict__:
             self.__dict__[option_name] = value
         self._plumbing.setOption(option_name, value)
 
     def get(self, option_name: str) -> object:
+        if "api_key" in option_name:
+            return ""
         return self._plumbing.getOption(option_name)
 
     def set_vars(self, injections: Dict[str, str]) -> Self:
@@ -685,4 +687,5 @@ class Ghostbox:
 
 
     def get_options(self) -> Dict[str, Any]:
-        return self._plumbing.options
+        return {k:v for k, v in self._plumbing.options.items()
+                if "api_key" not in k}

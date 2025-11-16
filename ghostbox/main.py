@@ -947,6 +947,9 @@ class Plumbing(object):
                 self.tts_flag = True  # restart TTS
         elif name == "no-tts":
             self.setOption("tts", not (value))
+        elif name == "tts":
+            if differs:
+                toggleTTS(self, [])
         elif name == "whisper_model":
             self.whisper = self._newTranscriber()
         # elif name == "cli_prompt":

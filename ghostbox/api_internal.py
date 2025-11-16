@@ -101,10 +101,12 @@ def toggle_tts(plumbing) -> str:
         if err:
             return err
         w += "Try /hide for a more immersive experience.\n"
-        prog.setOption("stream_flush", "sentence")
+        if prog.getOption("stream_flush") == "token":
+            prog.setOption("stream_flush", "sentence")
     else:
         # disabled tts
-        prog.tts.close()
+        if prog.tts:
+            prog.tts.close()
         prog.tts = None
     return w + "TTS " + {True : "on.", False : "off."}[prog.options["tts"]]
     

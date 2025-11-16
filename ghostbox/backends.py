@@ -1453,9 +1453,11 @@ class DeepseekBackend(OpenAIBackend):
         if isinstance(deepseek_payload["response_format"], str):
             del deepseek_payload["response_format"]
 
-            # clamp the length
-            n = deepseek_payload["max_length"]
-            deepseek_payload["max_length"] = min(8192, max(1, n))
+        # clamp the length
+        upper_bound = 65536
+        n = deepseek_payload["max_length"]
+        n = upper_bound if n == -1 else n
+        deepseek_payload["max_length"] = min(upper_bound, max(1, n))
 
 
         if deepseek_payload["top_p"] <= 0.0 or deepseek_payload["top_p"] > 1.0:

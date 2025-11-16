@@ -12,7 +12,8 @@ box = ghostbox.from_generic(
     tts_voice="am_santa",
     stderr=False,  # it's a CLI program, so we don't want clutter
 )
-
+import json
+print(f"debug:\n{json.dumps(box.get_options(), indent=4)}")
 # we will use this flag to signal whem streaming is done
 done = threading.Event()
 
