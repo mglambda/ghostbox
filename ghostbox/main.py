@@ -358,6 +358,7 @@ class Plumbing(object):
             self.backend = DeepseekBackend(
                 api_key = deepseek_api_key if deepseek_api_key else api_key
             )
+            self.verbose("Initialized deepseek backend.")
             self.setOption("prompt_format", "auto")
                 
             # check the model

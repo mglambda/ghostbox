@@ -1454,7 +1454,12 @@ class DeepseekBackend(OpenAIBackend):
             del deepseek_payload["response_format"]
 
         # clamp the length
-        upper_bound = 65536
+        # annoyingly, this depends on the model chosen and afaik there is no way to get this information from deepseek
+        if deepseek_payload["model"] == "deepseek-reasoner": 
+            upper_bound = 65536
+        else:
+            upper_bound = 8192
+            
         n = deepseek_payload["max_length"]
         n = upper_bound if n == -1 else n
         deepseek_payload["max_length"] = min(upper_bound, max(1, n))
