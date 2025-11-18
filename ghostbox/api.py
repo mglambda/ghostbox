@@ -72,7 +72,7 @@ def from_dummy(**kwargs) -> Ghostbox:
 
 class Ghostbox:
     def __init__(self, endpoint: str, backend: LLMBackend | str, **kwargs):
-        self._ct = None  # continuous transcriber
+        self._ct = None
         kwargs["endpoint"] = endpoint
         try:
             backend_str = backend.name
@@ -148,14 +148,14 @@ class Ghostbox:
         return self._plumbing.session.getVar(injection_key, default=None)
 
     def __getattr__(self, k):
+        if k.startswith("_"):
+            return self.__dict__[k]
+        
         # we intentionally avoid getOption because we want the api to crash if k not found
         return self.__dict__["_plumbing"].options[k]
 
     def __setattr__(self, k, v):
-        if k == "_plumbing":
-            return
-
-        if k in self.__dict__:
+        if k in self.__dict__ or k.startswith("_"):
             self.__dict__[k] = v
 
         if "_plumbing" in self.__dict__:
@@ -392,7 +392,7 @@ class Ghostbox:
         self, transcription_callback: Callable[[str], str]
     ) -> Ghostbox:
         """Set a user defined callback that will be invoked on transcribed phrases when audio=True.
-        This callback will be invoked in addition to ghostbox's own processing of the audio phrase, including fuzzy matching of the activation phrase. If you want full control of audio transcription, see adui_transcription_start_custom.
+        This callback will be invoked in addition to ghostbox's own processing of the audio phrase, including fuzzy matching of the activation phrase. If you want full control of audio transcription, see audio_transcription_start_custom.
         :param transcription_callback: Callback function that will receive the successfully transcribed string as only argument. The function's return value will be passed off to the LLM backend as the final user message.
         :return: The ghostbox instance.
 
