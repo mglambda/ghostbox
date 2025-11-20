@@ -1032,7 +1032,7 @@ class OpenAIBackend(AIBackend):
 class GoogleBackend(AIBackend):
     """Backend for google's AI Studio https://aistudio.google.com"""
 
-    def __init__(self, api_key: str, **kwargs):
+    def __init__(self, api_key: str, model: str, **kwargs):
         super().__init__("https://aistudio.google.com", **kwargs)
         self.api_key = api_key
         if not(self.api_key):
@@ -1052,12 +1052,16 @@ class GoogleBackend(AIBackend):
         
         self._memoized_params = None
         # Store the model name in _config for later use by tokenize and generate
-        # The 'model' key should be present in kwargs if passed from Plumbing
-        # We also fix it here to ensure it's a supported model name
-        initial_model = kwargs.get('model', "")
-        self._config['model'] = self.fix_model(initial_model)
+        self._config['model'] = self.fix_model(model)
+        self._tokenizer = None
+        try:
+            from google.genai.local_tokenizer import LocalTokenizer
+            # FIXME: I don't know why google won't accept their own official names for the tokenizer but that's what we're dealing with
+            tokenizer_model = self._config["model"].replace("models/","")
+            self._tokenizer = LocalTokenizer(model_name=tokenizer_model)
+        except Exception as e:
+            printerr(f"Could not initialize tokenizer. Reason: {e}")
         
-                                                                            
     def getName(self):
         return LLMBackend.google.name
 
@@ -1074,7 +1078,7 @@ class GoogleBackend(AIBackend):
         return [ModelStats(
             name = model.name,
             display_name = model.display_name,
-            description = model.description
+            description = model.description if model.description else ""
         )
                 for model in models]
     
@@ -1359,11 +1363,23 @@ class GoogleBackend(AIBackend):
 
     def tokenize(self, w: str) -> List[int]:
         self.log(f"Attempting to tokenize {len(w)} characters for Google backend (only token count is supported).")
+        token_count = None
+
         try:
-            content_to_count = self._make_content_from_raw_text(w)
-            response = self.client.models.count_tokens(contents=[content_to_count],
-                                                       model=self.fix_model(self._config.get("model", "")))
-            token_count = response.total_tokens
+            #content_to_count = self._make_content_from_raw_text(w)
+            content_to_count = w
+            if self._tokenizer is not None:
+                try:
+                    token_count = self._tokenizer.count_tokens(content_to_count).total_tokens
+                except Exception as e:
+                    printerr(f"warning: Failed to count tokens using local tokenizer. Reason: {e}")
+
+            if token_count is None:
+                # use http remote tokenizer
+                response = self.client.models.count_tokens(contents=[content_to_count],
+                                                           model=self.fix_model(self._config.get("model", "")))
+                token_count = response.total_tokens
+                
             self.log(f"Token count for '{w[:50]}...' is {token_count}.")
             # Return a list of placeholder integers so len() works as expected
             return [0] * token_count

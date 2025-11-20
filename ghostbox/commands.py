@@ -722,7 +722,7 @@ def tokenize(prog, argv):
     else:
         count = False
 
-    ts = prog.getBackend().tokenize("".join(argv))
+    ts = prog.getBackend().tokenize(" ".join(argv))
     if count:
         return str(len(ts))
 

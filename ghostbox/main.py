@@ -238,7 +238,7 @@ mode_formatters = {
 
 
 class Plumbing(object):
-    def __init__(self, options={}, initial_cli_prompt="", tags={}):
+    def __init__(self, options={}, initial_cli_prompt="", tags={}, delay_backend_init: bool = False):
         # the printerr stuff needs to happen early
         self._printerr_buffer = []
         self._initial_printerr_callback = lambda w: self._printerr_buffer.append(w)
@@ -259,7 +259,8 @@ class Plumbing(object):
         self.tags = tags
         self.backend = None
         self.template = None
-        self.initializeBackend(self.getOption("backend"), self.getOption("endpoint"))
+        if not delay_backend_init:
+            self.initializeBackend(self.getOption("backend"), self.getOption("endpoint"))
         self.session = Session(chat_user=options.get("chat_user", ""))
         # FIXME: make this a function returning backend.getlAStResult()
         self.lastResult = {}
@@ -346,13 +347,14 @@ class Plumbing(object):
             self.backend = OpenAIBackend(api_key, **kwargs)
             self.setOption("prompt_format", "auto")
         elif backend == LLMBackend.google.name:
-            google_api_key = self.getOption("google_api_key")
-            self.backend = GoogleBackend(
-                api_key = google_api_key if google_api_key else api_key
-            )
-            self.setOption("prompt_format", "auto")
             if not(self.getOption("model")):
                 self.setOption("model", self.getOption("google_prefered_model"))
+            google_api_key = self.getOption("google_api_key")
+            self.backend = GoogleBackend(
+                api_key = google_api_key if google_api_key else api_key,
+                model = self.getOption("model")
+            )
+            self.setOption("prompt_format", "auto")
         elif backend == LLMBackend.deepseek.name:
             deepseek_api_key = self.getOption("deepseek_api_key")
             self.backend = DeepseekBackend(
@@ -396,6 +398,19 @@ class Plumbing(object):
             if param.name not in self.options.keys():
                 self.setOption(param.name, param.default_value)
 
+        # this is so llamacpp uses the /chat/completions endpoint if we use auto templating
+        # has no effect on other backends
+        name = self.getOption("prompt_format")
+        self.getBackend().configure(
+            {
+                "llamacpp_use_chat_completion_endpoint": (
+                    True
+                    if name == PromptFormatTemplateSpecialValue.auto.name
+                    else False
+                )
+            }
+        )
+                
     def getBackend(self):
         return self.backend
 
@@ -583,18 +598,6 @@ class Plumbing(object):
         return "raw"
 
     def loadTemplate(self, name, startup=False):
-        # this is so llamacpp uses the /chat/completions endpoint if we use auto templating
-        # has no effect on other backends
-        self.getBackend().configure(
-            {
-                "llamacpp_use_chat_completion_endpoint": (
-                    True
-                    if name == PromptFormatTemplateSpecialValue.auto.name
-                    else False
-                )
-            }
-        )
-
         # special cases
         if name == PromptFormatTemplateSpecialValue.auto.name:
             if startup and (self.template is not None):
@@ -2290,9 +2293,10 @@ def main():
         options= args.__dict__ | keys,
         initial_cli_prompt=args.cli_prompt,
         tags=tagged_parser.get_tags(),
+        delay_backend_init = True,
     )
     setup_plumbing(prog, args)
-
+    prog.initializeBackend(prog.getOption("backend"), prog.getOption("endpoint"))
     if (prompt := prog.getOption("prompt")) is not None:
 
         def input_once():
