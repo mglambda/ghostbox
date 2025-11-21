@@ -1368,7 +1368,11 @@ class GoogleBackend(AIBackend):
         try:
             #content_to_count = self._make_content_from_raw_text(w)
             content_to_count = w
-            if self._tokenizer is not None:
+            # so as of nov 2025 the official goole stance is to not use local tokenization
+            # the reason is that their APi takes caching into account
+            # most people tokenize to figure out the token cost, so to be maximally useful that's what we will do
+            # that's why right now we default to false here
+            if False and self._tokenizer is not None:
                 try:
                     token_count = self._tokenizer.count_tokens(content_to_count).total_tokens
                 except Exception as e:

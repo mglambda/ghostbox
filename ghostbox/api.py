@@ -175,7 +175,7 @@ class Ghostbox:
         token_count = box.token_estimate("\n".join([msg.model_dump_json() for msg in box.get_history()]) + user_prompt)
 
 Again, the count won't be exact, but the estimate will give you an idea of whether you are prompting with 20k vs. 30k tokens.
-        Note: For most backends, tokenization will include an HTTP request. Except in the case of google, where tokenization bimay be local.
+Note on google backend: As of Nov 2025, official stance is to use tokenization over the HTTP API, as this will take caching into account, which can't be done locally. This means that the estimate results you get with the google backend involve an http request, and may differ from call to call, but should be pretty informative when it comes to gauging your token cost.
         """
         try:
             ts = self._plumbing.getBackend().tokenize(complete_prompt)
