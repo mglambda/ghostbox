@@ -168,6 +168,22 @@ class Ghostbox:
         """
         return self._plumbing._frozen
 
+    def token_estimate(self, complete_prompt: str) -> Optional[int]:
+        """Attempts to give an estimate of token count for a given complete prompt string. THe result is not guaranteed to be exact, and tokenization does not work for all backends all of the time (blame them, not me).
+        Note that the estimate does not take the internal history into account, it is based solely on the prompt string you provide. If you want to include the history, extract it from ghostbox and turn it into a plain string first, e.g:
+
+        token_count = box.token_estimate("\n".join([msg.model_dump_json() for msg in box.get_history()]) + user_prompt)
+
+Again, the count won't be exact, but the estimate will give you an idea of whether you are prompting with 20k vs. 30k tokens.
+        Note: For most backends, tokenization will include an HTTP request. Except in the case of google, where tokenization bimay be local.
+        """
+        try:
+            ts = self._plumbing.getBackend().tokenize(complete_prompt)
+            if complete_prompt != "" and ts == []:
+                return None
+            return len(ts)
+        except:
+            return None
     def timings(self) -> Optional[Timings]:
         """Provides timing and usage statistics for the last request to the backend.
         Returns none if no timings are available, which may happen if either no request has been sent yet, or the backend doesn't support timing.
