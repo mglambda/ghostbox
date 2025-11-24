@@ -513,6 +513,13 @@ def makeTaggedParser(default_params) -> TaggedArgumentParser:
         tag=mktag(type=AT.Plumbing, group=AG.TTS),
     )
     parser.add_argument(
+        "--tts_filter",
+        nargs="+",
+        default = [],
+        help="List of strings to filter out before passing the LLM generation to the underlying tts. Strings in the list will remain in the generated text, but will not be read out by the TTS engine. You can use this for responsive AI assistrant's that can output certain signal words e.g. '<USER_REQUEST>'.",
+        tag=mktag(type=AT.Plumbing, group=AG.TTS),
+    )    
+    parser.add_argument(
         "--tts_websock",
         action=argparse.BooleanOptionalAction,
         default=False,
