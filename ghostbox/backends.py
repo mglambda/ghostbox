@@ -1036,8 +1036,11 @@ class GoogleBackend(AIBackend):
         super().__init__("https://aistudio.google.com", **kwargs)
         self.api_key = api_key
         if not(self.api_key):
-            printerr("error: Google AI Studio requires an API key. Please set it with either the --google_api_key or the general --api_key option. You can get an API key at https://aistudio.google.com")
-            raise BrokenBackend("Missing API key for google.")
+            # try to get it from env vars
+            self.api_key = os.getenv("GEMINI_API_KEY", os.getenv("GOOGLE_API_KEY", None))
+            if self.api_key is None:
+                printerr("error: Google AI Studio requires an API key. Please set it with either the --google_api_key or the general --api_key option, or set either the GEMINI_API_KEY or GOOGLE_API_KEY environment variables. You can get an API key at https://aistudio.google.com")
+                raise BrokenBackend("Missing API key for google.")
 
         api_str = "" if not(api_key) else " with api key " + api_key[:4] + ("x" * len(api_key[4:]))
        
