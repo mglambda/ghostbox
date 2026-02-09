@@ -831,7 +831,7 @@ class OpenAIBackend(AIBackend):
         super().__init__(endpoint, **kwargs)
         self.api_key = api_key
         self._memoized_params = None
-        api_str = "" if not(api_key) else " with api key " + api_key[:4] + ("x" * len(api_key[4:]))
+        api_str = "" if not(api_key) else " with api key " + api_key[:5] + ("x" * len(api_key[4:]))
         self.log(f"Initialized OpenAI compatible backend {api_str}. Routing to {endpoint}. Config is {self._config}")
                                                                             
     def getName(self):
@@ -1521,7 +1521,71 @@ class DeepseekBackend(OpenAIBackend):
             self.log(f"Couldn't get deepseek models. Reason: {e}")
         return []
     
-    
-            
+class QwenBackend(OpenAIBackend):
+    """Backend for the qwen cloud LLM provider https://qwen.ai
+    Powered by Alibaba Cloud services. Based on the OpenAI API."""
 
+    def __init__(self, api_key: str, endpoint:str="https://dashscope-intl.aliyuncs.com/compatible-mode", **kwargs):
+        legit_endpoints = ["https://dashscope-intl.aliyuncs.com/compatible-mode", "https://dashscope-us.aliyuncs.com/compatible-mode","https://dashscope.aliyuncs.com/compatible-mode"]
+        if endpoint not in legit_endpoints:
+            printerr(f"warning: Custom endpoint for qwen backend detected ({endpoint}). Please make sure it does not have a trailing '/v1', e.g. do not use:\n `https://dashscope-intl.aliyuncs.com/compatible-mode/v1` -> **WRONG**\nbut rather\n - `https://dashscope-intl.aliyuncs.com/compatible-mode` -> **RIGHT**")
+
+
+        self.api_key = api_key
+        if not(self.api_key):
+            # try to get it from env vars
+            self.api_key = os.getenv("DASHSCOPE_API_KEY", None)
+            printerr(f"Found DASHSCOPE_API_KEY in environment.")
+            if self.api_key is None:
+                printerr("error: Google AI Studio requires an API key. Please set it with either the --google_api_key or the general --api_key option, or set either the GEMINI_API_KEY or GOOGLE_API_KEY environment variables. You can get an API key at https://aistudio.google.com")
+                raise BrokenBackend("Missing API key for qwen. Provide it via --api_key or set the DASHSCOPE_API_KEY environment variable. See more on https://modelstudio.console.alibabacloud.com/ap-southeast-1/?tab=doc#/doc/?type=model&url=2840915")
+
+        api_str = "" if not(api_key) else api_key[:5] + ("x" * len(api_key[4:]))
+
+        printerr(f"""Qwen specific note: The endpoint is different for each region.
+  - Singapore: https://dashscope-intl.aliyuncs.com/compatible-mode/v1
+  - US (Virginia): https://dashscope-us.aliyuncs.com/compatible-mode/v1
+  - China (Beijing): https://dashscope.aliyuncs.com/compatible-mode/v1
+Currently using {endpoint}. Set it with --endpoint.
+See more on https://modelstudio.console.alibabacloud.com/ap-southeast-1/?tab=doc#/doc/?type=model&url=2840915
+"""        )
+
+
+        super().__init__(self.api_key, endpoint, **kwargs)        
+        printerr(f"Qwen backend using API key {api_str}")
         
+    def getName(self) -> str:
+        return "Qwen"
+
+    # listing these two here explicitly because we may want to modify them in the future
+    def generate(self, payload: Dict[str, Any]) -> Any:
+        return super().generate(payload)
+
+    def generateStreaming(self, payload: Dict[str, Any], callback=lambda w: print(w)) -> None:
+        super().generateStreaming(payload, callback)
+        
+    
+    def get_models(self) -> List[ModelStats]:
+        headers = {
+            "Authorization": f"Bearer {self.api_key}",
+            "Content-Type": "application/json",
+        }
+        response = requests.get(self.endpoint + "/v1/models", headers=headers)
+        if response.status_code != 200:
+            self.log(f"Got status code {response.status_code} during model query.")
+            return []
+
+        try:
+            data = response.json()["data"]
+            return [ModelStats(
+                name=record["id"],
+                display_name=record["id"]
+            )
+                    for record in data]
+        except Exception as e:
+            self.log(f"Couldn't get qwen models. Reason: {e}")
+        return []
+
+
+
+

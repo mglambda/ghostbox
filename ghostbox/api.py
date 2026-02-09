@@ -31,6 +31,14 @@ def from_deepseek(**kwargs):
     """
     return Ghostbox(backend=LLMBackend.deepseek, **kwargs)
 
+def from_qwen(**kwargs):
+    """Returns a ghostbox instance that connects to the https:://qwen.ai api endpoints.
+    You will need to set your qwen_api_key or api_key variable to the APi key provided by Qwen.
+    Alternatively, you can set the DASHSCOPE_API_KEY environment variable to your API key.
+    See more here https://modelstudio.console.alibabacloud.com/ap-southeast-1/?tab=doc#/doc/?type=model&url=2840915
+    """
+    return Ghostbox(backend=LLMBackend.qwen, **kwargs)
+
 
 
 def from_openai_legacy(endpoint="http://localhost:8080", **kwargs):
@@ -554,7 +562,7 @@ Note on google backend: As of Nov 2025, official stance is to use tokenization o
         # FIXME: update self.__dict__?
         return self
 
-    def stop(self) -> None:
+    def stop_all(self) -> None:
         """Stops all ongoing interaction, including asynchronous or streaming text generation, and TTS output."""
         self._plumbing.stopAll()
 

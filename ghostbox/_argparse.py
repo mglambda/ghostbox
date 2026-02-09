@@ -179,14 +179,30 @@ def makeTaggedParser(default_params) -> TaggedArgumentParser:
         default="",
         help="API key for Deepseek https://deepseek.com",
         tag=mktag(type=AT.Plumbing, group=AG.Backend),
-    )    
+    )
+    parser.add_argument(
+        "--qwen_api_key",
+        type=str,
+        default="",
+        help="API key for Qwen (https://qwen.ai). You can also set this via the DASHSCOPE_API_KEY environment variable.",
+        tag=mktag(type=AT.Plumbing, group=AG.Backend),
+    )        
     parser.add_argument(
         "--google_prefered_model",
         type=str,
         default="models/gemini-2.5-flash",
         help="Prefered model to use with google backend. This will only be used if --model is not set.",
         tag=mktag(type=AT.Plumbing, group=AG.Google),
-    )        
+    )
+
+    parser.add_argument(
+        "--qwen_prefered_model",
+        type=str,
+        default="qwen3-vl-plus",
+        help="Prefered model to use with qwen backend. This will only be used if --model is not set.",
+        tag=mktag(type=AT.Plumbing, group=AG.Google),
+    )            
+    
     parser.add_argument(
         "--max_length",
         type=int,

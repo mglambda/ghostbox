@@ -4,6 +4,7 @@ from typing import *
 import feedwater
 from functools import *
 from colorama import just_fix_windows_console, Fore, Back, Style
+# FIXME: this huggingface import seems bugged (circular import)
 from huggingface_hub import snapshot_download, try_to_load_from_cache
 from lazy_object_proxy import Proxy  # type: ignore
 import argparse
@@ -352,13 +353,15 @@ class Plumbing(object):
             google_api_key = self.getOption("google_api_key")
             self.backend = GoogleBackend(
                 api_key = google_api_key if google_api_key else api_key,
-                model = self.getOption("model")
+                model = self.getOption("model"),
+                **kwargs
             )
             self.setOption("prompt_format", "auto")
         elif backend == LLMBackend.deepseek.name:
             deepseek_api_key = self.getOption("deepseek_api_key")
             self.backend = DeepseekBackend(
-                api_key = deepseek_api_key if deepseek_api_key else api_key
+                api_key = deepseek_api_key if deepseek_api_key else api_key,
+                **kwargs
             )
             self.verbose("Initialized deepseek backend.")
             self.setOption("prompt_format", "auto")
@@ -369,7 +372,30 @@ class Plumbing(object):
                     "model",
                     models[0].name if (models := self.getBackend().get_models()) != [] else "none"
                 )
+        elif backend == LLMBackend.qwen.name:
+            qwen_api_key = self.getOption("qwen_api_key")
+            
+            # we can only verify that the model is correct once we've insantiated the backend
+            # here we just fill in the prefered option if nothing was chosen
+            if not self.getOption("model"):
+                self.setOption("model", self.getOption("qwen_prefered_model"))
 
+            self.backend = QwenBackend(
+                api_key = qwen_api_key if qwen_api_key else api_key,
+                **kwargs
+            )
+            self.verbose("Initialized qwen backend.")
+            self.setOption("prompt_format", "auto")
+
+            # check the model
+            if not(self.getOption("model")):
+                self.setOption(
+                    "model",
+                    models[0].name if (models := self.getBackend().get_models()) != [] else "none"
+                )
+            
+                
+            
         elif backend == LLMBackend.generic.name:
             self.backend = OpenAIBackend(api_key, endpoint=endpoint, **kwargs)
             self.setOption("prompt_format", "auto")
@@ -2260,7 +2286,7 @@ class Plumbing(object):
 
 def get_api_keys(config_file: str, args: Dict[Any, Any]) -> Dict[str, Any]:
     """Loads api keys from various sources."""
-    key_names = ["api_key","google_api_key", "deepseek_api_key"]
+    key_names = ["api_key","google_api_key", "deepseek_api_key", "qwen_api_key"]
     arg_keys = {k:v for k, v in args.items() if k in key_names and v != ""}
     
     try:
