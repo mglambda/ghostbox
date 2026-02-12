@@ -336,93 +336,91 @@ class Plumbing(object):
     def initializeBackend(self, backend, endpoint):
         api_key = self.getOption("api_key")
         kwargs = {"logger": self.verbose}
-        if backend == LLMBackend.llamacpp.name:
-            self.backend = LlamaCPPBackend(endpoint, **kwargs)
-        elif backend == LLMBackend.openai.name:
-            if not api_key:
-                printerr(
-                    "error: OpenAI API key is required for the OpenAI backend. Did you forget to provide --api_key?"
+        match backend:
+            case LLMBackend.llamacpp.name:        
+                self.backend = LlamaCPPBackend(endpoint, **kwargs)
+            case LLMBackend.openai.name:
+                if not api_key:
+                    printerr(
+                        "error: OpenAI API key is required for the OpenAI backend. Did you forget to provide --api_key?"
+                    )
+                    # this is rough but we are in init phase so it's ok
+                    sys.exit()
+                self.backend = OpenAIBackend(api_key, **kwargs)
+                self.setOption("prompt_format", "auto")
+            case LLMBackend.google.name:
+                if not(self.getOption("model")):
+                    self.setOption("model", self.getOption("google_prefered_model"))
+                google_api_key = self.getOption("google_api_key")
+                self.backend = GoogleBackend(
+                    api_key = google_api_key if google_api_key else api_key,
+                    model = self.getOption("model"),
+                    **kwargs
                 )
-                # this is rough but we are in init phase so it's ok
-                sys.exit()
-            self.backend = OpenAIBackend(api_key, **kwargs)
-            self.setOption("prompt_format", "auto")
-        elif backend == LLMBackend.google.name:
-            if not(self.getOption("model")):
-                self.setOption("model", self.getOption("google_prefered_model"))
-            google_api_key = self.getOption("google_api_key")
-            self.backend = GoogleBackend(
-                api_key = google_api_key if google_api_key else api_key,
-                model = self.getOption("model"),
-                **kwargs
-            )
-            self.setOption("prompt_format", "auto")
-        elif backend == LLMBackend.deepseek.name:
-            deepseek_api_key = self.getOption("deepseek_api_key")
-            self.backend = DeepseekBackend(
-                api_key = deepseek_api_key if deepseek_api_key else api_key,
-                **kwargs
-            )
-            self.verbose("Initialized deepseek backend.")
-            self.setOption("prompt_format", "auto")
+                self.setOption("prompt_format", "auto")
+            case LLMBackend.deepseek.name:
+                deepseek_api_key = self.getOption("deepseek_api_key")
+                self.backend = DeepseekBackend(
+                    api_key = deepseek_api_key if deepseek_api_key else api_key,
+                    **kwargs
+                )
+                self.verbose("Initialized deepseek backend.")
+                self.setOption("prompt_format", "auto")
+
+                # check the model
+                if not(self.getOption("model")):
+                    self.setOption(
+                        "model",
+                        models[0].name if (models := self.getBackend().get_models()) != [] else "none"
+                    )
+            case LLMBackend.qwen.name:
+                qwen_api_key = self.getOption("qwen_api_key")
+
+                # we can only verify that the model is correct once we've insantiated the backend
+                # here we just fill in the prefered option if nothing was chosen
+                if not self.getOption("model"):
+                    self.setOption("model", self.getOption("qwen_prefered_model"))
+
+                # set the endpoint, but only if the user provided something that deviates from the default
+                if endpoint != "http://localhost:8080":
+                    kwargs["endpoint"] = endpoint                
+
+                self.backend = QwenBackend(                
+                    api_key = qwen_api_key if qwen_api_key else api_key,
+                    **kwargs
+                )
+                self.verbose("Initialized qwen backend.")
+                self.setOption("prompt_format", "auto")
+
+                # check the model
+                if not(self.getOption("model")):
+                    self.setOption(
+                        "model",
+                        models[0].name if (models := self.getBackend().get_models()) != [] else "none"
+                    )
+            case LLMBackend.generic.name:
+                self.backend = OpenAIBackend(api_key, endpoint=endpoint, **kwargs)
+                self.setOption("prompt_format", "auto")
+            case LLMBackend.legacy.name:
+                if (
+                    self.getOption("prompt_format")
+                    == PromptFormatTemplateSpecialValue.auto.name
+                ):
+                    printerr(
+                        "warning: Setting prompt_format to 'raw' as using 'auto' as prompt_format with the legacy backend will yield server errors. This backend exists specifically to *not* apply templates server side. You can manually reset this if you want."
+                    )
+                    # doing it without setOption as backend isn't fully initialized yet
+                    self.options["prompt_format"] = (
+                        PromptFormatTemplateSpecialValue.raw.name
+                    )
+
+                self.backend = OpenAILegacyBackend(api_key, endpoint=endpoint, **kwargs)
+            case LLMBackend.dummy.name:
+                self.backend = DummyBackend()
+            case _ as unreachable:
+                # ensure total coverage
+                assert_never(unreachable)
                 
-            # check the model
-            if not(self.getOption("model")):
-                self.setOption(
-                    "model",
-                    models[0].name if (models := self.getBackend().get_models()) != [] else "none"
-                )
-        elif backend == LLMBackend.qwen.name:
-            qwen_api_key = self.getOption("qwen_api_key")
-            
-            # we can only verify that the model is correct once we've insantiated the backend
-            # here we just fill in the prefered option if nothing was chosen
-            if not self.getOption("model"):
-                self.setOption("model", self.getOption("qwen_prefered_model"))
-
-            # set the endpoint, but only if the user provided something that deviates from the default
-            if endpoint != "http://localhost:8080":
-                kwargs["endpoint"] = endpoint                
-
-            self.backend = QwenBackend(                
-                api_key = qwen_api_key if qwen_api_key else api_key,
-                **kwargs
-            )
-            self.verbose("Initialized qwen backend.")
-            self.setOption("prompt_format", "auto")
-
-            # check the model
-            if not(self.getOption("model")):
-                self.setOption(
-                    "model",
-                    models[0].name if (models := self.getBackend().get_models()) != [] else "none"
-                )
-            
-                
-            
-        elif backend == LLMBackend.generic.name:
-            self.backend = OpenAIBackend(api_key, endpoint=endpoint, **kwargs)
-            self.setOption("prompt_format", "auto")
-        elif backend == LLMBackend.legacy.name:
-            if (
-                self.getOption("prompt_format")
-                == PromptFormatTemplateSpecialValue.auto.name
-            ):
-                printerr(
-                    "warning: Setting prompt_format to 'raw' as using 'auto' as prompt_format with the legacy backend will yield server errors. This backend exists specifically to *not* apply templates server side. You can manually reset this if you want."
-                )
-                # doing it without setOption as backend isn't fully initialized yet
-                self.options["prompt_format"] = (
-                    PromptFormatTemplateSpecialValue.raw.name
-                )
-
-            self.backend = OpenAILegacyBackend(api_key, endpoint=endpoint, **kwargs)
-        elif backend == LLMBackend.dummy.name:
-            self.backend = DummyBackend()
-        else:
-            # Handle other backends...
-            pass
-
         # fill in the default sampler parameters that were not shown in the command line arguments, but are still supported
         for param in self.backend.sampling_parameters().values():
             if param.name not in self.options.keys():
