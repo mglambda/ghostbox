@@ -7,7 +7,7 @@ import numpy as np
 import websockets
 from websockets.sync.client import connect, ClientConnection
 import threading, time, sys, json, traceback
-from ghostbox.util import (
+from .util import (
     printerr,
     find_default_sound_output_device_info,
     get_default_microphone_sample_rate,

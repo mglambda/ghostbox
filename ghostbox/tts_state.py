@@ -1,7 +1,7 @@
 import os, subprocess, tempfile
 import ghostbox
 #from moviepy.editor import *
-from ghostbox.tts_util import *
+from .tts_util import *
 from queue import Queue
 
 class TTSState(object):

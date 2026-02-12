@@ -4,18 +4,17 @@ from pydantic import BaseModel, ValidationError
 from typing import *
 from dataclasses import dataclass
 from contextlib import contextmanager
-from typing import Callable, Dict
 from typing_extensions import Self
 import json, time
-from ghostbox.main import Plumbing, setup_plumbing
-from ghostbox.StoryFolder import StoryFolder
-from ghostbox._argparse import makeDefaultOptions
-from ghostbox.util import printerr
-from ghostbox import commands
-from ghostbox.definitions import *
-from ghostbox import definitions
-from ghostbox.api_internal import *
-from ghostbox.agency import Tool, Function, Property, Parameters
+from .main import Plumbing, setup_plumbing
+from .StoryFolder import StoryFolder
+from ._argparse import makeDefaultOptions
+from .util import printerr
+from . import commands
+from .definitions import *
+from . import definitions
+from .api_internal import *
+from .agency import Tool, Function, Property, Parameters
 
 
 def from_generic(endpoint="http://localhost:8080", **kwargs):

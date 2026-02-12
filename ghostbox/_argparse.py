@@ -1,8 +1,7 @@
 import argparse, os
-from ghostbox.util import *
-from ghostbox import backends
-from ghostbox.definitions import *
-from ghostbox.__init__ import get_ghostbox_data
+from .util import *
+from . import backends
+from .definitions import *
 
 
 class TaggedArgumentParser:
@@ -44,6 +43,7 @@ class TaggedArgumentParser:
 
 
 def makeTaggedParser(default_params) -> TaggedArgumentParser:
+    from ghostbox import get_ghostbox_data    
     parser = TaggedArgumentParser(
         description="LLM Command Line Interface",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,

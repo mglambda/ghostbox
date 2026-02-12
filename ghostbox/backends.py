@@ -2,12 +2,12 @@ import time, requests, threading, json
 from abc import ABC, abstractmethod
 from functools import *
 from pydantic import BaseModel
-from ghostbox.util import *
-from ghostbox.definitions import *
-from ghostbox.streaming import *
-import traceback # Added for detailed error logging in GoogleBackend
-import base64 # Added for image handling in GoogleBackend
-from google.genai.types import Content, Part # Added for Google tokenize helper
+from .util import *
+from .definitions import *
+from .streaming import *
+import traceback
+import base64
+from google.genai.types import Content, Part
 
 # this list is based on the llamacpp server. IMO most other backends are subsets of this.
 # the sampler values have been adjusted to more sane default options (no more top_p)

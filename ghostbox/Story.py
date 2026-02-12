@@ -1,6 +1,6 @@
 from typing import *
 from pydantic import BaseModel
-from ghostbox.definitions import *
+from .definitions import *
 
 class Story(BaseModel):
     """A story is a thin wrapper around a list of ChatMessages."""

@@ -14,7 +14,7 @@ import numpy as np
 import torch
 import queue
 from huggingface_hub import snapshot_download
-from ghostbox.tts_backends import TTSBackend
+from .tts_backends import TTSBackend
 try:
     import feedwater
     _feedwater = True

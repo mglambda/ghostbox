@@ -1,5 +1,5 @@
 import os, appdirs, threading, time, sys
-from ghostbox.util import *
+from .util import *
 import operator
 from stat import ST_MTIME
 

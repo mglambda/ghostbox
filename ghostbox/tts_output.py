@@ -4,8 +4,8 @@ from abc import ABC, abstractmethod
 from functools import *
 from typing import *
 from queue import Queue, Empty
-from ghostbox.util import *
-from ghostbox.definitions import *
+from .util import *
+from .definitions import *
 
 
 class TTSOutput(ABC):

@@ -2,7 +2,7 @@ import requests, json
 #from requests_html import HTMLSession
 from time import sleep
 from threading import Thread, Event
-from ghostbox.util import printerr
+from .util import printerr
 
 # FIXME:   # poor man's closure; somehow this isn't enough yet to warrant making a class
 stop_streaming = Event()

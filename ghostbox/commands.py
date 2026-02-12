@@ -1,10 +1,10 @@
 import os, datetime, glob, sys, requests, traceback, random, json
-from ghostbox.session import Session
-from ghostbox.util import *
-from ghostbox.StoryFolder import *
-from ghostbox.definitions import *
-from ghostbox.api_internal import *
-from ghostbox.client import RemoteInfo
+from .session import Session
+from .util import *
+from .StoryFolder import *
+from .definitions import *
+from .api_internal import *
+from .client import RemoteInfo
 
 
 def newSession(program, argv, keep=False):

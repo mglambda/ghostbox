@@ -1,10 +1,9 @@
 # allows for use of tools with tools.py in char directory.
-
+from typing import *
 import os, importlib, inspect, docstring_parser, json, re, traceback
 from pydantic import BaseModel
-from ghostbox.util import *
-from typing import *
-from ghostbox.definitions import *
+from .util import *
+from .definitions import *
 
 # # example of tool dict
 # "tools": [

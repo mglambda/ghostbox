@@ -12,7 +12,7 @@ from queue import Queue
 import websockets.sync.server as WS
 import websockets
 import numpy as np
-from ghostbox.util import printerr
+from .util import printerr
 
 
 def loadModel(name="base.en"):

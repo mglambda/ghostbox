@@ -2,8 +2,8 @@ import traceback, appdirs, os, wget
 from abc import ABC, abstractmethod
 from functools import *
 from typing import *
-from ghostbox.util import *
-from ghostbox.definitions import *
+from .util import *
+from .definitions import *
 
 
 class IgnoreValueError(ValueError):

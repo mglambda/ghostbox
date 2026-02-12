@@ -1,8 +1,8 @@
 import os, glob, time
 from copy import deepcopy
-from ghostbox.util import *
-from ghostbox.StoryFolder import *
-from ghostbox.agency import *
+from .util import *
+from .StoryFolder import *
+from .agency import *
 
 
 class Session(object):

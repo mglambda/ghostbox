@@ -2,7 +2,7 @@
 import json
 from pydantic import BaseModel, Field
 import copy 
-from ghostbox.Story import *
+from .Story import *
 
 class StoryFolder(BaseModel):
     """Thin wrapper around a list of Story objects."""

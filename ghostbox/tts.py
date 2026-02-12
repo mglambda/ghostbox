@@ -1,11 +1,11 @@
 #!/usr/bin/env python
 import argparse, traceback, sys, tempfile, ast, shutil, json
-from ghostbox.definitions import TTSOutputMethod, TTSModel
-from ghostbox.tts_util import *
-from ghostbox.tts_state import *
-from ghostbox.tts_backends import *
-from ghostbox.tts_backends_orpheus import OrpheusBackend
-from ghostbox.tts_output import *
+from .definitions import TTSOutputMethod, TTSModel
+from .tts_util import *
+from .tts_state import *
+from .tts_backends import *
+from .tts_backends_orpheus import OrpheusBackend
+from .tts_output import *
 import cProfile
 
 def main():
