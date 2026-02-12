@@ -200,7 +200,7 @@ def makeTaggedParser(default_params) -> TaggedArgumentParser:
         type=str,
         default="qwen3-vl-plus",
         help="Prefered model to use with qwen backend. This will only be used if --model is not set.",
-        tag=mktag(type=AT.Plumbing, group=AG.Google),
+        tag=mktag(type=AT.Plumbing, group=AG.Backend),
     )            
     
     parser.add_argument(

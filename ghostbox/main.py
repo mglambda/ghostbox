@@ -9,19 +9,19 @@ from huggingface_hub import snapshot_download, try_to_load_from_cache
 from lazy_object_proxy import Proxy  # type: ignore
 import argparse
 from argparse import Namespace
-from ghostbox.commands import *
-from ghostbox.autoimage import *
-from ghostbox.output_formatter import *
-from ghostbox.util import *
-from ghostbox import util
-from ghostbox import agency
-from ghostbox._argparse import *
-from ghostbox import streaming
-from ghostbox.session import Session
-from ghostbox.pftemplate import *
-from ghostbox.backends import *
-from ghostbox import backends
-from ghostbox.client import GhostboxClient, client_cli_token
+from .commands import *
+from .autoimage import *
+from .output_formatter import *
+from .util import *
+from . import util
+from . import agency
+from ._argparse import *
+from . import streaming
+from .session import Session
+from .pftemplate import *
+from .backends import *
+from . import backends
+from .client import GhostboxClient, client_cli_token
 import ghostbox
 
 
@@ -380,7 +380,11 @@ class Plumbing(object):
             if not self.getOption("model"):
                 self.setOption("model", self.getOption("qwen_prefered_model"))
 
-            self.backend = QwenBackend(
+            # set the endpoint, but only if the user provided something that deviates from the default
+            if endpoint != "http://localhost:8080":
+                kwargs["endpoint"] = endpoint                
+
+            self.backend = QwenBackend(                
                 api_key = qwen_api_key if qwen_api_key else api_key,
                 **kwargs
             )
