@@ -859,7 +859,6 @@ class OpenAIBackend(AIBackend):
         response = requests.post(
             final_endpoint, headers=headers, json=data
         )
-        print(response.text)
 
         if response.status_code != 200:
             self.last_error = (
