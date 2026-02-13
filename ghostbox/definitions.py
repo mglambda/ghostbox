@@ -70,7 +70,7 @@ class ChatContentComplex(BaseModel):
         else:
             return self.content
 
-ChatContent = str | List[ChatContentComplex] | Dict
+ChatContent = str | List[ChatContentComplex] | Dict[str, Any]
 
 
 class FunctionCall(BaseModel):
@@ -95,11 +95,11 @@ class ChatMessage(BaseModel):
 
     def get_text(self) -> str:
         """Simple helper to extract the text from a possibly complex message. This may drop other parts."""
-        if type(self.content) == str:
+        if isinstance(self.content, str):
             return self.content
-        elif type(self.content) == ChatContentComplex:
+        elif isinstance(self.content, ChatContentComplex):
             return self.content.get_text()
-        elif type(self.content) == dict:
+        elif isinstance(self.content, dict):
             return str(self.content)
         return ""
 
@@ -125,7 +125,7 @@ class ChatMessage(BaseModel):
         return {k:v for k, v in dict(self).items() if v is not None and v != []}
     
     @staticmethod
-    def make_image_message(text: str, images: List[ImageRef], **kwargs) -> 'ChatMessage':
+    def make_image_message(text: str, images: List[ImageRef], **kwargs: object) -> 'ChatMessage':
         from ghostbox.util import getImageExtension
 
         complex_content_list = []
@@ -148,7 +148,8 @@ class ChatMessage(BaseModel):
         # don't forget the prompt
         complex_content_list.append(ChatContentComplex(type="text", content=text, text=text))
 
-        return ChatMessage(role="user", content=complex_content_list, **kwargs)
+        # FIXME: not sure why mypy complains about kwargs here
+        return ChatMessage(role="user", content=complex_content_list, **kwargs) # type: ignore
 
 
 LLMBackend = Enum("LLMBackend", "generic legacy llamacpp koboldcpp openai google deepseek qwen dummy")

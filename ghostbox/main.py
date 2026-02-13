@@ -747,7 +747,7 @@ class Plumbing(object):
         else:  # default
             self.options["cli_prompt"] = self.initial_cli_prompt
 
-    def getOption(self, key):
+    def getOption(self, key: str) -> Any:
         return self.options.get(key, None)
 
     def optionDiffers(self, name, newValue):
@@ -1397,7 +1397,7 @@ class Plumbing(object):
 
         return self.tts_config.get("special_tags", [])
 
-    def tryGetAbsVoiceDir(self):
+    def tryGetAbsVoiceDir(self) -> str:
         # this is sort of a heuristic. The problem is that we allow multiple include dirs, but have only one voice dir. So right now we must pick the best from a number of candidates.
         if os.path.isabs(self.getOption("tts_voice_dir")) and os.path.isdir(
             self.getOption("tts_voice_dir")

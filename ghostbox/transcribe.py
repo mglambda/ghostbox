@@ -1,8 +1,9 @@
 import whisper
 import time, os, sys, contextlib, threading
+from typing import *
 import wave
 import tempfile
-from ctypes import *
+from ctypes import CFUNCTYPE, c_char_p, c_int, cdll
 import pyaudio
 from pydub import pyaudioop
 import audioop
@@ -15,16 +16,16 @@ import numpy as np
 from .util import printerr
 
 
-def loadModel(name="base.en"):
+def loadModel(name: str = "base.en") -> whisper.model.Whisper:
     return whisper.load_model(name)
 
-def getWhisperTranscription(filename, model):
+def getWhisperTranscription(filename: str, model: whisper.model.Whisper) -> str:
     result = model.transcribe(filename, fp16=False)
     return result["text"].strip()
 
 # unfortunately pyaudio will give a bunch of error messages, which is very irritating for using it in a shell program, so we supress the msgs
-@contextlib.contextmanager
-def ignoreStderr():
+@contextlib.contextmanager # type: ignore
+def ignoreStderr(): # type: ignore
     devnull = os.open(os.devnull, os.O_WRONLY)
     old_stderr = os.dup(2)
     sys.stderr.flush()
@@ -37,7 +38,7 @@ def ignoreStderr():
         os.close(old_stderr)
 
 class WhisperTranscriber(object):
-    def __init__(self, model_name="base.en", silence_threshold=2500, input_func=None):
+    def __init__(self, model_name: str = "base.en", silence_threshold: int = 2500, input_func: Optional[Callable[[], None]] =None) -> None:
         """model_name is the name of a whisper model, e.g. 'base.en' or 'tiny.en'.
         silence_threshold is an integer value describing a decibel threshold at which recording starts in the case of continuous transcribing.
 input_func is a 0-argument function or None. If not None, it is called before transcribing, though only with the one-shot 'transcribe' method, not with transcribeContinuously. You can use this to print to stdout, or play a sound or do anything to signal to the user that recording has started."""
@@ -45,7 +46,7 @@ input_func is a 0-argument function or None. If not None, it is called before tr
         self.silence_threshold = silence_threshold
         self.input_func = input_func
 
-    def transcribeWithPrompt(self, input_msg="", input_func=None, input_handler=lambda w: w):
+    def transcribeWithPrompt(self, input_msg: str = "", input_func: Optional[Callable[[], None]] = None, input_handler: Callable[[str], str] = lambda w: w) -> str:
         """Records audio directly from the microphone and then transcribes it to text using Whisper, returning that transcription.
 input_msg - String that will be shown at the prompt.
 input_func - 0-argument callback function that will be called immediately before prompt. This will be called in addition to, and immediately after, WhisperTranscriber.input_func
@@ -62,7 +63,7 @@ This function will record from the point it is called and until the user hits en
         audio_format = pyaudio.paInt16
         channels = 1
 
-        def callback(in_data, frame_count, time_info, status):
+        def callback(in_data, frame_count, time_info, status): # type: ignore
             wav_file.writeframes(in_data)
             return None, pyaudio.paContinue
 
@@ -74,7 +75,7 @@ This function will record from the point it is called and until the user hits en
 
         # Suppress ALSA warnings (https://stackoverflow.com/a/13453192)
         ERROR_HANDLER_FUNC = CFUNCTYPE(None, c_char_p, c_int, c_char_p, c_int, c_char_p)
-        def py_error_handler(filename, line, function, err, fmt):
+        def py_error_handler(filename, line, function, err, fmt): # type: ignore
             return
 
         c_error_handler = ERROR_HANDLER_FUNC(py_error_handler)
@@ -113,7 +114,7 @@ This function will record from the point it is called and until the user hits en
         temp_file.close()
         return result
 
-    def transcribeContinuously(self, callback=None, on_threshold=None, websock=False, websock_host="localhost", websock_port=5051):
+    def transcribeContinuously(self, callback: Optional[Callable[[str], None]] = None, on_threshold: Optional[Callable[[], None]] = None, websock: bool = False, websock_host: str = "localhost", websock_port: int = 5051) -> 'ContinuousTranscriber':
         """Starts recording continuously, transcribing audio when a given volume threshold is reached.
         This function is non-blocking, but returns a ContinuousTranscriber object, which runs asynchronously and can be polled to get the latest transcription (if any).
         Alternatively or in addition to polling, you can allso supply a callback, which gets called whenever a string is transcribed with the string as argument.
@@ -127,7 +128,7 @@ This function will record from the point it is called and until the user hits en
 
 
 class ContinuousTranscriber(object):
-    def __init__(self, model, silence_threshold, callback=None, on_threshold=None, websock=False, websock_host="localhost", websock_port=5051):
+    def __init__(self, model: whisper.model.Whisper, silence_threshold: int, callback: Optional[Callable[[str], None]] = None, on_threshold: Optional[Callable[[], None]] = None, websock: bool = False, websock_host: str = "localhost", websock_port: int = 5051) -> None:
         self.model = model
         self.callback = callback
         self.on_threshold = on_threshold
@@ -148,7 +149,7 @@ class ContinuousTranscriber(object):
         if self.websock:
             self._setup_websocket_server()                    
 
-    def _handle_client(self, websocket):
+    def _handle_client(self, websocket) -> None:
         while self.running:
             try:
                 packet = websocket.recv(1024)
