@@ -7,7 +7,7 @@ class Story(BaseModel):
     
     data: List[ChatMessage] = [] 
 
-    def addUserText(self, w: str, image_context: Dict[int, ImageRef]={}, **kwargs) -> None:
+    def addUserText(self, w: str, image_context: Dict[int, ImageRef]={}, **kwargs: Any) -> None:
         """Adds a user message to the story.
         :param w: The user's prompt or message as plaintext.
         :param images: A list of 0 or more images to include with the message. The images, confusingly, may be http URLs, filenames, or binary data.
@@ -15,10 +15,10 @@ class Story(BaseModel):
         if image_context == {}:
             new_data = ChatMessage(role = "user", content = w, **kwargs)
         else:
-            new_data = ChatMessage.make_image_message(w, image_context.values(), **kwargs)
+            new_data = ChatMessage.make_image_message(w, list(image_context.values()), **kwargs)
         self.data.append(new_data)
 
-    def addAssistantText(self, w: str, **kwargs):
+    def addAssistantText(self, w: str, **kwargs: Any) -> None:
         # so it shouldn't come to this but
         # as a rule, we don't allow empty assistant messages.
         # since that can break server side when the content field with "" is interpreted as None or something
@@ -46,7 +46,7 @@ class Story(BaseModel):
         """Appends ChatMessages to the story."""
         self.data.extend(msgs)
         
-    def addSystemText(self, w: str, **kwargs) -> None:
+    def addSystemText(self, w: str, **kwargs: Any) -> None:
         self.data.append(ChatMessage(role="system", content= w, **kwargs))
 
     def extendAssistantText(self, w: str) -> None:
@@ -58,15 +58,15 @@ class Story(BaseModel):
                 if msg.content is None:
                     # this case is too weird, we just skip empty content
                     continue
-                elif type(msg.content) == str:
+                elif isinstance(msg.content, str):
                     # easy case
                     msg.content += w
                     return
                 else:
                     # the content is complex -> a list of images + text or smth
                     for cmsg in msg.content:
-                        if cmsg.type == "text":
-                            cmsg.content += w
+                        if cmsg.type == "text": # type: ignore
+                            cmsg.content += w # type: ignore
                             return
 
         # if we reached this point, no assistant was found
@@ -93,8 +93,8 @@ class Story(BaseModel):
             # the message is complex
             for cmsg in msg.content:
                 # this is a truly weird case, I guess we mirror the behaviour of extend assistant and just extend the first text field
-                if cmsg.type == "text":
-                    cmsg.content += w
+                if cmsg.type == "text": # type: ignore
+                    cmsg.content += w # type: ignore
                     return
                 
             
