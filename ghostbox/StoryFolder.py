@@ -1,8 +1,8 @@
-#import jsonpickle #type:ignore
 import json
 from pydantic import BaseModel, Field
 import copy 
-from .Story import *
+from typing import List, Any
+from .Story import Story
 
 class StoryFolder(BaseModel):
     """Thin wrapper around a list of Story objects."""
@@ -16,13 +16,13 @@ class StoryFolder(BaseModel):
             #self.stories = jsonpickle.loads(json_data) # throw if illegal json
             # #FIXME: this will crash and burn if json is bogus, but oh well
 
-    def empty(self):
-        return self.stories[self.index] == []
+    def empty(self) -> bool:
+        return self.stories[self.index].data == []
             
-    def get(self):
+    def get(self) -> Story:
         return self.stories[self.index]
     
-    def newStory(self):
+    def newStory(self) -> None:
         self.stories.append(Story())
         self.index = len(self.stories) - 1
 
@@ -31,7 +31,7 @@ class StoryFolder(BaseModel):
         self.stories = [Story()]
         self.index = 0
         
-    def cloneStory(self, index=-1):
+    def cloneStory(self, index: int = -1) -> None:
         if index == -1:
             # -1  means currrent story
             index = self.index
@@ -41,7 +41,7 @@ class StoryFolder(BaseModel):
             self.stories.append(copy.deepcopy(self.stories[index]))
             self.index = l
 
-    def copyFolder(self, only_active=False):
+    def copyFolder(self, only_active: bool = False) -> 'StoryFolder':
         sf = StoryFolder()
         if only_active:
             sf.stories = copy.deepcopy(self.stories[self.index:self.index+1])
@@ -50,7 +50,7 @@ class StoryFolder(BaseModel):
             sf.index = self.index
         return sf
         
-    def _shiftStory(self, i):
+    def _shiftStory(self, i: int) -> int:
         l = len(self.stories)
         newIndex = self.index + i
         if newIndex >= l:
@@ -62,10 +62,10 @@ class StoryFolder(BaseModel):
         self.index = newIndex
         return 0
 
-    def nextStory(self):
+    def nextStory(self) -> int:
         return self._shiftStory(1)
 
-    def previousStory(self):
+    def previousStory(self) -> int:
         return self._shiftStory(-1)
 
     @staticmethod
@@ -76,10 +76,9 @@ class StoryFolder(BaseModel):
         #return jsonpickle.dumps(self.stories)
         return json.dumps(self.model_dump())
     
-    def shiftTo(self, i):
+    def shiftTo(self, i: int) -> str:
         l = len(self.stories)
         if i >= l or i < 0:
             return "Index out of range."
         self.index = i
         return ""
-    
