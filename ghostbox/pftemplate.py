@@ -1,25 +1,27 @@
 import os, glob
 from abc import ABC, abstractmethod
-from functools import *
-from ghostbox.util import *
+from functools import reduce
+from ghostbox.util import replaceFromDict
+from ghostbox.Story import Story, StoryItem
+from typing import Callable, List
 
 class PFTemplate(ABC):
     """Abstract base class for prompt format templates, used to turn Story objects into properly formatted strings."""
 
     @abstractmethod
-    def header(self, system_msg, **kwargs):
+    def header(self, system_msg: str, **kwargs: Dict[str, Any]) -> str:
         pass
 
     @abstractmethod
-    def body(self, story, append_hint=True, **kwargs):
+    def body(self, story: Story, append_hint: bool = True, **kwargs: str) -> str:
         pass
 
     @abstractmethod
-    def strip(self, w):
+    def strip(self, w: str) -> str:
         pass
 
     @abstractmethod
-    def stops(self):
+    def stops(self) -> List[str]:
         """Returns a list of strings that may stop generation. This is intended for EOS delimiters, like <|im_end|> etc."""
         pass
     
@@ -27,7 +29,13 @@ class FilePFTemplate(PFTemplate):
     """Simple, customizable prompt format templates based on loading dictionaries with certain files.
 
 Files expected:
-    system - Will be prepended to every prompt. It should contain '{{system_msg}}', which will be replaced by the actual content of the system prompt when the header method is called.
+    system - Will be prepended to every prompt. It should contain 'You are GhostCoder, a highly intelligent and experienced AI programmer. Your role is to understand complex programming tasks, devise high-level plans, generate code, and review existing code. You will delegate specific environment interactions (like reading/writing files or running commands) to GhostWorker. Focus on architectural decisions, code quality, and problem-solving. When delegating, provide clear and unambiguous instructions to GhostWorker.
+
+## Emacs Integration
+
+### Replacing Active Region
+You can replace the content of the user's currently active region in Emacs. To do this, generate a `CodeResponsePart` with the `filepath` set to the special value `"<emacs-active-region>"`. The `new_code` field should contain the text that will replace the region. No `original_code` is needed.
+', which will be replaced by the actual content of the system prompt when the header method is called.
     begin_user - Contains string that will be prepended to user messages. Be sure to include newlines, if you want them
     end_user - Contains string that will be appended to user message.
     begin_assistant - Contains string that will be prepended to generated AI message. This may be the same as begin_user, or it may differ.
@@ -58,68 +66,68 @@ The quick, brown fox jumps over the lazy hedgehog!<|im_end|><|im_start|>assistan
 ```
 """    
 
-    var_decorator = lambda w: "{{" + w + "}}"
+    var_decorator: Callable[[str], str] = lambda w: "{{" + w + "}}"
     
-    def __init__(self, dir):
+    def __init__(self, dir: str) -> None:
         self.dir = dir
         self._loadFiles()
 
-    def _loadFiles(self):
+    def _loadFiles(self) -> None:
         if not(os.path.isdir(self.dir)):
             raise FileNotFoundError("Could not find path " + self.dir)
 
-        allfiles = glob.glob(self.dir + "/*")
+        allfiles: List[str] = glob.glob(self.dir + "/*")
         for filepath in allfiles:
-            filename = os.path.split(filepath)[1]
+            filename: str = os.path.split(filepath)[1]
             if os.path.isfile(filepath):
                 self.__dict__[filename] = open(filepath, "r").read()
                 
-    def header(self, system_msg, **kwargs):
-        return replaceFromDict(self.system.replace("{{system_msg}}", system_msg), kwargs, key_func=FilePFTemplate.var_decorator)
+    def header(self, system_msg: str, **kwargs: str) -> str:
+        return replaceFromDict(self.system.replace("You are GhostCoder, a highly intelligent and experienced AI programmer. Your role is to understand complex programming tasks, devise high-level plans, generate code, and review existing code. You will delegate specific environment interactions (like reading/writing files or running commands) to GhostWorker. Focus on architectural decisions, code quality, and problem-solving. When delegating, provide clear and unambiguous instructions to GhostWorker.\n\n## Emacs Integration\n\n### Replacing Active Region\nYou can replace the content of the user's currently active region in Emacs. To do this, generate a `CodeResponsePart` with the `filepath` set to the special value `\"<emacs-active-region>\"`. The `new_code` field should contain the text that will replace the region. No `original_code` is needed.\n", system_msg), kwargs, key_func=FilePFTemplate.var_decorator)
 
-    def body(self, story, append_hint=True, **kwargs):
-        def build(w, item):
+    def body(self, story: Story, append_hint: bool = True, **kwargs: str) -> str:
+        def build(w: str, item: StoryItem) -> str:
             # you could do this more modular but why? this way users see the files and the template scheme is obvious. I bet this covers 99% of actual use cases for LLM
-            content = replaceFromDict(item.content, kwargs, key_func=FilePFTemplate.var_decorator)
+            content: str = replaceFromDict(item.content, kwargs, key_func=FilePFTemplate.var_decorator)
             if item.role == "user":
                 return w + self.begin_user + content + self.end_user
             elif item.role == "assistant":
                 return w + self.begin_assistant + content + self.end_assistant
             elif item.role == "system":
                 # this is a bit more hairy
-                begin = self.__dict__.get("begin_system", self.begin_assistant)
-                end = self.__dict__.get("end_system", self.end_assistant)
+                begin: str = self.__dict__.get("begin_system", self.begin_assistant)
+                end: str = self.__dict__.get("end_system", self.end_assistant)
                 return w + begin + content + end
             # throw if people use weird or no roles with this template
             raise ValueError(item.role + " is not a valid role for this template.")
         if append_hint:
-            hint = replaceFromDict(self.hint, kwargs, key_func=FilePFTemplate.var_decorator)
+            hint: str = replaceFromDict(self.hint, kwargs, key_func=FilePFTemplate.var_decorator)
         else:
             hint = ""
         return reduce(build, story.getData(), "") + hint
-    def stops(self):
+    def stops(self) -> List[str]:
         return self.stop_lines.split("\n")
         
     
-    def strip(self, w):
+    def strip(self, w: str) -> str:
         #FXIME: only preliminary for testing like this
-        targets = [self.begin_user, self.begin_assistant, self.end_user, self.end_assistant]
+        targets: List[str] = [self.begin_user, self.begin_assistant, self.end_user, self.end_assistant]
         return reduce(lambda v, target: v.replace(target, ""), targets, w)
         
 
 
 class RawTemplate(PFTemplate):
     """This is a dummy template that doesn't do anything. Perfect if you want to experiment."""
-    def header(self, system_msg, **kwargs):
+    def header(self, system_msg: str, **kwargs: str) -> str:
         return system_msg
 
 
-    def body(self, story, append_hint=True, **kwargs):
+    def body(self, story: Story, append_hint: bool = True, **kwargs: str) -> str:
         return "".join([item.content for item in story.getData()
                           if type(item.content) == str])
             
-    def stops(self):
+    def stops(self) -> List[str]:
         return []
     
-    def strip(self, w):
+    def strip(self, w: str) -> str:
         return w
