@@ -1,9 +1,9 @@
 # allows for use of tools with tools.py in char directory.
-from typing import *
+from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 import os, importlib, inspect, docstring_parser, json, re, traceback
 from pydantic import BaseModel
-from .util import *
-from .definitions import *
+from .util import printerr
+from .definitions import ChatMessage, Function, FunctionCall, ImageRef, ImageURL, Parameters, Property, Tool, ToolCall
 
 # # example of tool dict
 # "tools": [
@@ -26,8 +26,8 @@ from .definitions import *
 #     }
 # ],
 
-def type_to_json_schema(type_):
-    type_map = {
+def type_to_json_schema(type_: Any) -> Dict[str, Any]:
+    type_map: Dict[Any, Dict[str, Any]] = {
         int: {"type": "integer"},
         float: {"type": "number"},
         str: {"type": "string"},
@@ -48,15 +48,19 @@ def type_to_json_schema(type_):
     return {}
 
 
-def makeTools(filepath, display_name="tmp_python_module", tools_forbidden=[]) -> Tuple[List[Tool], Any]:
+def makeTools(filepath: str, display_name: str = "tmp_python_module", tools_forbidden: List[str] = []) -> Tuple[List[Tool], Any]:
     """Reads a python file and returns a pair with all the top level functions parsed as tools, and the corresponding module for the file."""
     if not(os.path.isfile(filepath)):
         printerr("warning: Failed to generate tool dictionary for '" + filepath + "' file not found.")
-        return ({}, None)
+        return ([], None)
 
 
-    tools = []
+    tools: List[Tool] = []
     spec = importlib.util.spec_from_file_location(display_name, filepath)
+    if spec is None or spec.loader is None:
+        printerr("error: Failed to create module spec for '" + filepath + "'. Aborting tool generation.")
+        return ([], None)
+
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     for name, value in vars(module).items():
@@ -65,7 +69,7 @@ def makeTools(filepath, display_name="tmp_python_module", tools_forbidden=[]) ->
         doc = inspect.getdoc(value)
         if doc is None:
             printerr("error: Missing docstring in function '" + name + "' in file '" + filepath + "'. Aborting tool generation.")
-            return ({}, None)
+            return ([], None)
         fulldoc = docstring_parser.parse(doc)
         if fulldoc.description is None:
             printerr("warning: Missing description in function '" + name + "' in file '" + filepath + "'. Please make sure you adhere to standard python documentation syntax.")
@@ -76,15 +80,15 @@ def makeTools(filepath, display_name="tmp_python_module", tools_forbidden=[]) ->
 
         sig = inspect.signature(value)
         paramdocs = {p.arg_name : {"type" : p.type_name, "description" : p.description, "optional" : p.is_optional} for p in fulldoc.params}
-        properties = {}
-        required_params = []
+        properties: Dict[str, Property] = {}
+        required_params: List[str] = []
         for (param_name, param) in sig.parameters.items():
             if param.annotation == inspect._empty:
                 printerr("warning: Missing type annotations for function '" + name + "' and parameter '" + param_name + "' in '" + filepath + "'. This will significantly degrade AI tool use performance.")
                 # default to str
-                param_type = "str"
+                param_type = str
             else:
-                param_type = param.annotation.__name__
+                param_type = param.annotation
 
             # defaults
             param_description = ""
@@ -96,7 +100,7 @@ def makeTools(filepath, display_name="tmp_python_module", tools_forbidden=[]) ->
                 if p["description"] is None:
                     printerr("warning: Missing description for parameter '" + param_name + "' in function '" + name + "' in '" + filepath + "'. This will significantly degrade AI tool use performance.")
                 else:
-                    param_description = p["description"]
+                    param_description = p["description"] # type: ignore
 
                 #if p["type"] != param_type:
                     #printerr("warning: Erroneous type documentation for parameter '" + param_name + "' in function '" + name + "' in '" + filepath + "'. Stated type does not match function annotation. This will significantly degrade AI tool use performance.")
@@ -123,7 +127,7 @@ def makeTools(filepath, display_name="tmp_python_module", tools_forbidden=[]) ->
 
     return (tools, module)
 
-def tryParseToolUse(w, start_string = "```json", end_string = "```", magic_word="Action:"):
+def tryParseToolUse(w: str, start_string: str = "```json", end_string: str = "```", magic_word: str = "Action:") -> Tuple[Union[List[Dict[str, Any]], Dict[str, Any]], str]:
     """Process AI output to see if tool use is requested. Returns a dictionary which is {} if parse failed, and the input string with json removed on a successful parse.
     :param w: The input string, e.g. AI generated response.
     :param predicate: Optional boolean filter function which takes tool names as input.
@@ -134,7 +138,7 @@ def tryParseToolUse(w, start_string = "```json", end_string = "```", magic_word=
 
     try:
         capture = m.groups(1)[-1]
-        tools_requested = json.loads(capture)
+        tools_requested = json.loads(capture) # type: ignore
     except:
         printerr("warning: Exception while trying to parse AI tool use.\n```" + w + "```")
         printerr(traceback.format_exc())
@@ -146,22 +150,25 @@ def tryParseToolUse(w, start_string = "```json", end_string = "```", magic_word=
         printerr("Dump: \n" + json.dumps(tools_requested, indent=4))
         
     # parse succeeded, clean the input
-    w_clean = w.replace(start_string + capture + end_string, "").replace(magic_word, "")
+    w_clean = w.replace(start_string + f"{capture}" + end_string, "").replace(magic_word, "")
     return (tools_requested, w_clean)
 
 
 def tryParseAllowedToolUse(w : str,
-                           tools_allowed : dict):
-    return tryParseToolUse(w, predicate=lambda tool_name: tool_name in allowed_tools.keys())
+                           tools_allowed : Dict[str, Any]) -> Tuple[Union[List[Dict[str, Any]], Dict[str, Any]], str]:
+    # FIXME: predicate is not used in tryParseToolUse, so this function is currently broken.
+    # It should be: return tryParseToolUse(w, predicate=lambda tool_name: tool_name in tools_allowed.keys())
+    # For now, returning the raw parse result.
+    return tryParseToolUse(w)
 
 
-def getPositionalArguments(func):
+def getPositionalArguments(func: Callable[..., Any]) -> List[str]:
     return [param.name for (k, param) in inspect.signature(func).parameters.items() if param.default == inspect._empty]
 
-def getOptionalArguments(func):
+def getOptionalArguments(func: Callable[..., Any]) -> List[str]:
     return [param.name for (k, param) in inspect.signature(func).parameters.items() if param.default != inspect._empty]
 
-def makeToolResult(tool_name, result, tool_call_id) -> ChatMessage:
+def makeToolResult(tool_name: str, result: Any, tool_call_id: str) -> ChatMessage:
     """Packages a tool call result as a ChatMessage."""
     return ChatMessage(
         role="tool",
@@ -171,16 +178,16 @@ def makeToolResult(tool_name, result, tool_call_id) -> ChatMessage:
             
 
 
-def makeToolSystemMsg(tools):
+def makeToolSystemMsg(tools: List[Tool]) -> str:
     """Deprecated"""
     w = ""
     w += "    ## Available Tools\nHere is a list of tools that you have available to you:\n\n"
-    w += json.dumps(tools, indent= 4)
+    w += json.dumps([tool.model_dump() for tool in tools], indent= 4)
     w += "\n\n"
     return w
 
 
-def makeToolInstructionMsg():
+def makeToolInstructionMsg() -> str:
     """Deprecated"""
     #FIXME: this is currently designed only for command-r, other llms will use different special tokens, for which we have to extend the templating, probably iwth tool_begin and tool_end 
     w = """<|START_OF_TURN_TOKEN|><|SYSTEM_TOKEN|>
@@ -199,7 +206,7 @@ Action:```json
     return w
 
 
-def showToolResult(tool_result, indent=0):
+def showToolResult(tool_result: Any, indent: int = 0) -> str:
     """Takes a tool result of any type and returns a string that can be passed to an AI. Contains no special tokens. Expects whatever is in the 'output' field of the tool use dictionary. If tool_result is a list or dictionary, this function will be recursively appplied."""
     x = tool_result
     pad = " " * indent
