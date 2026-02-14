@@ -312,9 +312,9 @@ class AIBackend(ABC):
         self.endpoint = endpoint
         self.stream_done = threading.Event()
         self.last_error = ""
-        self._last_request = {}
-        self._last_result = {}
-        self._config = {}
+        self._last_request: Dict[str, Any] = {}
+        self._last_result: Dict[str, Any] = {}
+        self._config: Dict[str, Any] = {}
         self.logger = logger
 
     def log(self, msg: str) -> None:
@@ -329,44 +329,44 @@ class AIBackend(ABC):
         self._config |= config
         return self._config
 
-    def getLastError(self):
+    def getLastError(self) -> str:
         return self.last_error
 
-    def getLastJSON(self) -> Dict:
+    def getLastJSON(self) -> Dict[str, Any]:
         """Returns the last json result sent by the backend."""
         return self._last_result
 
-    def getLastRequest(self) -> Dict:
+    def getLastRequest(self) -> Dict[str, Any]:
         """Returns the last payload dictionary that was sent to the server."""
         return self._last_request
 
-    def waitForStream(self):
+    def waitForStream(self) -> None:
         self.stream_done.wait()
 
     @abstractmethod
-    def getName(self):
+    def getName(self) -> str:
         """Returns the name of the backend. This can be compared to the --backend command line option."""
         pass
 
     @abstractmethod
-    def getMaxContextLength(self):
+    def getMaxContextLength(self) -> int:
         """Returns the default setting for maximum context length that is set serverside. Often, this should be the maximum context the model is trained on.
         This should return -1 if the backend is unable to determine the maximum context (some backends don't let you query this at all).
         """
         pass
 
     @abstractmethod
-    def generate(self, payload):
+    def generate(self, payload: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         """Takes a payload dictionary similar to default_params. Returns a result object specific to the backend. Use handleResult to unpack its content."""
         pass
 
     @abstractmethod
-    def handleGenerateResult(self, result) -> Optional[Dict]:
+    def handleGenerateResult(self, result: Dict[str, Any]) -> Optional[str]:
         """Takes a result from the generate method and returns the generated string."""
         pass
 
     @abstractmethod
-    def generateStreaming(self, payload, callback=lambda w: print(w)):
+    def generateStreaming(self, payload: Dict[str, Any], callback: Callable[[str], None] = lambda w: print(w)) -> bool:
         """Takes a payload dictionary similar to default_params and begins streaming generated tokens to a callback function. Returns True if there was a HTTP error, which you can check with getLastError().
         callback - A function taking one string argument, which will be the generated tokens.
         payload - A dictionary similar to default_params. If this doesn't contain "stream" : True, this function may fail or have no effect.
@@ -374,22 +374,22 @@ class AIBackend(ABC):
         pass
 
     @abstractmethod
-    def tokenize(self, w):
+    def tokenize(self, w: str) -> List[int]:
         """Takes a string w and returns a list of tokens as ints."""
         pass
 
     @abstractmethod
-    def detokenize(self, ts):
+    def detokenize(self, ts: List[int]) -> str:
         """Takes a list of tokens as ints, and returns a string consisting of the tokens."""
         pass
 
     @abstractmethod
-    def health(self):
+    def health(self) -> str:
         """Returns a string indicating the status of the backend."""
         pass
 
     @abstractmethod
-    def timings(self, result_json=None) -> Optional[Timings]:
+    def timings(self, result_json: Optional[Dict[str, Any]] =None) -> Optional[Timings]:
         """Returns performance statistics for this backend.
         The method can take a json parameter, which may be a return value of the getLastJSON method. In this case, timings for that result are returned.
         Otherwise, if called without the json parameter, timings for the last request are returned.
@@ -411,7 +411,7 @@ class AIBackend(ABC):
 
 class DummyBackend(AIBackend):
 
-    def __init__(self, endpoint: str ="http://localhost:8080", **kwargs):
+    def __init__(self, endpoint: str ="http://localhost:8080", **kwargs: Any):
         super().__init__(endpoint, **kwargs)
 
     def getName(self) -> str:
@@ -420,10 +420,10 @@ class DummyBackend(AIBackend):
     def getMaxContextLength(self) -> int:
         return -1
 
-    def generate(self, payload) -> None:
+    def generate(self, payload: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         return None
 
-    def handleGenerateResult(self, result):
+    def handleGenerateResult(self, result: Dict[str, Any]) -> Optional[str]:
         return None
 
     def generateStreaming(self, payload) -> None:
