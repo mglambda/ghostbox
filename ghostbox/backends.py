@@ -1,4 +1,4 @@
-import time, requests, threading, json
+import time, requests, threading, json, os
 from abc import ABC, abstractmethod
 from functools import *
 from pydantic import BaseModel
@@ -8,10 +8,12 @@ from .streaming import *
 import traceback
 import base64
 from google.genai.types import Content, Part
+from google import genai
+from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
 # this list is based on the llamacpp server. IMO most other backends are subsets of this.
 # the sampler values have been adjusted to more sane default options (no more top_p)
-sampling_parameters = {
+sampling_parameters: Dict[str, SamplingParameterSpec] = {
     "temperature": SamplingParameterSpec(
         name="temperature",
         description="Adjust the randomness of the generated text.",
@@ -263,22 +265,22 @@ sampling_parameters = {
 ### end of big list
 
 # this is for fast copy and send to backend
-default_params = {hp.name: hp.default_value for hp in sampling_parameters.values()}
+default_params: Dict[str, Any] = {hp.name: hp.default_value for hp in sampling_parameters.values()}
 
 # some reference lists for convenience
-supported_parameters = {
+supported_parameters: Dict[str, SamplingParameterSpec] = {
     p: sampling_parameters[p]
     for p in "temperature frequency_penalty presence_penalty max_length repeat_penalty top_p stop".split(
         " "
     )
 }
-sometimes_parameters = {
+sometimes_parameters: Dict[str, SamplingParameterSpec] = {
     p: sampling_parameters[p]
     for p in "cache_prompt xtc_probability dry_multiplier min_p mirostat mirostat_tau mirostat_eta samplers grammar_lazy grammar_triggers preserved_tokens chat_template_kwargs enable_thinking".split(
         " "
     )
 }
-sampling_parameter_tags = {
+sampling_parameter_tags: Dict[str, ArgumentTag] = {
     p.name: ArgumentTag(
         name=p.name,
         type=ArgumentType.Plumbing,
@@ -298,7 +300,7 @@ sampling_parameter_tags["top_p"].type = ArgumentType.Porcelain
 
 
 # These don't fit anywhere else and don't really need documentation
-special_parameters = {"response_format": {"type": "text"},
+special_parameters: Dict[str, Any] = {"response_format": {"type": "text"},
                       "llamacpp_thinking_json_fix": True,
                       "model": ""}
 
@@ -356,13 +358,13 @@ class AIBackend(ABC):
         pass
 
     @abstractmethod
-    def generate(self, payload: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    def generate(self, payload: Dict[str, Any]) -> Optional[Any]: # Changed return type to Any to accommodate requests.Response
         """Takes a payload dictionary similar to default_params. Returns a result object specific to the backend. Use handleResult to unpack its content."""
         pass
 
     @abstractmethod
-    def handleGenerateResult(self, result: Dict[str, Any]) -> Optional[str]:
-        """Takes a result from the generate method and returns the generated string."""
+    def handleGenerateResult(self, result: Any) -> Optional[Union[str, Dict[str, Any]]]: # Changed result type to Any
+        """Takes a result from the generate method and returns the generated string or a dict for tool calls."""
         pass
 
     @abstractmethod
@@ -420,34 +422,35 @@ class DummyBackend(AIBackend):
     def getMaxContextLength(self) -> int:
         return -1
 
-    def generate(self, payload: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    def generate(self, payload: Dict[str, Any]) -> Optional[Any]:
         return None
 
-    def handleGenerateResult(self, result: Dict[str, Any]) -> Optional[str]:
+    def handleGenerateResult(self, result: Any) -> Optional[Union[str, Dict[str, Any]]]:
         return None
 
-    def generateStreaming(self, payload) -> None:
-        return None
-    def timings(self) -> Optional[Timings]:
+    def generateStreaming(self, payload: Dict[str, Any], callback: Callable[[str], None] = lambda w: print(w)) -> bool:
+        return False
+
+    def timings(self, result_json: Optional[Dict[str, Any]] =None) -> Optional[Timings]:
         return None
     
     
     def health(self) -> str:
         return "This is a dummy backend. It's fine."
 
-    def tokenize(self, w) -> List[int]:
+    def tokenize(self, w: str) -> List[int]:
         return []
 
-    def detokenize(self, tokens) -> str:
+    def detokenize(self, tokens: List[int]) -> str:
         return ""
     
-    def sampling_parameters(self):
+    def sampling_parameters(self) -> Dict[str, SamplingParameterSpec]:
         return {}
     
 class LlamaCPPBackend(AIBackend):
     """Bindings for the formidable Llama.cpp based llama-server program."""
 
-    def __init__(self, endpoint: str ="http://localhost:8080", **kwargs):
+    def __init__(self, endpoint: str ="http://localhost:8080", **kwargs: Any):
         super().__init__(endpoint, **kwargs)
         self._config |= {
             # this means we will use /chat/completions, which applies the jinja templates etc. This is most often what we want.
@@ -456,10 +459,10 @@ class LlamaCPPBackend(AIBackend):
         }
         self.log(f"Initialized llama.cpp backend with config : {json.dumps(self._config)}")
         
-    def getName(self):
+    def getName(self) -> str:
         return LLMBackend.llamacpp.name
 
-    def getMaxContextLength(self):
+    def getMaxContextLength(self) -> int:
         return -1
 
 
@@ -498,7 +501,7 @@ class LlamaCPPBackend(AIBackend):
             return
 
         schema_str = json.dumps(schema)
-        def append_schema(system_msg: str):
+        def append_schema(system_msg: str) -> str:
             return system_msg + f"""
 When responding to the user, think step by step before giving a response. Your final response should adhere to the following JSON schema: The JSON you output must adhere to the following schema:
 
@@ -519,7 +522,7 @@ When responding to the user, think step by step before giving a response. Your f
             pass
         
         
-    def generate(self, payload):
+    def generate(self, payload: Dict[str, Any]) -> requests.Response:
         # adjust slightly for our renames
         llama_payload = payload | {"n_predict": payload["max_length"]}
 
@@ -553,7 +556,7 @@ When responding to the user, think step by step before giving a response. Your f
         self.log(f"Payload: {json.dumps(llama_payload, indent=4)}")        
         return requests.post(final_endpoint, json=llama_payload)
 
-    def handleGenerateResult(self, result):
+    def handleGenerateResult(self, result: requests.Response) -> Optional[Union[str, Dict[str, Any]]]:
         if result.status_code != 200:
             self.last_error = "HTTP request with status code " + str(result.status_code)
             return None
@@ -573,19 +576,19 @@ When responding to the user, think step by step before giving a response. Your f
             return payload
         return None
 
-    def _makeLlamaCallback(self, callback):
-        def f(d):
+    def _makeLlamaCallback(self, callback: Callable[[str], None]) -> Callable[[Dict[str, Any]], None]:
+        def f(d: Dict[str, Any]) -> None:
             if d["stop"]:
                 self._last_result = d
             callback(d["content"])
 
         return f
 
-    def generateStreaming(self, payload, callback=lambda w: print(w)):
+    def generateStreaming(self, payload: Dict[str, Any], callback: Callable[[str], None] = lambda w: print(w)) -> bool:
         self.stream_done.clear()
         llama_payload = payload | {"n_predict": payload["max_length"], "stream": True}
 
-        def one_line_lambdas_for_python(r):
+        def one_line_lambdas_for_python(r: Dict[str, Any]) -> None:
             # thanks guido
             self._last_result = r
 
@@ -612,7 +615,11 @@ When responding to the user, think step by step before giving a response. Your f
             final_endpoint,
             llama_payload,
         )
-        if r.status_code != 200:
+        if r is None:
+            self.last_error = "Failed to get response from server."
+            self.stream_done.set()            
+            return True
+        elif r.status_code != 200:
             self.last_error = "streaming HTTP request with status code " + str(
                 r.status_code
             )
@@ -620,56 +627,57 @@ When responding to the user, think step by step before giving a response. Your f
             return True
         return False
 
-    def tokenize(self, w):
+    def tokenize(self, w: str) -> List[int]:
         self.log(f"tokenize {len(w)} characters.")
         r = requests.post(self.endpoint + "/tokenize", json={"content": w})
         if r.status_code == 200:
             return r.json()["tokens"]
         return []
 
-    def detokenize(self, ts):
-        self.log("detokenize with {len(ts)} tokens.")
+    def detokenize(self, ts: List[int]) -> str:
+        self.log(f"detokenize with {len(ts)} tokens.")
         r = requests.post(self.endpoint + "/detokenize", json={"tokens": ts})
         if r.status_code == 200:
             return r.json()["content"]
-        return []
+        return ""
 
-    def health(self):
+    def health(self) -> str:
         r = requests.get(self.endpoint + "/health")
         if r.status_code != 200:
             return "error " + str(r.status_code)
         return r.json()["status"]
 
-    def timings(self, result_json=None) -> Optional[Timings]:
+    def timings(self, result_json: Optional[Dict[str, Any]] =None) -> Optional[Timings]:
         if result_json is None:
-            if (json := self._last_result) is None:
+            if (json_data := self._last_result) is None:
                 return None
         else:
-            json = result_json
+            json_data = result_json
 
-        if "timings" not in json:
-            printerr("warning: Got weird server result: " + str(json))
-            return
+        if "timings" not in json_data:
+            printerr("warning: Got weird server result: " + str(json_data))
+            return None
 
-        time = json["timings"]
+        time_data = json_data["timings"]
         # these are llama specific fields which aren't always available on the OAI endpoints
-        truncated, cached_n = json.get("truncated", None), json.get(
+        truncated, cached_n = json_data.get("truncated", None), json_data.get(
             "tokens_cached", None
         )
-        if (verbose := json.get("__verbose", None)) is not None:
+        if (verbose := json_data.get("__verbose", None)) is not None:
             truncated, cached_n = verbose["truncated"], verbose["tokens_cached"]
 
             return Timings(
-                prompt_n=time["prompt_n"],
-                predicted_n=time["predicted_n"],
-                prompt_ms=time["prompt_ms"],
-                predicted_ms=time["predicted_ms"],
-                predicted_per_token_ms=time["predicted_per_token_ms"],
-                predicted_per_second=time["predicted_per_second"],
+                prompt_n=time_data["prompt_n"],
+                predicted_n=time_data["predicted_n"],
+                prompt_ms=time_data["prompt_ms"],
+                predicted_ms=time_data["predicted_ms"],
+                predicted_per_token_ms=time_data["predicted_per_token_ms"],
+                predicted_per_second=time_data["predicted_per_second"],
                 truncated=truncated,
                 cached_n=cached_n,
-                original_timings=time,
+                original_timings=time_data,
             )
+        return None # Should not happen if "timings" is present, but for type safety
 
     def sampling_parameters(self) -> Dict[str, SamplingParameterSpec]:
         # llamacpp params are the default
@@ -703,18 +711,18 @@ When responding to the user, think step by step before giving a response. Your f
 class OpenAILegacyBackend(AIBackend):
     """Backend for the official OpenAI API. The legacy version routes to /v1/completions, instead of the regular /v1/chat/completion."""
 
-    def __init__(self, api_key: str, endpoint:str="https://api.openai.com", **kwargs):
+    def __init__(self, api_key: str, endpoint:str="https://api.openai.com", **kwargs: Any):
         super().__init__(endpoint, **kwargs)
         self.api_key = api_key
         self.log(f"Initialized legacy OpenAI backend. This routes to /v1/completion and will not apply the chat template. Using config : {json.dumps(self._config)}")
         
-    def getName(self):
+    def getName(self) -> str:
         return LLMBackend.legacy.name
 
-    def getMaxContextLength(self):
+    def getMaxContextLength(self) -> int:
         return -1
 
-    def generate(self, payload):
+    def generate(self, payload: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         headers = {
             "Authorization": f"Bearer {self.api_key}",
             "Content-Type": "application/json",
@@ -733,10 +741,10 @@ class OpenAILegacyBackend(AIBackend):
                 f"HTTP request with status code {response.status_code}: {response.text}"
             )
             return None
-        self._lastResult = response.json()
+        self._last_result = response.json()
         return response.json()
 
-    def handleGenerateResult(self, result):
+    def handleGenerateResult(self, result: Dict[str, Any]) -> Optional[Union[str, Dict[str, Any]]]:
         if not result:
             return None
 
@@ -746,7 +754,7 @@ class OpenAILegacyBackend(AIBackend):
             return payload
         return None
 
-    def generateStreaming(self, payload, callback=lambda w: print(w)):
+    def generateStreaming(self, payload: Dict[str, Any], callback: Callable[[str], None] = lambda w: print(w)) -> bool:
         self.stream_done.clear()
         headers = {
             "Authorization": f"Bearer {self.api_key}",
@@ -756,7 +764,7 @@ class OpenAILegacyBackend(AIBackend):
         data = payload | {"max_tokens": payload["max_length"], "stream": True, "stream_options": {"include_usage": True}}
         self._last_request = data
 
-        def openaiCallback(d):
+        def openaiCallback(d: Dict[str, Any]) -> None:
             callback(d["choices"][0]["text"])
             self._last_result = d            
 
@@ -771,7 +779,11 @@ class OpenAILegacyBackend(AIBackend):
             json=data,
             headers=headers,
         )
-        if response.status_code != 200:
+        if response is None:
+            self.last_error = "Failed to get response from server."
+            self.stream_done.set()            
+            return True
+        elif response.status_code != 200:
             self.last_error = (
                 f"HTTP request with status code {response.status_code}: {response.text}"
             )
@@ -779,7 +791,7 @@ class OpenAILegacyBackend(AIBackend):
             return True
         return False
 
-    def tokenize(self, w):
+    def tokenize(self, w: str) -> List[int]:
         headers = {
             "Authorization": f"Bearer {self.api_key}",
             "Content-Type": "application/json",
@@ -793,7 +805,7 @@ class OpenAILegacyBackend(AIBackend):
             return response.json()["tokens"]
         return []
 
-    def detokenize(self, ts):
+    def detokenize(self, ts: List[int]) -> str:
         headers = {
             "Authorization": f"Bearer {self.api_key}",
             "Content-Type": "application/json",
@@ -805,15 +817,14 @@ class OpenAILegacyBackend(AIBackend):
         )
         if response.status_code == 200:
             return response.json()["content"]
-        return []
+        return ""
 
-    def health(self):
+    def health(self) -> str:
         # OpenAI API does not have a direct health check endpoint
         return "OpenAI API is assumed to be healthy."
 
-    def timings(self, result_json=None) -> Optional[Timings]:
-        return OpenAIBackend.timings(self, result_json)
-
+    def timings(self, result_json: Optional[Dict[str, Any]] =None) -> Optional[Timings]:
+        return OpenAIBackend.timings(cast(OpenAIBackend, self), result_json)
 
     def sampling_parameters(self) -> Dict[str, SamplingParameterSpec]:
         # restricted set
@@ -827,20 +838,20 @@ class OpenAILegacyBackend(AIBackend):
 class OpenAIBackend(AIBackend):
     """Backend for the official OpenAI API. This is used for the company of Altman et al, but also serves as a general purpose API suported by various backends, including llama.cpp, llama-box, and many others."""
 
-    def __init__(self, api_key: str, endpoint:str="https://api.openai.com", **kwargs):
+    def __init__(self, api_key: str, endpoint:str="https://api.openai.com", **kwargs: Any):
         super().__init__(endpoint, **kwargs)
         self.api_key = api_key
-        self._memoized_params = None
+        self._memoized_params: Optional[Dict[str, SamplingParameterSpec]] = None
         api_str = "" if not(api_key) else " with api key " + api_key[:5] + ("x" * len(api_key[4:]))
         self.log(f"Initialized OpenAI compatible backend {api_str}. Routing to {endpoint}. Config is {self._config}")
                                                                             
-    def getName(self):
+    def getName(self) -> str:
         return LLMBackend.openai.name
 
-    def getMaxContextLength(self):
+    def getMaxContextLength(self) -> int:
         return -1
 
-    def generate(self, payload):
+    def generate(self, payload: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         headers = {
             "Authorization": f"Bearer {self.api_key}",
             "Content-Type": "application/json",
@@ -868,7 +879,7 @@ class OpenAIBackend(AIBackend):
         self._last_result = response.json()
         return response.json()
 
-    def handleGenerateResult(self, result):
+    def handleGenerateResult(self, result: Dict[str, Any]) -> Optional[Union[str, Dict[str, Any]]]:
         # this is just so that others can use the openai specific handling, which is kind of an industry standard
         return self.handleGenerateResultOpenAI(result)
 
@@ -892,8 +903,8 @@ class OpenAIBackend(AIBackend):
         return None
 
     @staticmethod
-    def makeOpenAICallback(callback, last_result_callback=lambda x: x):
-        def openAICallback(d):
+    def makeOpenAICallback(callback: Callable[[str], None], last_result_callback: Callable[[Dict[str, Any]], None] = lambda x: None) -> Callable[[Dict[str, Any]], None]:
+        def openAICallback(d: Dict[str, Any]) -> None:
             last_result_callback(d)
             # FIXME: handle reasoning here
             choices = d["choices"]
@@ -907,7 +918,7 @@ class OpenAIBackend(AIBackend):
 
         return openAICallback
 
-    def generateStreaming(self, payload, callback=lambda w: print(w)):
+    def generateStreaming(self, payload: Dict[str, Any], callback: Callable[[str], None] = lambda w: print(w)) -> bool:
         self.stream_done.clear()
         headers = {
             "Authorization": f"Bearer {self.api_key}",
@@ -917,7 +928,7 @@ class OpenAIBackend(AIBackend):
         data = payload | {"max_tokens": payload["max_length"], "stream": True, "stream_options": {"include_usage": True}}
         self._last_request = data
 
-        def one_line_lambdas_for_python(r):
+        def one_line_lambdas_for_python(r: Dict[str, Any]) -> None:
             self._last_result = r
 
 
@@ -933,7 +944,11 @@ class OpenAIBackend(AIBackend):
             json=data,
             headers=headers,
         )
-        if response.status_code != 200:
+        if response is None:
+            self.last_error = "Failed to get response from server."
+            self.stream_done.set()            
+            return True        
+        elif response.status_code != 200:
             self.last_error = (
                 f"HTTP request with status code {response.status_code}: {response.text}"
             )
@@ -941,7 +956,7 @@ class OpenAIBackend(AIBackend):
             return True
         return False
 
-    def tokenize(self, w):
+    def tokenize(self, w: str) -> List[int]:
         headers = {
             "Authorization": f"Bearer {self.api_key}",
             "Content-Type": "application/json",
@@ -955,7 +970,7 @@ class OpenAIBackend(AIBackend):
             return response.json()["tokens"]
         return []
 
-    def detokenize(self, ts):
+    def detokenize(self, ts: List[int]) -> str:
         headers = {
             "Authorization": f"Bearer {self.api_key}",
             "Content-Type": "application/json",
@@ -967,44 +982,44 @@ class OpenAIBackend(AIBackend):
         )
         if response.status_code == 200:
             return response.json()["content"]
-        return []
+        return ""
 
-    def health(self):
+    def health(self) -> str:
         # OpenAI API does not have a direct health check endpoint
         return "OpenAI API is assumed to be healthy."
 
 
-    def timings(self, result_json=None) -> Optional[Timings]:
+    def timings(self, result_json: Optional[Dict[str, Any]] =None) -> Optional[Timings]:
         if result_json is None:
-            if (json := self._last_result) is None:
+            if (json_data := self._last_result) is None:
                 return None
         else:
-            json = result_json
+            json_data = result_json
 
 
-        if "__verbose" in json:
-            verbose = json["__verbose"]
-            time = verbose["timings"]
+        if "__verbose" in json_data:
+            verbose = json_data["__verbose"]
+            time_data = verbose["timings"]
             truncated = verbose["truncated"]
             cached = verbose["tokens_cached"]
-        elif "timings" in json:
-            time = json["timings"]
+        elif "timings" in json_data:
+            time_data = json_data["timings"]
             truncated = False
             cached = None            
         else:
             return None
 
         return Timings(
-            prompt_n=time["prompt_n"],
-            predicted_n=time["predicted_n"],
-            prompt_ms=time["prompt_ms"],
-            predicted_ms=time["predicted_ms"],
-            predicted_per_token_ms=time["predicted_per_token_ms"],
-            predicted_per_second=time["predicted_per_second"],
+            prompt_n=time_data["prompt_n"],
+            predicted_n=time_data["predicted_n"],
+            prompt_ms=time_data["prompt_ms"],
+            predicted_ms=time_data["predicted_ms"],
+            predicted_per_token_ms=time_data["predicted_per_token_ms"],
+            predicted_per_second=time_data["predicted_per_second"],
             # unfortunately openai don't reveal these, unless we got __verbose
             truncated=truncated,
             cached_n=cached,
-            original_timings=time,
+            original_timings=time_data,
         )
 
     def sampling_parameters(self) -> Dict[str, SamplingParameterSpec]:
@@ -1016,7 +1031,7 @@ class OpenAIBackend(AIBackend):
         # the openai class really is not specific enough for this
         supported = supported_parameters.keys()
         sometimes = sometimes_parameters.keys()
-        d = {hp.name: hp for hp in sampling_parameters.values() if hp.name in supported}
+        d: Dict[str, SamplingParameterSpec] = {hp.name: hp for hp in sampling_parameters.values() if hp.name in supported}
         for param in sometimes:
             sp = sampling_parameters[param]
             d[param] = SamplingParameterSpec(
@@ -1028,18 +1043,19 @@ class OpenAIBackend(AIBackend):
 
             self._memoized_params = d
             return d
+        return d # Added return for mypy
 
 
 class GoogleBackend(AIBackend):
     """Backend for google's AI Studio https://aistudio.google.com"""
 
-    def __init__(self, api_key: str, model: str, **kwargs):
+    def __init__(self, api_key: str, model: str, **kwargs: Any):
         super().__init__("https://aistudio.google.com", **kwargs)
         self.api_key = api_key
         if not(self.api_key):
             # try to get it from env vars
-            self.api_key = os.getenv("GEMINI_API_KEY", os.getenv("GOOGLE_API_KEY", None))
-            if self.api_key is None:
+            self.api_key = os.getenv("GEMINI_API_KEY", os.getenv("GOOGLE_API_KEY", ""))
+            if not self.api_key:
                 printerr("error: Google AI Studio requires an API key. Please set it with either the --google_api_key or the general --api_key option, or set either the GEMINI_API_KEY or GOOGLE_API_KEY environment variables. You can get an API key at https://aistudio.google.com")
                 raise BrokenBackend("Missing API key for google.")
 
@@ -1054,10 +1070,10 @@ class GoogleBackend(AIBackend):
             printerr("error: Could not import google's SDK. Do you have the google-genai package installed?\nTry\n\n```\npip install google-genai```\n")
             raise RuntimeError("Aborting due to failed imports.")
         
-        self._memoized_params = None
+        self._memoized_params: Optional[Dict[str, SamplingParameterSpec]] = None
         # Store the model name in _config for later use by tokenize and generate
         self._config['model'] = self.fix_model(model)
-        self._tokenizer = None
+        self._tokenizer: Optional[Any] = None # Type hint for LocalTokenizer
         try:
             from google.genai.local_tokenizer import LocalTokenizer
             # FIXME: I don't know why google won't accept their own official names for the tokenizer but that's what we're dealing with
@@ -1066,29 +1082,29 @@ class GoogleBackend(AIBackend):
         except Exception as e:
             printerr(f"Could not initialize tokenizer. Reason: {e}")
         
-    def getName(self):
+    def getName(self) -> str:
         return LLMBackend.google.name
 
-    def getMaxContextLength(self):
+    def getMaxContextLength(self) -> int:
         return -1
 
 
-    def _get_models(self) -> List[Any]:
+    def _get_models(self) -> List[genai.types.Model]:
         """Returns a list of names of supported models by google."""
-        return self.client.models.list()
+        return list(self.client.models.list())
 
     def get_models(self) -> List[ModelStats]:
         models = self._get_models()
         return [ModelStats(
-            name = model.name,
-            display_name = model.display_name,
+            name = model.name if model.name else "",
+            display_name = model.display_name if model.display_name else "",
             description = model.description if model.description else ""
         )
                 for model in models]
     
     def fix_model(self, model: str) -> str:
         """Ensures the given model name is a valid one. Returns a default model with a warning if not."""
-        models = [model.name for model in self._get_models()]
+        models = [model.name for model in self.get_models()]
         if model not in models:
             default_model = models[0] if len(models) > 0 else "gemini-2.5-flash"
             printerr(f"warning: Model {model} not supported by Google. Defaulting to {default_model}")
@@ -1096,15 +1112,15 @@ class GoogleBackend(AIBackend):
         return model
 
     
-    def content_from_chatmessage(self, msg: ChatMessage) -> 'google.genai.types.Content':
+    def content_from_chatmessage(self, msg: ChatMessage) -> Content:
         from google.genai.types import Content, Part, FunctionCall, FunctionResponse, Blob
         import base64
 
         # Google GenAI roles: 'user', 'model', 'tool'
         # System messages are usually handled by system_instruction, but if they appear in history, they are treated as user messages by GenAI.
-        role_map = {"user": "user", "assistant": "model", "tool": "tool", "system": "user"} 
+        role_map: Dict[str, str] = {"user": "user", "assistant": "model", "tool": "tool", "system": "user"} 
 
-        genai_parts = []
+        genai_parts: List[Part] = []
 
         # Handle text content
         if isinstance(msg.content, str) and msg.content:
@@ -1125,7 +1141,7 @@ class GoogleBackend(AIBackend):
                         self.log(f"warning: Could not parse image_url for Google GenAI: {image_url_str}. Error: {e}")
                         # Skip this image part if parsing fails
                         pass
-                elif item.type == "video_url" and item.video_url and item.video_url.url:
+                elif item.type == "video_url" and item.video_url and item.video_url.url: # type: ignore
                     video_url_str = item.video_url.url
                     try:
                         # Assuming data URI: data:video/mp4;base64,...
@@ -1171,7 +1187,7 @@ class GoogleBackend(AIBackend):
     
 
     @staticmethod
-    def get_safety_settings() -> List['google.genai.types.SafetySetting']:
+    def get_safety_settings() -> List[Any]: # Changed to Any as google.genai.types.SafetySetting might not be directly available
         from google.genai import types
         # so the APi will error out with 400 invalid request if you set any other than the following (as per the docs)
         # kind of defeats the point of an enum. thanks, googl!
@@ -1190,14 +1206,14 @@ class GoogleBackend(AIBackend):
                         if category in supported_categories
         ]
 
-    def _post_generation(self):
+    def _post_generation(self) -> None:
         """Some processing that runs after generating text, shared between generation methods."""
         # Check for block/failure etc and notify the user
         if self._last_result is not None:
             if (prompt_feedback := self._last_result.get("prompt_feedback", None)) != None:
                 printerr(f"warning: Got prompt feedback from server:\n{json.dumps(prompt_feedback, indent=4)}")
 
-    def _prepare_generation_config(self, payload):
+    def _prepare_generation_config(self, payload: Dict[str, Any]) -> Any: # Changed to Any as google.genai.types.GenerateContentConfig might not be directly available
         """Prepare google's generate config for generation."""
         from google.genai import types, errors        
         generation_config = types.GenerateContentConfig(
@@ -1219,11 +1235,11 @@ class GoogleBackend(AIBackend):
             
         return generation_config
 
-    def _prepare_generation_contents(self, payload) -> Tuple[Any, Any]:
+    def _prepare_generation_contents(self, payload: Dict[str, Any]) -> Tuple[List[Content], List[Content]]:
         """Prepare contents for google's generate_content method based on a payload.
         returns a pair of genai contents (for google) and serializable contents (for debugging/logging)."""
         from google.genai import types, errors                
-        genai_contents = []
+        genai_contents: List[Content] = []
         for msg in payload["story"]:
             # System messages are passed via `system_instruction` argument, not in `contents` list.
             if msg.role == "system":
@@ -1233,7 +1249,7 @@ class GoogleBackend(AIBackend):
         serializable_contents = self._serialize_content(genai_contents)
         return genai_contents, serializable_contents
     
-    def generate(self, payload) -> Optional[Any]:
+    def generate(self, payload: Dict[str, Any]) -> Optional[Any]:
         from google.genai import types, errors
         
         generation_config = self._prepare_generation_config(payload)
@@ -1253,7 +1269,7 @@ class GoogleBackend(AIBackend):
 
         try:
             response = self.client.models.generate_content(
-                contents=genai_contents,
+                contents=genai_contents, # type: ignore
                 config=generation_config,
                 model=self.fix_model(payload["model"])
             )
@@ -1269,12 +1285,12 @@ class GoogleBackend(AIBackend):
             return None
 
 
-    def handleGenerateResult(self, result):
+    def handleGenerateResult(self, result: Any) -> Optional[Union[str, Dict[str, Any]]]:
         return self.handleGenerateResultGoogle(result)
 
 
     @staticmethod
-    def handleGenerateResultGoogle(result):
+    def handleGenerateResultGoogle(result: Any) -> Optional[str]:
         # keep it simple
         try:
             # result.text aggregates all text parts from all candidates
@@ -1284,13 +1300,15 @@ class GoogleBackend(AIBackend):
             return None
 
 
-    def _serialize_content(self, genai_contents):
+    def _serialize_content(self, genai_contents: List[Content]) -> List[Content]:
         """Serialize a google genai content type to json strings. This is mostly used for debugging and self.lastResult."""
         from google.genai import types
         # Before serializing to JSON, base64 encode any bytes data
-        serializable_contents = []
+        serializable_contents: List[Content] = []
         for c in genai_contents:
-            serializable_parts = []
+            if c.parts is None:
+                continue
+            serializable_parts: List[Part] = []
             for part in c.parts:
                 if part.inline_data and isinstance(part.inline_data.data, bytes):
                     # no need to see binary data. just snip it.
@@ -1300,7 +1318,7 @@ class GoogleBackend(AIBackend):
             serializable_contents.append(Content(role=c.role, parts=serializable_parts))
         return serializable_contents
 
-    def generateStreaming(self, payload, callback=lambda w: print(w)):
+    def generateStreaming(self, payload: Dict[str, Any], callback: Callable[[str], None] = lambda w: print(w)) -> bool:
         self.stream_done.clear()
         from google.genai import types, errors
 
@@ -1320,7 +1338,7 @@ class GoogleBackend(AIBackend):
         
         try:
             stream_response = self.client.models.generate_content_stream(
-                contents=genai_contents,
+                contents=genai_contents, # type: ignore
                 config=generation_config,
                 model=self.fix_model(payload["model"]),
             )
@@ -1338,6 +1356,8 @@ class GoogleBackend(AIBackend):
                 # A candidate's content might have multiple parts.
                 if chunk.candidates:
                     candidate_content = chunk.candidates[0].content
+                    if candidate_content is None or candidate_content.parts is None:
+                        continue
                     for part in candidate_content.parts:
                         if part.text:
                             callback(part.text)
@@ -1361,13 +1381,13 @@ class GoogleBackend(AIBackend):
             self._post_generation()
         return False # No HTTP error
     
-    def _make_content_from_raw_text(self, text: str) -> 'google.generativeai.types.Content':
+    def _make_content_from_raw_text(self, text: str) -> Content:
         """Helper to create a Content object from a raw string for token counting."""
         return Content(role="user", parts=[Part(text=text)])
 
     def tokenize(self, w: str) -> List[int]:
         self.log(f"Attempting to tokenize {len(w)} characters for Google backend (only token count is supported).")
-        token_count = None
+        token_count: Optional[int] = None
 
         try:
             #content_to_count = self._make_content_from_raw_text(w)
@@ -1384,13 +1404,13 @@ class GoogleBackend(AIBackend):
 
             if token_count is None:
                 # use http remote tokenizer
-                response = self.client.models.count_tokens(contents=[content_to_count],
+                response = self.client.models.count_tokens(contents=[content_to_count], # type: ignore
                                                            model=self.fix_model(self._config.get("model", "")))
                 token_count = response.total_tokens
                 
             self.log(f"Token count for '{w[:50]}...' is {token_count}.")
             # Return a list of placeholder integers so len() works as expected
-            return [0] * token_count
+            return [0] * (token_count if token_count else 0)
         except Exception as e:
             self.log(f"warning: Tokenization (counting) failed for Google backend: {e.__class__.__name__}: {e}\n{traceback.format_exc()}")
             return []
@@ -1399,10 +1419,10 @@ class GoogleBackend(AIBackend):
         self.log("warning: Detokenization is not directly supported by the Google GenAI API.")
         return ""
     
-    def health(self):
+    def health(self) -> str:
         return "Google AI Studio API is assumed to be healthy."
 
-    def timings(self, result_json=None) -> Optional[Timings]:
+    def timings(self, result_json: Optional[Dict[str, Any]] =None) -> Optional[Timings]:
         # Google GenAI responses include usage metadata in the final response.
         # We can extract this to populate Timings.
         if result_json is None:
@@ -1446,7 +1466,7 @@ class GoogleBackend(AIBackend):
         # max_output_tokens: int (positive) -> maps to Ghostbox's max_length
         # stop_sequences: List[str] -> maps to Ghostbox's stop
 
-        google_supported_params = {
+        google_supported_params: Dict[str, SamplingParameterSpec] = {
             "temperature": sampling_parameters["temperature"],
             "top_p": sampling_parameters["top_p"],
             "top_k": sampling_parameters["top_k"],
@@ -1464,7 +1484,7 @@ class DeepseekBackend(OpenAIBackend):
         This is a razor thin wrapper around the OpenAI ctype. It exists mostly to provide a list of model and to be future proof.
         """
 
-    def __init__(self, api_key: str, endpoint:str="https://api.deepseek.com", **kwargs):
+    def __init__(self, api_key: str, endpoint:str="https://api.deepseek.com", **kwargs: Any):
         super().__init__(api_key, endpoint, **kwargs)        
 
     def getName(self) -> str:
@@ -1492,13 +1512,13 @@ class DeepseekBackend(OpenAIBackend):
         if deepseek_payload["top_p"] <= 0.0 or deepseek_payload["top_p"] > 1.0:
             deepseek_payload["top_p"] = 0.95
                 
-    def generate(self, payload: Dict[str, Any]) -> Any:
+    def generate(self, payload: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         self._fix_payload(payload)
         return super().generate(payload)
 
-    def generateStreaming(self, payload: Dict[str, Any], callback=lambda w: print(w)) -> None:
+    def generateStreaming(self, payload: Dict[str, Any], callback: Callable[[str], None] = lambda w: print(w)) -> bool:
         self._fix_payload(payload)
-        super().generateStreaming(payload, callback)
+        return super().generateStreaming(payload, callback)
         
     
     def get_models(self) -> List[ModelStats]:
@@ -1526,7 +1546,7 @@ class QwenBackend(OpenAIBackend):
     """Backend for the qwen cloud LLM provider https://qwen.ai
     Powered by Alibaba Cloud services. Based on the OpenAI API."""
 
-    def __init__(self, api_key: str, endpoint:str="https://dashscope-intl.aliyuncs.com/compatible-mode", **kwargs):
+    def __init__(self, api_key: str, endpoint:str="https://dashscope-intl.aliyuncs.com/compatible-mode", **kwargs: Any):
         legit_endpoints = ["https://dashscope-intl.aliyuncs.com/compatible-mode", "https://dashscope-us.aliyuncs.com/compatible-mode","https://dashscope.aliyuncs.com/compatible-mode"]
         if endpoint not in legit_endpoints:
             printerr(f"warning: Custom endpoint for qwen backend detected ({endpoint}). Please make sure it does not have a trailing '/v1', e.g. do not use:\n `https://dashscope-intl.aliyuncs.com/compatible-mode/v1` -> **WRONG**\nbut rather\n - `https://dashscope-intl.aliyuncs.com/compatible-mode` -> **RIGHT**")
@@ -1535,9 +1555,9 @@ class QwenBackend(OpenAIBackend):
         self.api_key = api_key
         if not(self.api_key):
             # try to get it from env vars
-            self.api_key = os.getenv("DASHSCOPE_API_KEY", None)
+            self.api_key = os.getenv("DASHSCOPE_API_KEY", "")
             printerr(f"Found DASHSCOPE_API_KEY in environment.")
-            if self.api_key is None:
+            if not self.api_key:
                 printerr("error: Google AI Studio requires an API key. Please set it with either the --google_api_key or the general --api_key option, or set either the GEMINI_API_KEY or GOOGLE_API_KEY environment variables. You can get an API key at https://aistudio.google.com")
                 raise BrokenBackend("Missing API key for qwen. Provide it via --api_key or set the DASHSCOPE_API_KEY environment variable. See more on https://modelstudio.console.alibabacloud.com/ap-southeast-1/?tab=doc#/doc/?type=model&url=2840915")
 
@@ -1559,11 +1579,11 @@ See more on https://modelstudio.console.alibabacloud.com/ap-southeast-1/?tab=doc
         return "Qwen"
 
     # listing these two here explicitly because we may want to modify them in the future
-    def generate(self, payload: Dict[str, Any]) -> Any:
+    def generate(self, payload: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         return super().generate(payload)
 
-    def generateStreaming(self, payload: Dict[str, Any], callback=lambda w: print(w)) -> None:
-        super().generateStreaming(payload, callback)
+    def generateStreaming(self, payload: Dict[str, Any], callback: Callable[[str], None] = lambda w: print(w)) -> bool:
+        return super().generateStreaming(payload, callback)
         
     
     def get_models(self) -> List[ModelStats]:
@@ -1586,7 +1606,4 @@ See more on https://modelstudio.console.alibabacloud.com/ap-southeast-1/?tab=doc
         except Exception as e:
             self.log(f"Couldn't get qwen models. Reason: {e}")
         return []
-
-
-
 
