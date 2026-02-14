@@ -1,13 +1,15 @@
+from typing import Callable, Any, Dict, Optional, Mapping
 import requests, json
 #from requests_html import HTMLSession
 from time import sleep
 from threading import Thread, Event
 from .util import printerr
 
+
 # FIXME:   # poor man's closure; somehow this isn't enough yet to warrant making a class
 stop_streaming = Event()
 
-def connect_to_endpoint(url, prompt, headers=""):
+def connect_to_endpoint(url: str, prompt: Any, headers: Optional[Mapping[str, str]] = None) -> requests.Response | None:
     try:
         #session = HTMLSession()
         session = requests.Session()
@@ -18,10 +20,9 @@ def connect_to_endpoint(url, prompt, headers=""):
         return None
 
 
-
   
     
-def process_sse_streaming_events(callback, done_flag, r):
+def process_sse_streaming_events(callback: Callable[[Dict[str, Any]], None], done_flag: Event, r: requests.Response) -> None:
     global stop_streaming
     for event in r.iter_lines():
         if stop_streaming.is_set():
@@ -47,7 +48,7 @@ def process_sse_streaming_events(callback, done_flag, r):
     done_flag.set()
 
 
-def streamPrompt(callback, done_flag, url, json="", headers=""):
+def streamPrompt(callback: Callable[[Dict[str, Any]], None], done_flag: Event, url: str, json: Any = "", headers: Optional[Mapping[str, str]] = None) -> requests.Response | None:
     global stop_streaming
     stop_streaming.clear()
     
