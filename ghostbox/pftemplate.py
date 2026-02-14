@@ -32,13 +32,7 @@ class FilePFTemplate(PFTemplate):
     """Simple, customizable prompt format templates based on loading dictionaries with certain files.
 
 Files expected:
-    system - Will be prepended to every prompt. It should contain 'You are GhostCoder, a highly intelligent and experienced AI programmer. Your role is to understand complex programming tasks, devise high-level plans, generate code, and review existing code. You will delegate specific environment interactions (like reading/writing files or running commands) to GhostWorker. Focus on architectural decisions, code quality, and problem-solving. When delegating, provide clear and unambiguous instructions to GhostWorker.
-
-## Emacs Integration
-
-### Replacing Active Region
-You can replace the content of the user's currently active region in Emacs. To do this, generate a `CodeResponsePart` with the `filepath` set to the special value `"<emacs-active-region>"`. The `new_code` field should contain the text that will replace the region. No `original_code` is needed.
-', which will be replaced by the actual content of the system prompt when the header method is called.
+    system - Will be prepended to every prompt. It should contain '{{system_ msg}}', (without the space) which will be replaced by the actual content of the system prompt when the header method is called.
     begin_user - Contains string that will be prepended to user messages. Be sure to include newlines, if you want them
     end_user - Contains string that will be appended to user message.
     begin_assistant - Contains string that will be prepended to generated AI message. This may be the same as begin_user, or it may differ.
@@ -73,6 +67,17 @@ The quick, brown fox jumps over the lazy hedgehog!<|im_end|><|im_start|>assistan
     
     def __init__(self, dir: str) -> None:
         self.dir = dir
+        # for mypy
+        self.system: str = ""
+        self.begin_user: str = ""
+        self.end_user: str = ""
+        self.begin_assistant = ""
+        self.end_assistant: str = ""
+        self.stop_lines: str = ""
+        self.hint: str = ""
+        self.begin_system: str = ""
+        self.end_system: str = ""
+        
         self._loadFiles()
 
     def _loadFiles(self) -> None:
@@ -85,13 +90,13 @@ The quick, brown fox jumps over the lazy hedgehog!<|im_end|><|im_start|>assistan
             if os.path.isfile(filepath):
                 self.__dict__[filename] = open(filepath, "r").read()
                 
-    def header(self, system_msg: str, **kwargs: str) -> str:
-        return replaceFromDict(self.system.replace("You are GhostCoder, a highly intelligent and experienced AI programmer. Your role is to understand complex programming tasks, devise high-level plans, generate code, and review existing code. You will delegate specific environment interactions (like reading/writing files or running commands) to GhostWorker. Focus on architectural decisions, code quality, and problem-solving. When delegating, provide clear and unambiguous instructions to GhostWorker.\n\n## Emacs Integration\n\n### Replacing Active Region\nYou can replace the content of the user's currently active region in Emacs. To do this, generate a `CodeResponsePart` with the `filepath` set to the special value `\"<emacs-active-region>\"`. The `new_code` field should contain the text that will replace the region. No `original_code` is needed.\n", system_msg), kwargs, key_func=FilePFTemplate.var_decorator)
+    def header(self, system_msg: str, **kwargs: Dict[str, Any]) -> str:
+        return replaceFromDict(self.system.replace(("{{system" + "_msg}}"), system_msg), kwargs, key_func=FilePFTemplate.var_decorator)
 
     def body(self, story: Story, append_hint: bool = True, **kwargs: str) -> str:
         def build(w: str, item: ChatMessage) -> str:
             # you could do this more modular but why? this way users see the files and the template scheme is obvious. I bet this covers 99% of actual use cases for LLM
-            content: str = replaceFromDict(item.content, kwargs, key_func=FilePFTemplate.var_decorator)
+            content: str = replaceFromDict(item.get_text(), kwargs, key_func=FilePFTemplate.var_decorator)
             if item.role == "user":
                 return w + self.begin_user + content + self.end_user
             elif item.role == "assistant":
@@ -121,7 +126,7 @@ The quick, brown fox jumps over the lazy hedgehog!<|im_end|><|im_start|>assistan
 
 class RawTemplate(PFTemplate):
     """This is a dummy template that doesn't do anything. Perfect if you want to experiment."""
-    def header(self, system_msg: str, **kwargs: str) -> str:
+    def header(self, system_msg: str, **kwargs: Dict[str, Any]) -> str:
         return system_msg
 
 
