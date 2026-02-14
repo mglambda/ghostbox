@@ -1,6 +1,6 @@
 import whisper
 import time, os, sys, contextlib, threading
-from typing import *
+from typing import Optional, Callable, List, Dict, Any, Union, Tuple, Generator, Mapping
 import wave
 import tempfile
 from ctypes import CFUNCTYPE, c_char_p, c_int, cdll
@@ -24,8 +24,8 @@ def getWhisperTranscription(filename: str, model: whisper.model.Whisper) -> str:
     return result["text"].strip()
 
 # unfortunately pyaudio will give a bunch of error messages, which is very irritating for using it in a shell program, so we supress the msgs
-@contextlib.contextmanager # type: ignore
-def ignoreStderr(): # type: ignore
+@contextlib.contextmanager
+def ignoreStderr() -> Generator[None, None, None]:
     devnull = os.open(os.devnull, os.O_WRONLY)
     old_stderr = os.dup(2)
     sys.stderr.flush()
@@ -37,14 +37,19 @@ def ignoreStderr(): # type: ignore
         os.dup2(old_stderr, 2)
         os.close(old_stderr)
 
+# Define the C error handler function signature
+ERROR_HANDLER_FUNC = CFUNCTYPE(None, c_char_p, c_int, c_char_p, c_int, c_char_p)
+def py_error_handler(filename: c_char_p, line: c_int, function: c_char_p, err: c_int, fmt: c_char_p) -> None:
+    return
+
 class WhisperTranscriber(object):
     def __init__(self, model_name: str = "base.en", silence_threshold: int = 2500, input_func: Optional[Callable[[], None]] =None) -> None:
         """model_name is the name of a whisper model, e.g. 'base.en' or 'tiny.en'.
         silence_threshold is an integer value describing a decibel threshold at which recording starts in the case of continuous transcribing.
 input_func is a 0-argument function or None. If not None, it is called before transcribing, though only with the one-shot 'transcribe' method, not with transcribeContinuously. You can use this to print to stdout, or play a sound or do anything to signal to the user that recording has started."""
-        self.model = loadModel(model_name)
-        self.silence_threshold = silence_threshold
-        self.input_func = input_func
+        self.model: whisper.model.Whisper = loadModel(model_name)
+        self.silence_threshold: int = silence_threshold
+        self.input_func: Optional[Callable[[], None]] = input_func
 
     def transcribeWithPrompt(self, input_msg: str = "", input_func: Optional[Callable[[], None]] = None, input_handler: Callable[[str], str] = lambda w: w) -> str:
         """Records audio directly from the microphone and then transcribes it to text using Whisper, returning that transcription.
@@ -57,38 +62,35 @@ This function will record from the point it is called and until the user hits en
         # Create a temporary file to store the recorded audio (this will be deleted once we've finished transcription)
         temp_file = tempfile.NamedTemporaryFile(suffix=".wav")
 
-        sample_rate = 16000
-        bits_per_sample = 16
-        chunk_size = 1024
-        audio_format = pyaudio.paInt16
-        channels = 1
+        sample_rate: int = 16000
+        bits_per_sample: int = 16
+        chunk_size: int = 1024
+        audio_format: int = pyaudio.paInt16
+        channels: int = 1
 
-        def callback(in_data, frame_count, time_info, status): # type: ignore
-            wav_file.writeframes(in_data)
+        def callback(in_data: bytes | None, frame_count: int, time_info: Mapping[str, float], status: int) -> Tuple[bytes | None, int]:
+            wav_file.writeframes(in_data) # type: ignore
             return None, pyaudio.paContinue
 
         # Open the wave file for writing
-        wav_file = wave.open(temp_file.name, 'wb')
+        wav_file: wave.Wave_write = wave.open(temp_file.name, 'wb')
         wav_file.setnchannels(channels)
         wav_file.setsampwidth(bits_per_sample // 8)
         wav_file.setframerate(sample_rate)
 
         # Suppress ALSA warnings (https://stackoverflow.com/a/13453192)
-        ERROR_HANDLER_FUNC = CFUNCTYPE(None, c_char_p, c_int, c_char_p, c_int, c_char_p)
-        def py_error_handler(filename, line, function, err, fmt): # type: ignore
-            return
-
+        # ERROR_HANDLER_FUNC is already defined globally
         c_error_handler = ERROR_HANDLER_FUNC(py_error_handler)
         asound = cdll.LoadLibrary('libasound.so')
         asound.snd_lib_error_set_handler(c_error_handler)
 
         # Initialize PyAudio
-        audio = None
+        audio: pyaudio.PyAudio
         with ignoreStderr():
             audio = pyaudio.PyAudio()
 
         # Start recording audio
-        stream = audio.open(format=audio_format,
+        stream: pyaudio.Stream = audio.open(format=audio_format,
                             channels=channels,
                             rate=sample_rate,
                             input=True,
@@ -110,7 +112,7 @@ This function will record from the point it is called and until the user hits en
         wav_file.close()
 
         # And transcribe the audio to text (suppressing warnings about running on a CPU)
-        result = getWhisperTranscription(temp_file.name, self.model)
+        result: str = getWhisperTranscription(temp_file.name, self.model)
         temp_file.close()
         return result
 
@@ -129,32 +131,33 @@ This function will record from the point it is called and until the user hits en
 
 class ContinuousTranscriber(object):
     def __init__(self, model: whisper.model.Whisper, silence_threshold: int, callback: Optional[Callable[[str], None]] = None, on_threshold: Optional[Callable[[], None]] = None, websock: bool = False, websock_host: str = "localhost", websock_port: int = 5051) -> None:
-        self.model = model
-        self.callback = callback
-        self.on_threshold = on_threshold
-        self.silence_threshold = silence_threshold
+        self.model: whisper.model.Whisper = model
+        self.callback: Optional[Callable[[str], None]] = callback
+        self.on_threshold: Optional[Callable[[], None]] = on_threshold
+        self.silence_threshold: int = silence_threshold
         # sampel rate is in self._samplerate. This is a tricky value, as it gets set by the client in websock mode.
-        self._set_samplerate(44100) 
-        self.buffer = []
-        self.running = False
-        self.resume_flag = threading.Event()
-        self.payload_flag = threading.Event()
-        self.websock = websock
-        self.websock_host = websock_host
-        self.websock_port = websock_port
-        self.websock_server = None
+        self._samplerate: int
+        self._set_samplerate(44100)
+        self.buffer: List[str] = []
+        self.running: bool = False
+        self.resume_flag: threading.Event = threading.Event()
+        self.payload_flag: threading.Event = threading.Event()
+        self.websock: bool = websock
+        self.websock_host: str = websock_host
+        self.websock_port: int = websock_port
+        self.websock_server: Optional[WS.Server] = None # websockets.sync.server.Server
         #self.audio_buffer = b""
-        self.audio_buffer = Queue()
+        self.audio_buffer: Queue[bytes] = Queue()
         self._spawnThread()
         if self.websock:
-            self._setup_websocket_server()                    
+            self._setup_websocket_server()
 
-    def _handle_client(self, websocket) -> None:
+    def _handle_client(self, websocket: WS.WebSocketServerProtocol) -> None:
         while self.running:
             try:
-                packet = websocket.recv(1024)
-                if type(packet) == str:
-                    w = packet
+                packet: Union[str, bytes] = websocket.recv(1024)
+                if isinstance(packet, str):
+                    w: str = packet
                     if w.startswith("samplerate:"):
                         #printerr("[DEBUG] Setting " + w)
                         self._set_samplerate(int(w.split(":")[1]))
@@ -170,24 +173,24 @@ class ContinuousTranscriber(object):
                 #self.running = False
                 self.resume_flag.set()
 
-                
-    def _setup_websocket_server(self):
-        def run_server():
+
+    def _setup_websocket_server(self) -> None:
+        def run_server() -> None:
             printerr("Starting websock server for audio transcription.")
             self.websock_server = WS.serve(self._handle_client, host=self.websock_host, port=self.websock_port)
             self.websock_server.serve_forever()
 
         server_thread = threading.Thread(target=run_server, daemon=True)
         server_thread.start()
-                
-    def _spawnThread(self):
+
+    def _spawnThread(self) -> None:
         self.running = True
         self.resume_flag.set()
         self.payload_flag.clear()
         thread = threading.Thread(target=self._recordLoop, args=(), daemon=True)
         thread.start()
 
-    def _recordLoop(self):
+    def _recordLoop(self) -> None:
         while self.running:
             self.resume_flag.wait()
             temp_file = tempfile.NamedTemporaryFile(suffix=".wav")
@@ -201,29 +204,29 @@ class ContinuousTranscriber(object):
                 self.callback(self.buffer[-1])
             self.payload_flag.set()
 
-    def pause(self):
+    def pause(self) -> None:
         self.resume_flag.clear()
 
-    def isPaused(self):
+    def isPaused(self) -> bool:
         return not(self.resume_flag.is_set())
 
-    def resume(self):
+    def resume(self) -> None:
         self.resume_flag.set()
 
-    def stop(self):
+    def stop(self) -> None:
         self.running = False
         self.resume()
         if self.websock and self.websock_server is not None:
-            self.websock_server.shutdown()            
+            self.websock_server.shutdown()
 
-    def pop(self):
+    def pop(self) -> List[str]:
         """Returns a list of strings that were recorded and transcribed since the last time poll or pop was called.
         This function is non-blocking."""
-        tmp = self.buffer
+        tmp: List[str] = self.buffer
         self.buffer = [] #FIXME: race condition?
         return tmp
 
-    def poll(self):
+    def poll(self) -> List[str]:
         """Returns a list of strings that were recorded and transcribed since the last time poll or pop was called.
 This function will block until new input is recorded."""
         self.payload_flag.wait()
@@ -231,14 +234,14 @@ This function will block until new input is recorded."""
         return self.pop()
 
 
-    def _set_samplerate(self, samplerate):
+    def _set_samplerate(self, samplerate: int) -> None:
         self._samplerate = samplerate
 
-    def get_samplerate(self):
+    def get_samplerate(self) -> int:
         return self._samplerate
-        
 
-    def record_on_detect(self, file_name, silence_limit=1, silence_threshold=2500, chunk=1024, prev_audio=1):
+
+    def record_on_detect(self, file_name: str, silence_limit: int = 1, silence_threshold: int = 2500, chunk: int = 1024, prev_audio: int = 1) -> bool:
         """Records audio from the microphone or WebSocket and saves it to a file.
         Returns False on error or if stopped.
         Silence limit in seconds. The max amount of seconds where
@@ -252,13 +255,14 @@ This function will block until new input is recorded."""
         prepended. This helps to prevent chopping the beginning
         of the phrase."""
 
-        rate = self.get_samplerate()
+        rate: int = self.get_samplerate()
         # FIXME: this is necessary until I find out how to send stereo audio from javascript, otherwise we get chipmunk sound
-        CHANNELS = 2 if not(self.websock) else 1
-        FORMAT = pyaudio.paInt16
+        CHANNELS: int = 2 if not(self.websock) else 1
+        FORMAT: int = pyaudio.paInt16
+        p: pyaudio.PyAudio
         with ignoreStderr():
             p = pyaudio.PyAudio()
-        stream = None
+        stream: Optional[pyaudio.Stream] = None
         if not self.websock:
             stream = p.open(format=p.get_format_from_width(2),
                             channels=CHANNELS,
@@ -266,24 +270,25 @@ This function will block until new input is recorded."""
                             input=True,
                             output=False,
                             frames_per_buffer=chunk)
-        listen = True
-        started = False
-        rel = rate / chunk
-        frames = []
-        prev_audio = deque(maxlen=int(prev_audio * rel))
-        slid_window = deque(maxlen=int(silence_limit * rel))
+        listen: bool = True
+        started: bool = False
+        rel: float = float(rate) / chunk
+        frames: List[bytes] = []
+        prev_audio_deque: deque[bytes] = deque(maxlen=int(prev_audio * rel))
+        slid_window: deque[float] = deque(maxlen=int(silence_limit * rel))
         while listen:
             if not(self.running) or self.isPaused():
                 return True
 
-            data = None
+            data: Optional[bytes] = None
             if self.websock:
                 data = self.audio_buffer.get()
                 #if len(self.audio_buffer) >= chunk:
                     #data = np.frombuffer(self.audio_buffer[:chunk], dtype=np.int16)
                     #self.audio_buffer = self.audio_buffer[chunk:]
             else:
-                data = stream.read(chunk)
+                if stream:
+                    data = stream.read(chunk)
 
             if data is not None:
                 slid_window.append(math.sqrt(abs(audioop.avg(data, 4))))
@@ -297,28 +302,25 @@ This function will block until new input is recorded."""
             elif started:
                 started = False
                 listen = False
-                prev_audio = deque(maxlen=int(0.5 * rel))
+                prev_audio_deque = deque(maxlen=int(0.5 * rel))
 
             if started and data is not None:
                 frames.append(data)
             elif data is not None:
-                prev_audio.append(data)
+                prev_audio_deque.append(data)
 
         if not self.websock:
-            stream.stop_stream()
-            stream.close()
-            p.terminate()
+            if stream:
+                stream.stop_stream()
+                stream.close()
+            if p:
+                p.terminate()
 
-        wf = wave.open(file_name, 'wb')
+        wf: wave.Wave_write = wave.open(file_name, 'wb')
         wf.setnchannels(CHANNELS)
         wf.setsampwidth(pyaudio.get_sample_size(FORMAT))
         wf.setframerate(rate)
-        wf.writeframes(b''.join(list(prev_audio)))
+        wf.writeframes(b''.join(list(prev_audio_deque)))
         wf.writeframes(b''.join(frames))
         wf.close()
         return False
-
-
-    #debug notes
-    # https://community.openai.com/t/playing-audio-in-js-sent-from-realtime-api/970917/8
-    
