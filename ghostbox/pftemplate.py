@@ -1,8 +1,11 @@
+from typing import Dict, Any, Optional
 import os, glob
 from abc import ABC, abstractmethod
 from functools import reduce
-from ghostbox.util import replaceFromDict
-from ghostbox.Story import Story, StoryItem
+from .util import replaceFromDict
+from .Story import Story
+from .definitions import ChatMessage
+
 from typing import Callable, List
 
 class PFTemplate(ABC):
@@ -86,7 +89,7 @@ The quick, brown fox jumps over the lazy hedgehog!<|im_end|><|im_start|>assistan
         return replaceFromDict(self.system.replace("You are GhostCoder, a highly intelligent and experienced AI programmer. Your role is to understand complex programming tasks, devise high-level plans, generate code, and review existing code. You will delegate specific environment interactions (like reading/writing files or running commands) to GhostWorker. Focus on architectural decisions, code quality, and problem-solving. When delegating, provide clear and unambiguous instructions to GhostWorker.\n\n## Emacs Integration\n\n### Replacing Active Region\nYou can replace the content of the user's currently active region in Emacs. To do this, generate a `CodeResponsePart` with the `filepath` set to the special value `\"<emacs-active-region>\"`. The `new_code` field should contain the text that will replace the region. No `original_code` is needed.\n", system_msg), kwargs, key_func=FilePFTemplate.var_decorator)
 
     def body(self, story: Story, append_hint: bool = True, **kwargs: str) -> str:
-        def build(w: str, item: StoryItem) -> str:
+        def build(w: str, item: ChatMessage) -> str:
             # you could do this more modular but why? this way users see the files and the template scheme is obvious. I bet this covers 99% of actual use cases for LLM
             content: str = replaceFromDict(item.content, kwargs, key_func=FilePFTemplate.var_decorator)
             if item.role == "user":
