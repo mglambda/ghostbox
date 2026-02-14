@@ -1,32 +1,39 @@
-import os, glob, time
+import os, glob, time, traceback, json
 from copy import deepcopy
+from typing import List, Optional, Any, Dict
 from .util import *
 from .StoryFolder import *
 from .agency import *
+from .definitions import ChatMessage, Tool
 
 
 class Session(object):
-    special_files = "chat_ai config.json tools.py".split(" ")
+    special_files: List[str] = "chat_ai config.json tools.py".split(" ")
 
     def __init__(
-        self, dir=None, chat_user="", chat_ai="", additional_keys=[], tools_forbidden=[]
-    ):
-        self.dir = dir
-        self.fileVars = {
+        self,
+        dir: Optional[str] = None,
+        chat_user: str = "",
+        chat_ai: str = "",
+        additional_keys: List[str] = [],
+        tools_forbidden: List[str] = [],
+    ) -> None:
+        self.dir: str = dir if dir else ""
+        self.fileVars: Dict[str, Any] = {
             "chat_user": chat_user,
             "chat_ai": chat_ai,
             "system_msg": "",
             "current_tokens": "0",
             "datetime": getAITime(),
         }
-        self.stories = StoryFolder()
-        self.tools = []
-        self.tools_file = ""
-        self.tools_module = None
+        self.stories: StoryFolder = StoryFolder()
+        self.tools: List[Tool] = []
+        self.tools_file: str = ""
+        self.tools_module: Any = None
         if self.dir is not None:
             self._init(additional_keys, tools_forbidden)
 
-    def copy(self):
+    def copy(self) -> "Session":
         # can't deepcopy a module
         tmp = self.tools_module
         self.tools_module = None
@@ -36,22 +43,22 @@ class Session(object):
         new.tools_module = tmp
         return new
 
-    def merge(self, other):
+    def merge(self, other: "Session") -> None:
         """Merges some things from a session object other into itself. This generally means keeping story etc, of self, but possibly adding fileVars from other, including overriding our own."""
         self.fileVars = self.fileVars | other.fileVars
         self.dir = other.dir
 
-    def hasVar(self, var):
+    def hasVar(self, var: str) -> bool:
         return var in self.fileVars
 
-    def getVar(self, var, default=None):
+    def getVar(self, var: str, default: Any = None) -> Any:
         if var not in self.fileVars:
             if default is None:
                 printerr(
                     "warning: session.getVar: Key not defined '"
                     + var
                     + "'. Did you forget to create "
-                    + self.dir
+                    + str(self.dir)
                     + "/"
                     + var
                     + "?"
@@ -61,18 +68,18 @@ class Session(object):
                 return default
         return self.expandVars(self.fileVars[var])
 
-    def setVar(self, name, value):
+    def setVar(self, name: str, value: Any) -> None:
         self.fileVars[name] = value
 
-    def getVars(self):
+    def getVars(self) -> Dict[str, Any]:
         return {k: self.expandVars(v) for (k, v) in self.fileVars.items()}
 
-    def getSystem(self, history_retroactive_vars: bool = False):
+    def getSystem(self, history_retroactive_vars: bool = False) -> str:
         if not history_retroactive_vars:
             return self.getVar("system_msg")
         return self.expandVars(self.getVar("system_msg"))
-    
-    def expandVars(self, w, depth=3):
+
+    def expandVars(self, w: str, depth: int = 3) -> str:
         """Expands all variables of the form {{VAR}} in a given string w, if VAR is a key in fileVars. By default, will recursively expand replacements to a depth of 3."""
         for i in range(0, depth):
             w_new = replaceFromDict(w, self.fileVars, lambda k: "{{" + k + "}}")
@@ -81,9 +88,9 @@ class Session(object):
             w = w_new
         return w_new
 
-    def _init(self, additional_keys=[], tools_forbidden=[]):
+    def _init(self, additional_keys: List[str] = [], tools_forbidden: List[str] = []) -> None:
         if not (os.path.isdir(self.dir)):
-            raise FileNotFoundError("Could not find path " + self.dir)
+            raise FileNotFoundError("Could not find path " + str(self.dir))
 
         allfiles = glob.glob(self.dir + "/*") + additional_keys
         for filepath in allfiles:
@@ -94,7 +101,7 @@ class Session(object):
                 # this is useful but too verbose
                 # printerr("Found " + filename)
             elif filename == "tools.py":
-                self.tool_file = filepath
+                self.tools_file = filepath
                 (self.tools, self.tools_module) = makeTools(
                     filepath,
                     display_name=os.path.basename(self.dir) + "_tools",
@@ -105,7 +112,7 @@ class Session(object):
         if init_msg:
             self.stories.get().addAssistantText(init_msg)
 
-    def callTool(self, name, params):
+    def callTool(self, name: str, params: Dict[str, Any]) -> Any:
         if name not in [tool.function.name for tool in self.tools]:
             return
         try:
@@ -163,8 +170,3 @@ class Session(object):
 
     def get_messages_json(self, history_retroactive_vars: bool = False) -> List[Dict[str, Any]]:
         return [msg.model_dump() for msg in self.get_messages(history_retroactive_vars=history_retroactive_vars)]
-
-
-
-        
-        
