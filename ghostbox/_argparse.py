@@ -10,11 +10,11 @@ class TaggedArgumentParser:
     You can then use add_arguments just like with argparse, except that there is an additional keyword argument 'tags', which is a dictionary that will be associated with that command line argument.
     """
 
-    def __init__(self, **kwargs):
+    def __init__(self, **kwargs: Dict[str, Any]):
         self.parser = argparse.ArgumentParser(**kwargs)
         self.tags = {}
 
-    def add_argument(self, *args, **kwargs):
+    def add_argument(self, *args, **kwargs: Dict[str, Any]):
         if "tag" in kwargs:
             # this is a bit tricky, argparse does a lot to find the arg name, but this might do
             # find the longest arg, strip leading hyphens, replace remaining hyphens with _

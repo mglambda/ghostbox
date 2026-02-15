@@ -953,7 +953,7 @@ class Plumbing(object):
             if self.getOption("verbose"):
                 printerr("unfreezing " + name + " : " + str(value))
 
-    def setOption(self, name, value):
+    def setOption(self, name: str, value: bool | str | List[str] | int | float) -> None:
         # we freeze state during some parts of execution, applying options after we unfreeze
         if self._frozen:
             self._freeze_queue.put((name, value))
