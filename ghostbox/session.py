@@ -30,7 +30,7 @@ class Session(object):
         self.tools: List[Tool] = []
         self.tools_file: str = ""
         self.tools_module: Any = None
-        if self.dir is not None:
+        if self.dir:
             self._init(additional_keys, tools_forbidden)
 
     def copy(self) -> "Session":
