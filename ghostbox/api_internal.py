@@ -4,12 +4,12 @@ from .session import Session
 from .util import ultraglob, printerr, saveFile
 from .StoryFolder import StoryFolder
 
-def start_session(plumbing, filepath: str, keep=False) -> str:
+def start_session(plumbing: Any, filepath: str, keep: bool = False) -> str:
     
     allpaths = [filepath] + [p + "/" + filepath for p in plumbing.getOption("include")]    
     for path in allpaths:
         path = os.path.normpath(path)
-        failure = False
+        failure: bool | Exception = False
         try:
             s = Session(dir=path, chat_user=plumbing.getOption("chat_user"), chat_ai=plumbing.getOption("chat_ai"), additional_keys=plumbing.getOption("var_file"), tools_forbidden=plumbing.getOption("tools_forbidden"))
             break
@@ -71,7 +71,7 @@ def start_session(plumbing, filepath: str, keep=False) -> str:
     return w
 
 
-def load_config(plumbing, filepath, override=True, protected_keys: List[str]=[]) -> str:
+def load_config(plumbing: Any, filepath: str, override: bool = True, protected_keys: List[str]=[] ) -> str:
     try:
         w = open(filepath, "r").read()
     except Exception as e:
@@ -83,7 +83,7 @@ def load_config(plumbing, filepath, override=True, protected_keys: List[str]=[])
     
 
 
-def hide_some_output(plumbing):
+def hide_some_output(plumbing: Any) -> None:
     plumbing.options["cli_prompt"] = "\n"
     plumbing.options["audio_show_transcript"] = False
     plumbing.options["tts_subtitles"] = False
@@ -92,7 +92,7 @@ def hide_some_output(plumbing):
     plumbing.options["color"] = False
     
 
-def toggle_tts(plumbing) -> str:
+def toggle_tts(plumbing: Any) -> str:
     prog = plumbing
     prog.options["tts"] = not(prog.options["tts"])
     w = ""
@@ -112,7 +112,7 @@ def toggle_tts(plumbing) -> str:
     
 
 
-def all_chars(prog) -> List[str]:
+def all_chars(prog: Any) -> List[str]:
     allchars = []
     for dir in prog.getOption("include"):
         if not(os.path.isdir(dir)):
@@ -126,7 +126,7 @@ def all_chars(prog) -> List[str]:
 
     return allchars
 
-def save(prog, filename: str = "", overwrite: bool = True) -> str:
+def save(prog: Any, filename: str = "", overwrite: bool = True) -> str:
     if filename == "":
         name = datetime.datetime.now().strftime("%Y-%m-%d-%H:%M:%S") + ".json"
     else:
@@ -134,7 +134,7 @@ def save(prog, filename: str = "", overwrite: bool = True) -> str:
 
     return saveFile(name, prog.session.stories.toJSON(), overwrite=overwrite)    
 
-def load(prog, filename: str) -> None:
+def load(prog: Any, filename: str) -> None:
     w = open(filename, "r").read()
     s = StoryFolder.from_json(w)
     prog.session.stories = s            
