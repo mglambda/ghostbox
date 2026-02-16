@@ -47,7 +47,7 @@ def wrapColorStyle(w: str, color: str, style: str) -> str:
 
 
 # this can be used to modify printerr behaviour. It can be a function that accepts one argument -> the to be printed string
-printerr_callback = None
+printerr_callback: Optional[Callable[[str], None]] = None
 printerr_disabled = False
 
 

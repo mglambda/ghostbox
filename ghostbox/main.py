@@ -1,4 +1,4 @@
-import requests, json, os, io, re, base64, random, sys, threading, signal, tempfile, string, uuid, textwrap
+import requests, json, os, io, re, base64, random, sys, threading, signal, tempfile, string, uuid, textwrap, traceback
 from queue import Queue, Empty
 from typing import *
 import feedwater
@@ -6,7 +6,7 @@ from functools import *
 from colorama import just_fix_windows_console, Fore, Back, Style
 # FIXME: this huggingface import seems bugged (circular import)
 from huggingface_hub import snapshot_download, try_to_load_from_cache
-from lazy_object_proxy import Proxy  # type: ignore
+from lazy_object_proxy import Proxy
 import argparse
 from argparse import Namespace
 from .commands import *
@@ -23,15 +23,17 @@ from .backends import *
 from . import backends
 from .client import GhostboxClient, client_cli_token
 import ghostbox
+if TYPE_CHECKING:
+    from .transcribe import WhisperTranscriber
+    from websockets import ClientConnection
 
-
-def showHelpCommands(prog, argv):
+def showHelpCommands(prog: 'Plumbing', argv: List[str]) -> str:
     """
     List commands, their arguments, and a short description."""
 
     w = ""
     candidate = "/" + "".join(argv).strip()
-    failure = True
+    failure: bool | str = True
     for cmd_name, f in sorted(cmds, key=lambda p: p[0]):
         if candidate != "/" and cmd_name != candidate:
             continue
@@ -40,7 +42,7 @@ def showHelpCommands(prog, argv):
             docstring = cmds_additional_docs.get(cmd_name, "")
         else:
             docstring = str(f.__doc__)
-        w += cmd_name + " " + docstring + "\n"
+        w += f"{cmd_name} {docstring}\n"
     printerr(w, prefix="")
 
     if failure:
@@ -48,7 +50,7 @@ def showHelpCommands(prog, argv):
     return ""
 
 
-def show_help_option_tag(prog, tag, markdown: bool = False) -> str:
+def show_help_option_tag(prog: 'Plumbing', tag: ArgumentTag, markdown: bool = False) -> str:
     w = ""
     if not (markdown):
         cv = str(prog.getOption(tag.name))
@@ -88,7 +90,7 @@ def show_help_option_tag(prog, tag, markdown: bool = False) -> str:
     return w
 
 
-def showHelp(prog, argv):
+def showHelp(prog: 'Plumbing', argv: List[str]) -> str:
     """[TOPIC] [-v|--verbose] [--markdown]
     List help on various topics. Use -v to see even more information."""
     w = ""
@@ -239,40 +241,40 @@ mode_formatters = {
 
 
 class Plumbing(object):
-    def __init__(self, options={}, initial_cli_prompt="", tags={}, delay_backend_init: bool = False):
+    def __init__(self, options: Dict[str, Any] = {}, initial_cli_prompt: str = "", tags: Dict[str, ArgumentTag] = {}, delay_backend_init: bool = False):
         # the printerr stuff needs to happen early
-        self._printerr_buffer = []
-        self._initial_printerr_callback = lambda w: self._printerr_buffer.append(w)
+        self._printerr_buffer: List[str] = []
+        self._initial_printerr_callback: Callable[[str], None] = lambda w: self._printerr_buffer.append(w)
         util.printerr_callback = self._initial_printerr_callback
         if not (options["stderr"]):
             util.printerr_disabled = True
         # some general callbacks that are veryuseful
-        self._on_interaction = None  # Callable[[], None]
-        self._on_interaction_finished = None  # Callable[[], None]
+        self._on_interaction: Optional[Callable[[], None]] = None  
+        self._on_interaction_finished: Optional[Callable[[], None]] = None
 
         # this is for the websock clients
-        self.stderr_token = "[|STDER|]:"
-        self._stdout_ringbuffer = ""
-        self._stdout_ringbuffer_size = 1024
+        self.stderr_token: str = "[|STDER|]:"
+        self._stdout_ringbuffer: str = ""
+        self._stdout_ringbuffer_size: int = 1024
         self._frozen = False
-        self._freeze_queue = Queue()
-        self.options = options
+        self._freeze_queue: Queue[str] = Queue()
+        self.options: Dict[str, Any] = options
         self.tags = tags
-        self.backend = None
-        self.template = None
+        self.backend: Optional[AIBackend] = None
+        self.template: Any = None
         if not delay_backend_init:
             self.initializeBackend(self.getOption("backend"), self.getOption("endpoint"))
         self.session = Session(chat_user=options.get("chat_user", ""))
         # FIXME: make this a function returning backend.getlAStResult()
-        self.lastResult = {}
+        self.lastResult: Dict[str, Any] = {}
         self._lastInteraction = 0
         self.tts_flag = False
         self.initial_print_flag = False
         self.initial_cli_prompt = initial_cli_prompt
-        self.stream_queue = []
-        self.stream_sentence_queue = []
-        self._stream_only_once_token_bag = set()
-        self.images = {}
+        self.stream_queue: List[str] = []
+        self.stream_sentence_queue: List[str] = []
+        self._stream_only_once_token_bag: Set[str] = set()
+        self.images: Dict[int, str] = {}
         # flag to show wether image data needs to be resent to the backend
         self._images_dirty = False
         self._lastPrompt = ""
@@ -298,6 +300,7 @@ class Plumbing(object):
         # template
         self.loadTemplate(self.getOption("prompt_format"), startup=True)
 
+
         # whisper stuff. We do this with a special init function because it's lazy
         self._on_transcription = None  # Callable[[str],str] or None
         self._on_activation = None  # Callable[[], None] or None
@@ -317,23 +320,23 @@ class Plumbing(object):
         # websock server
         self.websock_thread = None
         self.websock_server = None
-        self.websock_clients = []
+        self.websock_clients: List[ClientConnection] = []
         self.websock_server_running = threading.Event()
-        self.websock_msg_queue = Queue()
+        self.websock_msg_queue: Queue[str] = Queue()
 
         # formatters is to be idnexed with modes
         self.setMode(self.getOption("mode"))
         self.running = True
         self._startCLIPrinter()
 
-    def getTags(self):
+    def getTags(self) -> Dict[str, ArgumentTag]:
         return self.tags | {
             param.name: param
             for param in backends.sampling_parameter_tags.values()
             if param.name in self.getBackend().sampling_parameters().keys()
         }
 
-    def initializeBackend(self, backend, endpoint):
+    def initializeBackend(self, backend: LLMBackend, endpoint: str) -> None:
         api_key = self.getOption("api_key")
         kwargs = {"logger": self.verbose}
         match backend:
@@ -439,7 +442,9 @@ class Plumbing(object):
             }
         )
                 
-    def getBackend(self):
+    def getBackend(self) -> AIBackend:
+        if self.backend is None:
+            raise RuntimeError(f"Uninitialized backend.")
         return self.backend
 
     def justUsedTools(self) -> bool:
@@ -464,7 +469,7 @@ class Plumbing(object):
 
         return w
 
-    def makeGeneratePayload(self, text):
+    def makeGeneratePayload(self, text: str) -> Dict[str, Any]:
         d = {}
 
         # gather set sampling parameters and warn user for unsupported ones
@@ -548,17 +553,17 @@ class Plumbing(object):
             d["prompt"] = text
         return d
 
-    def isContinue(self):
+    def isContinue(self) -> bool:
         return self.getOption("continue")
 
-    def resetContinue(self):
+    def resetContinue(self) -> None:
         self.setOption("continue", False)
 
-    def _newTranscriber(self):
+    def _newTranscriber(self) -> 'WhisperTranscriber':
         # makes a lazy WhisperTranscriber, because model loading can be slow
         # yes this is hacky but some platforms (renpy) can't handle torch, which the whisper models rely on
-        def delayWhisper():
-            from ghostbox.transcribe import WhisperTranscriber
+        def delayWhisper() -> 'WhisperTranscriber':
+            from .transcribe import WhisperTranscriber
 
             return WhisperTranscriber(
                 model_name=self.getOption("whisper_model"),
@@ -568,18 +573,18 @@ class Plumbing(object):
 
         return Proxy(delayWhisper)
 
-    def continueWith(self, newUserInput):
+    def continueWith(self, newUserInput: str) -> None:
         # FIXME: the entire 'continue' architecture is a trashfire. This should be refactored along with other modeswitching/input rewriting stuff in the main loop
         self.setOption("continue", "1")
         self.continue_with = newUserInput
 
-    def popContinueString(self):
+    def popContinueString(self) -> str:
         self.setOption("continue", False)
         tmp = self.continue_with
         self.continue_with = ""
         return tmp
 
-    def loadGrammar(self, grammar_file):
+    def loadGrammar(self, grammar_file: str) -> None:
         if os.path.isfile(grammar_file):
             w = open(grammar_file, "r").read()
             self.setOption("grammar", w)
@@ -591,7 +596,7 @@ class Plumbing(object):
                 + " could not be loaded: file not found."
             )
 
-    def guessPromptFormat(self):
+    def guessPromptFormat(self) -> str:
         """Uses any trick it can do guess the prompt format template. Returns a string like 'chat-ml', 'alpaca', etc."""
         # see if we can find llm_layers
         try:
@@ -625,7 +630,7 @@ class Plumbing(object):
         )
         return "raw"
 
-    def loadTemplate(self, name, startup=False):
+    def loadTemplate(self, name: str, startup: bool = False) -> None:
         # special cases
         if name == PromptFormatTemplateSpecialValue.auto.name:
             if startup and (self.template is not None):
@@ -675,7 +680,7 @@ class Plumbing(object):
         self.options["prompt_format"] = name
         printerr("Using '" + name + "' as prompt format template.")
 
-    def loadConfig(self, json_data, override=True, protected_keys: List[str] = []):
+    def loadConfig(self, json_data: str, override: bool = True, protected_keys: List[str] = []) -> str:
         """Loads a config file provided as json into options. Override=False means that command line options that have been provided will not be overriden by the config file."""
         d = json.loads(json_data)
         if type(d) != type({}):
@@ -703,14 +708,14 @@ class Plumbing(object):
 
         # now actually load the options, with a partial ordering
         items = sorted(
-            d.items(), key=cmp_to_key(lambda a, b: -1 if a[0] == "mode" else 1)
+            d.items(), key=cmp_to_key(lambda a, b: -1 if a[0] == "mode" else 1) # type: ignore
         )
         for k, v in items:
             if not (k in protected_keys):
                 self.setOption(k, v)
         return ""
 
-    def showCLIPrompt(self):
+    def showCLIPrompt(self) -> str:
         if self.isMultilineBuffering():
             return ""
 
@@ -719,20 +724,20 @@ class Plumbing(object):
 
         f = IdentityFormatter()
         if self.getOption("color"):
-            f = ColorFormatter(self.getOption("cli_prompt_color")) + f
+            f = ColorFormatter(self.getOption("cli_prompt_color")) + f # type: ignore
 
         return self.session.expandVars(f.format(self.getOption("cli_prompt")))
 
-    def getMode(self):
+    def getMode(self) -> str:
         w = self.getOption("mode")
         if not (self.isValidMode(w)):
             return "default"
         return w
 
-    def isValidMode(self, mode):
+    def isValidMode(self, mode: str) -> bool:
         return mode in mode_formatters
 
-    def setMode(self, mode):
+    def setMode(self, mode: str) -> None:
         # FIXME: this isn't affected by freeze, but since most things go through setOption we should be fine, right? ... right?
         if not (self.isValidMode(mode)):
             return
@@ -750,22 +755,22 @@ class Plumbing(object):
     def getOption(self, key: str) -> Any:
         return self.options.get(key, None)
 
-    def optionDiffers(self, name, newValue):
+    def optionDiffers(self, name: str, newValue: Any) -> bool:
         if name not in self.options:
             return True
         return self.getOption(name) != newValue
 
-    def getFormatters(self):
+    def getFormatters(self) -> Tuple[OutputFormatter, OutputFormatter, OutputFormatter, OutputFormatter]:
         mode = self.getOption("mode")
         if not (self.isValidMode(mode)):
             mode = "default"
             printerr("warning: Unsupported mode '" + mode + "'.. Using 'default'.")
         return mode_formatters[mode](self.options | self.session.getVars())
 
-    def getDisplayFormatter(self):
+    def getDisplayFormatter(self) -> OutputFormatter:
         return self.getFormatters()[0]
 
-    def getTTSFormatter(self):
+    def getTTSFormatter(self) -> OutputFormatter:
         return self.getFormatters()[1]
 
     def getUserFormatter(self):
@@ -781,7 +786,7 @@ class Plumbing(object):
     def getAIFormatter(self, with_color=False):
         return self.getAIColorFormatter() + self.getFormatters()[3]
 
-    def addUserText(self, w):
+    def addUserText(self, w: str) -> None:
         if w and self.getOption("history"):
             if self.getOption("history_force_alternating_roles"):
                 # we don't want 2 consecutive user messages
@@ -792,7 +797,7 @@ class Plumbing(object):
                 self.getUserFormatter().format(w), image_context=self.images
             )
 
-    def addAIText(self, w):
+    def addAIText(self, w: str) -> str:
         """Adds text toe the AI's history in a cleanly formatted way according to the AI formatter. Returns the formatted addition or empty string if nothing was added.."""
         if w == "":
             return ""
@@ -822,7 +827,7 @@ class Plumbing(object):
             self.session.stories.get().addAssistantText(addition)
         return addition
 
-    def addSystemText(self, w):
+    def addSystemText(self, w: str) -> None:
         """Add a system message to the chat log, i.e. add a message with role=system. This is mostly used for tool/function call results."""
         if w == "":
             return
@@ -912,7 +917,7 @@ class Plumbing(object):
 
         return tool_results, tool_request_msg
 
-    def _formatToolResults(self, results):
+    def _formatToolResults(self, results: Any) -> str:
         """Based on a list of dictionaries, returns a string that represents the tool outputs to an LLM."""
         # FIXME: currently only intended for command-r
         w = ""
@@ -925,7 +930,7 @@ class Plumbing(object):
         # w += "<|END_OF_TURN_TOKEN|>"
         return w
 
-    def appendOption(self, name, value, duplicates=True):
+    def appendOption(self, name: str, value: Any, duplicates: bool = True) -> None:
         if name not in self.options:
             printerr("warning: unrecognized option '" + name + "'")
             return
@@ -942,10 +947,10 @@ class Plumbing(object):
                 return
         self.options[name].append(value)
 
-    def freeze(self):
+    def freeze(self) -> None:
         self._frozen = True
 
-    def unfreeze(self):
+    def unfreeze(self) -> None:
         self._frozen = False
         while not (self._freeze_queue.empty()):
             (name, value) = self._freeze_queue.get(block=False)
@@ -1062,7 +1067,7 @@ class Plumbing(object):
         self.ct.resume()
         signal.signal(signal.SIGINT, self._ctPauseHandler)
 
-    def _imageWatchCallback(self, image_path, image_id):
+    def _imageWatchCallback(self, image_path: str, image_id: int) -> None:
         if self.getOption("image_watch_clear_history"):
             newStory(self, [])
         w = self.getOption("image_watch_msg")
@@ -1077,7 +1082,7 @@ class Plumbing(object):
         self.addAIText(self.communicate(self.buildPrompt(hint + image_watch_hint)))
         # print(self.showCLIPrompt(), end="")
 
-    def _print_generation_callback(self, result_str):
+    def _print_generation_callback(self, result_str: str) -> None:
         """Pass this as callback to self.interact for a nice simple console printout of generations."""
         if result_str == "":
             return
@@ -1092,17 +1097,17 @@ class Plumbing(object):
         # self.print(self.showCLIPrompt(), end="", tts=False)
         return
 
-    def suspendTranscription(self):
+    def suspendTranscription(self) -> None:
         """Renders transcription unresponsive until an activation phrase is heard or unsuspendTranscription is called."""
         self._transcription_suspended = True
         self.verbose("Suspending audio interaction.")
 
-    def unsuspendTranscription(self):
+    def unsuspendTranscription(self) -> None:
         """Resumes interacting by audio after a suspension."""
         self._transcription_suspended = False
         self.verbose("Resuming audio interaction.")
 
-    def modifyTranscription(self, w):
+    def modifyTranscription(self, w: str) -> None:
         """Checks wether an incoming user transcription by the whisper model contains activation phrases or is within timing etc. Returns the modified transcription, or the empty string if activation didn't trigger."""
 
         # want to match fuzzy, so strip of all punctuation etc.
@@ -1145,7 +1150,7 @@ class Plumbing(object):
             self.getOption("audio_activation_phrase"), ""
         )
 
-    def printActivationPhraseWarning(self):
+    def printActivationPhraseWarning(self) -> None:
         n = self.getOption("warn_audio_activation_phrase")
         if not (n):
             return
@@ -1159,7 +1164,7 @@ class Plumbing(object):
             self.setOption("warn_audio_activation_phrase", False)
         printerr(w)
 
-    def _transcriptionCallback(self, w):
+    def _transcriptionCallback(self, w: str) -> None:
         """Supposed to be called whenever the whisper model has successfully transcribed a phrase."""
         if self.getOption("audio_show_transcript"):
             self.print(w, tts=False)
@@ -1178,7 +1183,7 @@ class Plumbing(object):
             generation_callback=self._print_generation_callback,
         )
 
-    def _transcriptionOnThresholdCallback(self):
+    def _transcriptionOnThresholdCallback(self) -> None:
         """Gets called whenever the continuous transcriber picks up audio above the threshold."""
         if self.getOption("audio_interrupt"):
             self.stopAll()
@@ -1186,7 +1191,7 @@ class Plumbing(object):
         if self._on_activation is not None:
             self._on_activation()
 
-    def _streamCallback(self, token, user_callback=None, only_once=None):
+    def _streamCallback(self, token: str, user_callback: Optional[Callable[[str], None]] = None, only_once: Optional[str] = None) -> None:
         if only_once not in self._stream_only_once_token_bag:
             # this is so that we can print tokens/sentences without interrupting the TTS every time
             # except that we want to interrupt the TTS exactly once -> when we start streaming
@@ -1230,21 +1235,21 @@ class Plumbing(object):
             f(w)
             user_callback(w)
 
-    def flushStreamQueue(self):
+    def flushStreamQueue(self) -> None:
         w = "".join(self.stream_queue)
         self.stream_queue = []
         self.stream_sentence_queue = []
         return w
 
-    def isAudioTranscribing(self):
+    def isAudioTranscribing(self) -> bool:
         return self.ct is not None and self.ct.running
 
-    def startImageWatch(self):
+    def startImageWatch(self) -> None:
         dir = self.getOption("image_watch_dir")
         printerr("Watching for new images in " + dir + ".")
         self.image_watch = AutoImageProvider(dir, self._imageWatchCallback)
 
-    def startAudioTranscription(self):
+    def startAudioTranscription(self) -> None:
         printerr("Beginning automatic transcription. CTRL + c to pause.")
         if self.ct:
             self.ct.stop()
@@ -1257,19 +1262,19 @@ class Plumbing(object):
         )
         signal.signal(signal.SIGINT, self._ctPauseHandler)
 
-    def stopImageWatch(self):
+    def stopImageWatch(self) -> None:
         if self.image_watch:
             printerr("Stopping watching of images.")
             self.image_watch.stop()
 
-    def stopAudioTranscription(self):
+    def stopAudioTranscription(self) -> None:
         if self.ct:
             printerr("Stopping automatic audio transcription.")
             self.ct.stop()
         self.ct = None
         signal.signal(signal.SIGINT, self._defaultSIGINTHandler)
 
-    def initializeTTS(self):
+    def initializeTTS(self) -> None:
         tts_program = self.getOption("tts_program")
         candidate = os.getcwd() + "/" + tts_program
         if os.path.isfile(candidate):
@@ -1353,7 +1358,7 @@ class Plumbing(object):
         Invoking this method is non-blocking, but will set self.tts_config to None."""
         self.tts_config = None
 
-        def update_config():
+        def update_config() -> None:
             retries = 0
             max_retries = 3
 
@@ -1422,14 +1427,14 @@ class Plumbing(object):
             )
         return abs_dir
 
-    def stopTTS(self):
+    def stopTTS(self) -> None:
         # FIXME: not implemented for all TTS clients
         if self.tts is None:
             return
 
         self.tts.write_line("<clear>")
 
-    def communicateTTS(self, w, interrupt=False):
+    def communicateTTS(self, w: str, interrupt: bool = False) -> None:
         if not (self.getOption("tts")):
             return ""
 
@@ -1455,16 +1460,16 @@ class Plumbing(object):
         self.tts.write_line(w)
         return w
 
-    def verbose(self, w: str):
+    def verbose(self, w: str) -> None:
         """Prints to stderr but only in verbose mode."""
         if self.getOption("verbose"):
             printerr(w)
 
-    def console(self, w):
+    def console(self, w: str) -> None:
         """Print something to stderr. This exists to be used in tools.py via dependency injection."""
         printerr(w)
 
-    def console_me(self, w):
+    def console_me(self, w: str) -> None:
         """Prints w to stderr, prepended by the AI name. This exists because it is a very common pattern to be used in tools.py"""
         printerr(self.getOption("chat_ai") + w)
 
@@ -1479,15 +1484,15 @@ class Plumbing(object):
 
     def print(
         self,
-        w,
-        end="\n",
-        flush=False,
-        color="",
-        style="",
-        tts=True,
-        interrupt=None,
-        websock=True,
-    ):
+        w: str,
+        end: str = "\n",
+        flush: bool = False,
+        color: str = "",
+        style: str = "",
+        tts: bool = True,
+        interrupt: Optional[str] = None,
+        websock: bool = True,
+    ) -> None:
         # either prints, speaks, or both, depending on settings
         if w == "":
             return
@@ -1530,12 +1535,12 @@ class Plumbing(object):
                 flush=flush,
             )
 
-    def replaceForbidden(self, w):
+    def replaceForbidden(self, w: str) -> None:
         for forbidden in self.getOption("forbid_strings"):
             w = w.replace(forbidden, "")
         return w
 
-    def bufferMultilineInput(self, w):
+    def bufferMultilineInput(self, w: str) -> None:
         if self.getOption("multiline"):
             # does not expect backslash at end
             self.multiline_buffer += w + "\n"
@@ -1543,15 +1548,15 @@ class Plumbing(object):
             # expects strings with \ at the end
             self.multiline_buffer += w[:-1] + "\n"
 
-    def isMultilineBuffering(self):
+    def isMultilineBuffering(self) -> bool:
         return self.multiline_buffer != ""
 
-    def flushMultilineBuffer(self):
+    def flushMultilineBuffer(self) -> None:
         w = self.multiline_buffer
         self.multiline_buffer = ""
         return w
 
-    def expandDynamicFileVars(self, w, depth: int =0):
+    def expandDynamicFileVars(self, w: str, depth: int =0) -> str:
         """Expands strings of the form `{[FILEPATH]}` by replacing them with the contents of FILE1 if it is found and readable."""
         if not (self.getOption("dynamic_file_vars")):
             return w
@@ -1596,7 +1601,7 @@ class Plumbing(object):
             return self.expandDynamicFileVars(w, depth+1)
         return w
 
-    def modifyInput(prog, w):
+    def modifyInput(prog, w: str) -> str:
         """Takes user input (w), returns pair of (modified user input, and a hint to give to the ai."""
         if (
             prog.isContinue() and prog.continue_with == ""
@@ -1633,7 +1638,7 @@ class Plumbing(object):
 
         return (w, ai_hint + user_hint)
 
-    def getSystemTokenCount(self):
+    def getSystemTokenCount(self) -> int:
         """Returns the number of tokens in system msg. The value is cached per session. Note that this adds +1 for the BOS token."""
         if self._systemTokenCount is None:
             # self._systemTokenCount = len(self.getBackend().tokenize(self.session.getSystem())) + 1
@@ -1648,7 +1653,7 @@ class Plumbing(object):
     def getRawTemplate(self):
         return RawTemplate()
 
-    def showSystem(self):
+    def showSystem(self) -> str:
         # vars contains system_msg and others that may or may not be replaced in the template
         vars = self.session.getVars().copy()
         if (
@@ -1658,7 +1663,7 @@ class Plumbing(object):
             vars["system_msg"] += "\n" + tools_hint
         return self.getTemplate().header(**vars)
 
-    def showStory(self, story_folder=None, append_hint=True) -> str:
+    def showStory(self, story_folder: Optional[StoryFolder] = None, append_hint: bool = True) -> str:
         """Returns the current story as a unformatted string, injecting the current prompt template."""
         # new and possibly FIXME: we need to add another hint from agency.makeToolInstructionMsg when using tools, so we disable the hint here
         if self.getOption("use_tools"):
@@ -1675,7 +1680,7 @@ class Plumbing(object):
             )
         return self.getTemplate().body(sf.get(), append_hint, **self.session.getVars())
 
-    def formatStory(self, story_folder=None, with_color=False):
+    def formatStory(self, story_folder: Optional[StoryFolder] = None, with_color: bool = False) -> str:
         """Pretty print the current story (or a provided one) in a nicely formatted way. Returns pretty story as a string."""
         if story_folder is None:
             sf = self.session.stories
@@ -1694,7 +1699,7 @@ class Plumbing(object):
             ws.append(self.getDisplayFormatter().format(w))
         return "\n".join(ws)
 
-    def buildPrompt(self, hint=""):
+    def buildPrompt(self, hint: str = "") -> str:
         """Takes an input string w and returns the full history (including system msg) + w, but adjusted to fit into the context given by max_context_length. This is done in a complicated but very smart way.
         returns - A string ready to be sent to the backend, including the full conversation history, and guaranteed to carry the system msg.
         """
@@ -1731,7 +1736,7 @@ class Plumbing(object):
             # FIXME: this can be way better, needs moretesting!
         return self.showSystem() + self.showStory(story_folder=sf) + hint
 
-    def adjustForChat(self, w):
+    def adjustForChat(self, w: str) -> Tuple[str, str]:
         """Takes user input w and returns a pair (w1, v) where w1 is the modified user input and v is a hint for the AI to be put at the end of the prompt."""
         v = ""
         if self.getMode() == "chat":
@@ -1739,7 +1744,7 @@ class Plumbing(object):
             v = mkChatPrompt(self.session.getVar("chat_ai"), space=False)
         return (w, v)
 
-    def _on_generation_error(self, last_error: str):
+    def _on_generation_error(self, last_error: str) -> None:
         """Triggers when there is a server, network, or other error during backend generation."""
         # FIXME: in the future, allow API users to configure hooks here
         printerr("error: " + last_error)
@@ -1749,7 +1754,7 @@ class Plumbing(object):
             self.session.stories.get().drop()
             self.verbose("Dropped last prompt due to error. You'll have to repeat it manually. Toggle history_drop_on_generation_error to disable this.")
                 
-    def communicate(self, prompt_text, stream_callback=None):
+    def communicate(self, prompt_text: str, stream_callback: Optional[Callable[[str], None]] = None) -> None:
         """Sends prompt_text to the backend and returns results."""
         backend = self.getBackend()
         payload = self.makeGeneratePayload(prompt_text)
@@ -1813,7 +1818,7 @@ class Plumbing(object):
         self._updateDatetime()
         self.freeze()
 
-        def loop_interact(w):
+        def loop_interact(w) -> None:
             while self._busy.is_set():
                 # another interaction might be happening
                 # respect the jinja template 🔥🔥🔥
@@ -1881,31 +1886,31 @@ class Plumbing(object):
         if self.getOption("log_time"):
             printerr(showTime(self, []))
 
-    def interactBlocking(self, w: str, timeout=None) -> str:
+    def interactBlocking(self, w: str, timeout: Optional[float] = None) -> str:
         temp = ""
 
-        def f(v):
+        def f(v) -> None:
             nonlocal temp
             temp = v
 
         self.interact(w, user_generation_callback=f, timeout=timeout, blocking=True)
         return temp
 
-    def _stopInteraction(self):
+    def _stopInteraction(self) -> None:
         """Stops an ongoing generation, regardless of wether it is streaming, blocking, or async.
         This is a low level function. Consider using stopAll instead.
         Note: Currently only works for streaming generations."""
         streaming.stop_streaming.set()
         self._stop_generation.set()
 
-    def stopAll(self):
+    def stopAll(self) -> None:
         """Stops ongoing generation and interrupts the TTS.
         The side effects of stopping generation depend on the method used, i.e. streaming generation will yield some partially generated results, while a blocking generation may be entirely discarded.
         Note: Currently only works for streaming generations."""
         self._stopInteraction()
         self.stopTTS()
 
-    def _aggressively_fix_history(self, history) -> None:
+    def _aggressively_fix_history(self, history: List[ChatMessage]) -> None:
         """Ensures role alternates between assistant and user with extreme prejudice. Currently untested for tool calls etc."""
         # this is supposed to be called from _ensure_...
         if len(history) < 2:
@@ -1930,7 +1935,7 @@ class Plumbing(object):
             # if they are different, it's fine
             i += 1
 
-    def _maybe_extend_last_user_message(self, new_message) -> str:
+    def _maybe_extend_last_user_message(self, new_message: str) -> str:
         """Part of the entire history_force_alternating_roles suite of methods.
         If the last message in history is of user role, this method deletes it and then returns new_message with the deleted message's contents prepended.
         """
@@ -2005,10 +2010,10 @@ class Plumbing(object):
                 history.pop(-1)
                 return
 
-    def hasImages(self):
+    def hasImages(self) -> bool:
         return bool(self.images) and self._images_dirty
 
-    def loadImage(self, url, id):
+    def loadImage(self, url: str, id: int) -> None:
         url = os.path.expanduser(url.strip())
         if not (os.path.isfile(url)):
             printerr("warning: Could not load image '" + url + "'. File not found.")
@@ -2029,7 +2034,7 @@ class Plumbing(object):
             return str(self.lastResult.get("usage", {}).get("total_tokens", 0))
 
         
-    def setLastJSON(self, json_result):
+    def setLastJSON(self, json_result: str) -> None:
         self.lastResult = json_result
         try:
             current_tokens = self._get_last_result_tokens()
