@@ -756,7 +756,7 @@ def detokenize(prog: 'Plumbing', argv: List[str]) -> str:
             return "Please specify tokens as integers, seperated by spaces, or newlines in case you supplied -n."
         ts.append(t)
 
-    w = prog.backend.detokenize(ts)
+    w = prog.getBackend().detokenize(ts)
     print(w)
     return ""
 

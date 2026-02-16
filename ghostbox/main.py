@@ -512,9 +512,9 @@ class Plumbing(object):
                     del d["grammar"]
 
         # props is only supported by llama.cpp and it can help with some things
-        if self.getOption("backend") == LLMBackend.llamacpp.name:
+        if self.getOption("backend") == LLMBackend.llamacpp.name and isinstance((llamacpp_backend := self.getBackend()), LlamaCPPBackend):
             if self.getOption("llamacpp_auto_enable_thinking"):
-                if (enable_thinking := self.getBackend().has_thinking_model()) is not None:
+                if (enable_thinking := llamacpp_backend.has_thinking_model()) is not None:
                     self.verbose(f"Setting enable_thinking to {enable_thinking} due to automatic detection.")
                     self.setOption("enable_thinking", enable_thinking)
                 else:
@@ -648,7 +648,7 @@ class Plumbing(object):
         for path in allpaths:
             path = os.path.normpath(path)
             if not (os.path.isdir(path)):
-                failure = (
+                failure: bool | str | Exception = (
                     "Could not find prompt format template '"
                     + name
                     + "'. Did you supply a --template_include option?"
