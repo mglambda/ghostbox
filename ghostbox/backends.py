@@ -363,7 +363,7 @@ class AIBackend(ABC):
         pass
 
     @abstractmethod
-    def handleGenerateResult(self, result: Any) -> Optional[Union[str, Dict[str, Any]]]: # Changed result type to Any
+    def handleGenerateResult(self, result: Any) -> Optional[str | Dict[str, Any]]:
         """Takes a result from the generate method and returns the generated string or a dict for tool calls."""
         pass
 

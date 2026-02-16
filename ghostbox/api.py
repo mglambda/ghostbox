@@ -616,7 +616,7 @@ Note on google backend: As of Nov 2025, official stance is to use tokenization o
                 + symbol_name
                 + "'. Tool module not initialized."
             )
-            return Self
+        return Self
 
         # FIXME: should we warn users if they overriade an existing identifier? Let's do ti since if they injected once why do they need to do it again?
         if symbol_name in module.__dict__:

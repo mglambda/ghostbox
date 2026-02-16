@@ -152,7 +152,7 @@ class ChatMessage(BaseModel):
         return ChatMessage(role="user", content=complex_content_list, **kwargs) # type: ignore
 
 
-LLMBackend = Enum("LLMBackend", "generic legacy llamacpp koboldcpp openai google deepseek qwen dummy")
+LLMBackend = Enum("LLMBackend", "generic legacy llamacpp openai google deepseek qwen dummy")
 
 # these are the models supported by ghostbox-tts
 TTSModel = Enum("TTSModel", "zonos kokoro xtts polly orpheus")
