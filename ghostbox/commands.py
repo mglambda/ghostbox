@@ -429,7 +429,7 @@ def saveConfig(prog: 'Plumbing', argv: List[str]) -> str:
     if not (name.endswith(".json")):
         name = name + ".json"
 
-    filename = saveFile(name, json.dumps(prog.options, indent=4))
+    filename = saveFile(name, json.dumps(prog.options, indent=4), overwrite=False)
     if filename:
         return "Saved config to " + filename
     return "error: Could not save config."
@@ -569,7 +569,7 @@ def showTime(prog: 'Plumbing', argv: List[str]) -> str:
 
     factor = 1 / 1000
     unit = "s"
-    prep = lambda u: str(round(u * factor, 2))
+    prep: Callable[[float], str] = lambda u: str(round(u * factor, 2))
     w += prep(r.prompt_ms) + unit + " spent evaluating prompt.\n"
     w += prep(r.predicted_ms) + unit + " spent generating.\n"
     w += prep(r.total_ms()) + unit + " total processing time.\n"

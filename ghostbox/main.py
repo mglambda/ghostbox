@@ -247,6 +247,7 @@ class Plumbing(object):
     def __init__(self, options: Dict[str, Any] = {}, initial_cli_prompt: str = "", tags: Dict[str, ArgumentTag] = {}, delay_backend_init: bool = False):
         # the printerr stuff needs to happen early
         self._printerr_buffer: List[str] = []
+        self._lastChar: Optional[str] = None
         self._initial_printerr_callback: Callable[[str], None] = lambda w: self._printerr_buffer.append(w)
         util.printerr_callback = self._initial_printerr_callback
         if not (options["stderr"]):
