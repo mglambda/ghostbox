@@ -38,9 +38,13 @@ def process_sse_streaming_events(callback: Callable[[Dict[str, Any]], None], don
             elif w.startswith("data: "):
                 d = json.loads(w[6:])            
                 callback(d)
+            elif w.startswith("data:"):
+                d = json.loads(w[5:])            
+                callback(d)                
             else:
                 # this works usually if people aren't actually streaming, but maybe we should just crash
                 printerr("warning: Malformed data in process_sse_streaming_events. Are you actually streaming?")
+                printerr(f"dump: {w}")
                 d = json.loads(w)            
                 callback(d)                
 

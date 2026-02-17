@@ -1630,11 +1630,19 @@ class IFlowBackend(OpenAIBackend):
     def getName(self) -> str:
         return "iFlow"
 
-    # listing these two here explicitly because we may want to modify them in the future
+    @staticmethod
+    def _fix_payload(payload: Dict[str, Any]) -> None:
+        """Fix payload to be more pallatable to the iFlow backend.
+        Modifies a given payload in-place."""
+        if isinstance(payload["response_format"], str):
+            del payload["response_format"]
+        
     def generate(self, payload: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        self._fix_payload(payload)
         return super().generate(payload)
 
     def generateStreaming(self, payload: Dict[str, Any], callback: Callable[[str], None] = lambda w: print(w)) -> bool:
+        self._fix_payload(payload)        
         return super().generateStreaming(payload, callback)
         
     
