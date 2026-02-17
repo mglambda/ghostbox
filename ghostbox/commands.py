@@ -108,7 +108,7 @@ def showOptions(prog: 'Plumbing', argv: List[str]) -> str:
         # undocumented, outputs all options in a neat form to put as keywords in ghostbox.el
         w = "`("
         for name in prog.options.keys():
-            w += '"' + name + '"', 
+            w += f"\"{name}\""
         w = w[:-2] + ")"
         printerr(w)
         return ""
