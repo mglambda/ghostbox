@@ -14,23 +14,23 @@ from . import commands
 from .definitions import *
 from . import definitions
 from .api_internal import *
-from .agency import Tool, Function, Property, Parameters
+#from .agency import Tool, Function, Property, Parameters
 
 
-def from_generic(endpoint="http://localhost:8080", **kwargs):
+def from_generic(endpoint: str ="http://localhost:8080", **kwargs: Dict[str, Any]) -> 'Ghostbox':
     """Returns a Ghostbox instance that connects to an OpenAI API compatible endpoint.
     This generic backend adapter works with many backends, including llama.cpp, llama-box, ollama, as well as online providers, like OpenAI, Anthropic, etc. However, to use features specific to a given backend, that are not part of the OpenAI API, you may need to use a more specific backend.
     Note: Expects ENDPOINT to serve /v1/chat/completions and similar, so e.g. http://localhost:8080/v1/chat/completions should be reachable.
     """
     return Ghostbox(backend=LLMBackend.generic, endpoint=endpoint, **kwargs)
 
-def from_deepseek(**kwargs):
+def from_deepseek(**kwargs: Any) -> 'Ghostbox':
     """Returns a ghostbox instance that connects to the https:://deepseek.com api endpoints.
     You will need to set your deepseek_api_key or api_key variable to the APi key provided by deepseek.
     """
     return Ghostbox(backend=LLMBackend.deepseek, **kwargs)
 
-def from_qwen(**kwargs):
+def from_qwen(**kwargs: Any) -> 'Ghostbox':
     """Returns a ghostbox instance that connects to the https:://qwen.ai api endpoints.
     You will need to set your qwen_api_key or api_key variable to the APi key provided by Qwen.
     Alternatively, you can set the DASHSCOPE_API_KEY environment variable to your API key.
@@ -40,14 +40,14 @@ def from_qwen(**kwargs):
 
 
 
-def from_openai_legacy(endpoint="http://localhost:8080", **kwargs):
+def from_openai_legacy(endpoint: str ="http://localhost:8080", **kwargs: Dict[str, Any]) -> 'Ghostbox':
     """Returns a Ghostbox instance that connects to an OpenAI API compatible endpoint using the legacy /v1/completions interface.
     This generic backend adapter works with many backends, including llama.cpp, llama-box, ollama, as well as online providers, like OpenAI, etc. However, to use features specific to a given backend, that are not part of the OpenAI API, you may need to use a more specific backend.
     Note: There is usually no reason to use this over the generic variant."""
     return Ghostbox(backend=LLMBackend.legacy, endpoint=endpoint, **kwargs)
 
 
-def from_llamacpp(endpoint="http://localhost:8080", **kwargs):
+def from_llamacpp(endpoint: str ="http://localhost:8080", **kwargs: Dict[str, Any]) -> 'Ghostbox':
     """Returns a Ghostbox instance bound to the formidable LLama.cpp. See https://github.com/ggml-org/llama.cpp .
     This uses endpoints described in the llama-server documentation, and will make use of Llama.cpp specific features.
     """
@@ -55,35 +55,32 @@ def from_llamacpp(endpoint="http://localhost:8080", **kwargs):
 
 
 # FIXME: temporarily disabled due to being untested
-# ndef from_koboldcpp(endpoint="http://localhost:5001", **kwargs):
-#    return Ghostbox(backend="llama.cpp", endpoint=endpoint, **kwargs)
 
-
-def from_openai_official():
+def from_openai_official(**kwargs: Any) -> 'Ghostbox':
     """Returns a Ghostbox instance that connects to the illustrious OpenAI API at their official servers.
     The endpoint is hardcoded for this one. Use the 'generic' backend to connect to arbitrary URLs using the OpenAI API.
     """
     return Ghostbox(backend=LLMBackend.openai, **kwargs)
 
 
-def from_google(**kwargs):
+def from_google(**kwargs: Dict[str, Any]) -> 'Ghostbox':
     """Returns a Ghostbox instance that connects to the powerful Google AI Studio API at their official servers."""
     return Ghostbox(backend=LLMBackend.google, endpoint="",**kwargs)
 
 
-def from_dummy(**kwargs) -> Ghostbox:
+def from_dummy(**kwargs: Dict[str, Any]) -> 'Ghostbox':
     """Returns a non-functional dummy ghostbox object.
     Useful if something goes wrong and you still want to clean up."""
     return Ghostbox(endpoint="", backend="dummy", **kwargs)
 
 
 class Ghostbox:
-    def __init__(self, endpoint: str, backend: LLMBackend | str, **kwargs):
+    def __init__(self, endpoint: str, backend: LLMBackend | str, **kwargs: Any):
         self._ct = None
         kwargs["endpoint"] = endpoint
-        try:
+        if isinstance(backend, LLMBackend):
             backend_str = backend.name
-        except AttributeError:
+        else:
             backend_str = backend
         kwargs["backend"] = backend_str
 
@@ -104,8 +101,8 @@ class Ghostbox:
         )
 
         if self.config_file:
-            load_config(self._plumbing, self.config_file, protected_keys=kwargs.keys())
-        setup_plumbing(self._plumbing, protected_keys=kwargs.keys())
+            load_config(self._plumbing, self.config_file, protected_keys=list(kwargs.keys()))
+        setup_plumbing(self._plumbing, protected_keys=list(kwargs.keys()))
 
         # for arcane reasons we must startthe tts after everything else
         if self._plumbing.tts_flag:
@@ -119,7 +116,7 @@ class Ghostbox:
         self._plumbing._busy.clear()
 
     @contextmanager
-    def options(self, **kwargs):
+    def options(self, **kwargs): # type: ignore
         # copy old values
         tmp = {k: v for (k, v) in self._plumbing.options.items() if k in kwargs}
         # this has to be done one by one as setoptions has sideffects
@@ -131,11 +128,11 @@ class Ghostbox:
             self._plumbing.setOption(old_k, old_v)
 
     @contextmanager
-    def option(self, name, value):
-        with self.options({name: value}):
+    def option(self, name: str, value: Any): # type: ignore
+        with self.options(**{name: value}):
             yield self
 
-    def set(self, option_name: str, value) -> None:
+    def set(self, option_name: str, value: Any) -> None:
         if option_name in self.__dict__:
             self.__dict__[option_name] = value
         self._plumbing.setOption(option_name, value)
@@ -154,14 +151,14 @@ class Ghostbox:
         """Retrieve the value of an injection variable if it was set, or return None otherwise."""
         return self._plumbing.session.getVar(injection_key, default=None)
 
-    def __getattr__(self, k):
+    def __getattr__(self, k: str) -> Any:
         if k.startswith("_"):
             return self.__dict__[k]
         
         # we intentionally avoid getOption because we want the api to crash if k not found
         return self.__dict__["_plumbing"].options[k]
 
-    def __setattr__(self, k, v):
+    def __setattr__(self, k: str, v: Any) -> None:
         if k in self.__dict__ or k.startswith("_"):
             self.__dict__[k] = v
 
@@ -289,7 +286,7 @@ Note on google backend: As of Nov 2025, official stance is to use tokenization o
     def json(
         self,
         prompt_text: str,
-        schema: Optional[Dict] = None,
+        schema: Optional[Dict[str, Any]] = None,
         timeout: Optional[float] = None,
         options: Dict[str, Any] = {},
     ) -> str:
@@ -315,7 +312,7 @@ Note on google backend: As of Nov 2025, official stance is to use tokenization o
     def json_async(
         self,
         prompt_text: str,
-        callback: Callable[[dict], None],
+        callback: Callable[[str], None],
         schema: Optional[Dict[str, Any]] = None,
         options: Dict[str, Any] = {},
     ) -> None:
@@ -378,11 +375,11 @@ Note on google backend: As of Nov 2025, official stance is to use tokenization o
         with self.options(stream=False, **options):
             while True:
                 try:
-                    return pydantic_class(
+                    return pydantic_class( # type: ignore
                         **json.loads(
                             self.json(
                                 text_prompt,
-                                schema=pydantic_class.model_json_schema(),
+                                schema=pydantic_class.model_json_schema(), # type: ignore
                                 timeout=timeout,
                             )
                         )
@@ -398,7 +395,7 @@ Note on google backend: As of Nov 2025, official stance is to use tokenization o
 
     # images
     @contextmanager
-    def images(self, image_urls: List[str]):
+    def images(self, image_urls: List[str]) -> Any:
         """Creates a context in which ghostbox queries can refer to images.
         This context manager will not raise an error if an image cannot be found on the file system.
         :param image_urls: A list of either file system paths or web URLs (or both) that point to images.
@@ -453,7 +450,7 @@ Note on google backend: As of Nov 2025, official stance is to use tokenization o
         self,
         transcription_callback: Callable[[str], None],
         threshold_activation_callback: Callable[[], None],
-    ):
+    ) -> Self:
         """Start to continuously record and transcribe audio above a certain threshold.
         This method is for rolling your own transcriber. If you want to simply have the ghostbox react to a user saying things, just use the "audio"=True option. E.g.
         ```
@@ -484,11 +481,12 @@ Note on google backend: As of Nov 2025, official stance is to use tokenization o
         )
         return self
 
-    def audio_transcription_stop(self):
+    def audio_transcription_stop(self) -> Self:
         """Stops an ongoing continuous transcription."""
         if self._ct is not None:
             self._ct.stop()
-
+        return self
+        
     # TTS
 
     def tts_say(self, text: str, interrupt: bool = True) -> Self:
@@ -530,7 +528,7 @@ Note on google backend: As of Nov 2025, official stance is to use tokenization o
 
     # managing ghostbox operation
 
-    def start_session(self, filepath: str, keep=False) -> Self:
+    def start_session(self, filepath: str, keep: bool =False) -> Self:
         """Start a completely new session with a given character folder.
         This function wipes all history and context variables. It's a clean slate. If you want to switch characters while retaining context, use set_char instead.
         :param filepath: Path to a character folder.
@@ -616,7 +614,7 @@ Note on google backend: As of Nov 2025, official stance is to use tokenization o
                 + symbol_name
                 + "'. Tool module not initialized."
             )
-        return Self
+        return self
 
         # FIXME: should we warn users if they overriade an existing identifier? Let's do ti since if they injected once why do they need to do it again?
         if symbol_name in module.__dict__:
@@ -631,7 +629,7 @@ Note on google backend: As of Nov 2025, official stance is to use tokenization o
     def set_char(
         self,
         character_folder: str,
-        chat_history: Optional[List[ChatMessage | Dict[str, Any]]] = None,
+        chat_history: Optional[List[ChatMessage]] = None,
     ) -> Self:
         """Set an active character_folder, which may be the same one, and optionally set the chat history.
         This method differs from start_session in that it doesn't wipe various vars that may be set in the session, and preserves the chat history by default.
@@ -670,6 +668,7 @@ Note on google backend: As of Nov 2025, official stance is to use tokenization o
         self.__dict__["_plumbing"].session.stories.reset()
 
         return self
+    
     def set_history(self, new_history: List[ChatMessage]) -> Self:
         """Wipe the old chat history and set it to a provided one.
             Note: This is a helper method. Calling it is synonymous to doing box.set_char(character_folder=box.character_folder, chat_history=new_history)."""
