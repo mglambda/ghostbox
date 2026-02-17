@@ -2,6 +2,7 @@ import argparse, os
 from .util import *
 from . import backends
 from .definitions import *
+from typing import Dict, Any, List, Optional, Union
 
 
 class TaggedArgumentParser:
@@ -10,15 +11,15 @@ class TaggedArgumentParser:
     You can then use add_arguments just like with argparse, except that there is an additional keyword argument 'tags', which is a dictionary that will be associated with that command line argument.
     """
 
-    def __init__(self, **kwargs: Dict[str, Any]):
-        self.parser = argparse.ArgumentParser(**kwargs)
-        self.tags = {}
+    def __init__(self, **kwargs: Any):
+        self.parser: argparse.ArgumentParser = argparse.ArgumentParser(**kwargs)
+        self.tags: Dict[str, ArgumentTag] = {}
 
-    def add_argument(self, *args, **kwargs: Dict[str, Any]):
+    def add_argument(self, *args: Any, **kwargs: Any) -> None:
         if "tag" in kwargs:
             # this is a bit tricky, argparse does a lot to find the arg name, but this might do
             # find the longest arg, strip leading hyphens, replace remaining hyphens with _
-            arg = (
+            arg: str = (
                 sorted(args, key=lambda w: len(w), reverse=True)[0]
                 .strip("-")
                 .replace("-", "_")
@@ -35,23 +36,23 @@ class TaggedArgumentParser:
 
         self.parser.add_argument(*args, **kwargs)
 
-    def get_parser(self):
+    def get_parser(self) -> argparse.ArgumentParser:
         return self.parser
 
-    def get_tags(self):
+    def get_tags(self) -> Dict[str, ArgumentTag]:
         return self.tags
 
 
-def makeTaggedParser(default_params) -> TaggedArgumentParser:
+def makeTaggedParser(default_params: Dict[str, Any]) -> TaggedArgumentParser:
     from ghostbox import get_ghostbox_data    
-    parser = TaggedArgumentParser(
+    parser: TaggedArgumentParser = TaggedArgumentParser(
         description="LLM Command Line Interface",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
     # we'll be typing these a lot so buckle up
-    mktag = ArgumentTag
-    AT = ArgumentType
-    AG = ArgumentGroup
+    mktag: Type[ArgumentTag] = ArgumentTag
+    AT: Type[ArgumentType] = ArgumentType
+    AG: Type[ArgumentGroup] = ArgumentGroup
     parser.add_argument(
         "-I",
         "--include",
@@ -451,7 +452,7 @@ def makeTaggedParser(default_params) -> TaggedArgumentParser:
     parser.add_argument(
         "--cli_prompt",
         type=str,
-        default=" {{current_tokens}} > ",
+        default=" 0 > ",
         help="String to show at the bottom as command prompt. Can be empty.",
         tag=mktag(type=AT.Plumbing, group=AG.Interface, motd=True),
     )
@@ -893,7 +894,7 @@ def makeTaggedParser(default_params) -> TaggedArgumentParser:
     )
 
     # don't show all possible parameters on command line, but do show some
-    params = backends.supported_parameters | backends.sometimes_parameters
+    params: Dict[str, SamplingParameterSpec] = backends.supported_parameters | backends.sometimes_parameters
     for name, param in params.items():
         # we need to avoid some redefinitions
         if name in "stop max_length".split(" "):
@@ -926,9 +927,8 @@ def makeTaggedParser(default_params) -> TaggedArgumentParser:
     return parser
 
 
-def makeDefaultOptions():
+def makeDefaultOptions() -> Tuple[argparse.Namespace, Dict[str, ArgumentTag]]:
     """Returns a pair of default options and tags."""
-    tp = makeTaggedParser(backends.default_params)
-    parser = tp.get_parser()
+    tp: TaggedArgumentParser = makeTaggedParser(backends.default_params)
+    parser: argparse.ArgumentParser = tp.get_parser()
     return parser.parse_args(args=""), tp.get_tags()
-
