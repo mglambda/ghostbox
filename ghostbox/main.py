@@ -405,6 +405,31 @@ class Plumbing(object):
                         "model",
                         models[0].name if (models := self.getBackend().get_models()) != [] else "none"
                     )
+            case LLMBackend.iflow:
+                iflow_api_key: str = self.getOption("iflow_api_key")
+
+                # we can only verify that the model is correct once we've insantiated the backend
+                # here we just fill in the prefered option if nothing was chosen
+                if not self.getOption("model"):
+                    self.setOption("model", self.getOption("iflow_prefered_model"))
+
+                # set the endpoint, but only if the user provided something that deviates from the default
+                if endpoint != "http://localhost:8080":
+                    kwargs["endpoint"] = endpoint                
+
+                self.backend = IFlowBackend(                
+                    api_key = iflow_api_key if iflow_api_key else api_key,
+                    **kwargs
+                )
+                self.verbose("Initialized iflow backend.")
+                self.setOption("prompt_format", "auto")
+
+                # check the model
+                if not(self.getOption("model")):
+                    self.setOption(
+                        "model",
+                        models[0].name if (models := self.getBackend().get_models()) != [] else "none"
+                    )                    
             case LLMBackend.generic:
                 self.backend = OpenAIBackend(api_key, endpoint=endpoint, **kwargs)
                 self.setOption("prompt_format", "auto")

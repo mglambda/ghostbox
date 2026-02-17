@@ -187,7 +187,21 @@ def makeTaggedParser(default_params: Dict[str, Any]) -> TaggedArgumentParser:
         default="",
         help="API key for Qwen (https://qwen.ai). You can also set this via the DASHSCOPE_API_KEY environment variable.",
         tag=mktag(type=AT.Plumbing, group=AG.Backend),
-    )        
+    )
+    parser.add_argument(
+        "--iflow_api_key",
+        type=str,
+        default="",
+        help="API key for the iFlow cloud provider (https://iflow.cn). You can also set the IFLOW_API_KEY environment variable.",
+        tag=mktag(type=AT.Plumbing, group=AG.Backend),
+    )
+    parser.add_argument(
+        "--iflow_prefered_model",
+        type=str,
+        default="qwen3-coder-plus",
+        help="Prefered model to use with the Iflow backend (https://iflow.cn).",
+        tag=mktag(type=AT.Plumbing, group=AG.Backend),
+    )
     parser.add_argument(
         "--google_prefered_model",
         type=str,

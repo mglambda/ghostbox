@@ -1558,10 +1558,10 @@ class QwenBackend(OpenAIBackend):
             self.api_key = os.getenv("DASHSCOPE_API_KEY", "")
             printerr(f"Found DASHSCOPE_API_KEY in environment.")
             if not self.api_key:
-                printerr("error: Google AI Studio requires an API key. Please set it with either the --google_api_key or the general --api_key option, or set either the GEMINI_API_KEY or GOOGLE_API_KEY environment variables. You can get an API key at https://aistudio.google.com")
+                printerr("error: The alibaba platform requires an api key. Please set the api_key, qwen_api_key command line or config option, or set the DASHSCOPE_API_KEY environment variable to the API key. You can get an API key at https://www.modelscope.cn")
                 raise BrokenBackend("Missing API key for qwen. Provide it via --api_key or set the DASHSCOPE_API_KEY environment variable. See more on https://modelstudio.console.alibabacloud.com/ap-southeast-1/?tab=doc#/doc/?type=model&url=2840915")
 
-        api_str = "" if not(api_key) else api_key[:5] + ("x" * len(api_key[4:]))
+        api_str = "" if not(self.api_key) else self.api_key[:5] + ("x" * len(self.api_key[4:]))
 
         printerr(f"""Qwen specific note: The endpoint is different for each region.
   - Singapore: https://dashscope-intl.aliyuncs.com/compatible-mode/v1
@@ -1607,3 +1607,56 @@ See more on https://modelstudio.console.alibabacloud.com/ap-southeast-1/?tab=doc
             self.log(f"Couldn't get qwen models. Reason: {e}")
         return []
 
+class IFlowBackend(OpenAIBackend):
+    """Backend for the iFlow model provider https::iflow.cn
+    """
+
+    def __init__(self, api_key: str, endpoint:str="https://apis.iflow.cn", **kwargs: Any):
+        self.api_key = api_key
+        if not(self.api_key):
+            # try to get it from env vars
+            # note: not an official env var, we made it up
+            self.api_key = os.getenv("IFLOW_API_KEY", "")
+            printerr(f"Found IFLOW_API_KEY in environment.")
+            if not self.api_key:
+                printerr("error: The iflow model provider requires an API key. Please set the api_key, iflow_api_key command line or config option, or set the IFLOW_API_KEY environment variable. You can get an API key at https:://iflow.cn")
+                raise BrokenBackend("Missing API key for iflow. Provide it via --api_key or set the IFLOW_API_KEY environment variable. See more on https://iflow.cn")
+
+        api_str = "" if not(self.api_key) else self.api_key[:5] + ("x" * len(self.api_key[4:]))
+
+        super().__init__(self.api_key, endpoint, **kwargs)        
+        printerr(f"IFlow backend using API key {api_str}")
+        
+    def getName(self) -> str:
+        return "iFlow"
+
+    # listing these two here explicitly because we may want to modify them in the future
+    def generate(self, payload: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        return super().generate(payload)
+
+    def generateStreaming(self, payload: Dict[str, Any], callback: Callable[[str], None] = lambda w: print(w)) -> bool:
+        return super().generateStreaming(payload, callback)
+        
+    
+    def get_models(self) -> List[ModelStats]:
+        headers = {
+            "Authorization": f"Bearer {self.api_key}",
+            "Content-Type": "application/json",
+        }
+        response = requests.get(self.endpoint + "/v1/models", headers=headers)
+        if response.status_code != 200:
+            self.log(f"Got status code {response.status_code} during model query.")
+            return []
+
+        try:
+            data = response.json()["data"]
+            return [ModelStats(
+                name=record["id"],
+                display_name=record["id"]
+            )
+                    for record in data]
+        except Exception as e:
+            self.log(f"Couldn't get qwen models. Reason: {e}")
+        return []
+
+    
