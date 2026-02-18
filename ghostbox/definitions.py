@@ -2141,7 +2141,8 @@ class Config(BaseModel):
     )
 
     # Hidden/Internal options (not directly exposed via CLI, but used internally or via API)
-    __api__: bool = Field(default=False, exclude=True)
+
+    #__api__: bool = Field(default=False, exclude=True)    
     user_config: str = Field(default="", exclude=True)
 
 
@@ -2312,5 +2313,4 @@ class ConfigKwargs(TypedDict, total=False):
     response_fields: Optional[List[str]]
     lora: List[Dict[str, Any]]
     add_generation_prompt: bool
-    __api__: bool
     user_config: str    
