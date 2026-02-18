@@ -264,7 +264,7 @@ sampling_parameters: Dict[str, SamplingParameterSpec] = {
 }
 ### end of big list
 
-# this is for fast copy and send to backend
+# note: a lot of the parameter stuff her e is deprecated and no longer used, or has been moved to definitions.config.
 default_params: Dict[str, Any] = {hp.name: hp.default_value for hp in sampling_parameters.values()}
 
 # some reference lists for convenience
