@@ -4,6 +4,7 @@ from typing import *
 import feedwater
 from functools import *
 from colorama import just_fix_windows_console, Fore, Back, Style
+
 # FIXME: this huggingface import seems bugged (circular import)
 from huggingface_hub import snapshot_download, try_to_load_from_cache
 from lazy_object_proxy import Proxy
@@ -23,6 +24,7 @@ from .backends import *
 from . import backends
 from .client import GhostboxClient, client_cli_token
 import ghostbox
+
 if TYPE_CHECKING:
     from .transcribe import WhisperTranscriber
     from websockets.sync.client import ClientConnection
@@ -30,6 +32,7 @@ if TYPE_CHECKING:
     from .output_formatter import OutputFormatter
     from .pftemplate import PFTemplate
     from .backends import AIBackend
+
 
 def showHelpCommands(prog: "Plumbing", argv: List[str]) -> str:
     """
@@ -54,7 +57,9 @@ def showHelpCommands(prog: "Plumbing", argv: List[str]) -> str:
     return ""
 
 
-def show_help_option_tag(prog: "Plumbing", tag: ArgumentTag, markdown: bool = False) -> str:
+def show_help_option_tag(
+    prog: "Plumbing", tag: ArgumentTag, markdown: bool = False
+) -> str:
     w: str = ""
     if not (markdown):
         cv: str = str(prog.getOption(tag.name))
@@ -175,7 +180,7 @@ cmds: List[Tuple[str, Callable[["Plumbing", List[str]], str]]] = [
     ("/start", newSession),
     ("/switch", switch),
     ("/quit", exitProgram),
-    ("/client_handshake", client_handshake),    
+    ("/client_handshake", client_handshake),
     ("/test", testQuestion),
     ("/restart", lambda prog, argv: newSession(prog, [])),
     ("/print", printStory),
@@ -215,7 +220,7 @@ cmds: List[Tuple[str, Callable[["Plumbing", List[str]], str]]] = [
     ("/lsoptions", showOptions),
     ("/lschars", showChars),
     ("/lsvoices", showVoices),
-    ("/lsmodels", showModels),    
+    ("/lsmodels", showModels),
     ("/lsvars", showVars),
     ("/mode", toggleMode),
     ("/hide", hide),
@@ -229,10 +234,16 @@ cmds: List[Tuple[str, Callable[["Plumbing", List[str]], str]]] = [
 # 1 - Formats text sent to the TTS backend
 # 2 - Formats text to be saved as user message in the chat history
 # 3 - formats text to be saved as AI message in the chat history
-mode_formatters: Dict[str, Callable[[Dict[str, Any]], Tuple[OutputFormatter, OutputFormatter, OutputFormatter, OutputFormatter]]] = {
+mode_formatters: Dict[
+    str,
+    Callable[
+        [Dict[str, Any]],
+        Tuple[OutputFormatter, OutputFormatter, OutputFormatter, OutputFormatter],
+    ],
+] = {
     "default": lambda d: (DoNothing, DoNothing, DoNothing, DoNothing),
-    "clean": lambda d: (DoNothing, DoNothing, DoNothing, CleanResponse),    
-    "thinking": lambda d: (StripThinking, StripThinking, StripThinking, StripThinking),    
+    "clean": lambda d: (DoNothing, DoNothing, DoNothing, CleanResponse),
+    "thinking": lambda d: (StripThinking, StripThinking, StripThinking, StripThinking),
     "raw_output": lambda d: (DoNothing, DoNothing, DoNothing, DoNothing),
     "chat": lambda d: (
         DoNothing,
@@ -244,16 +255,24 @@ mode_formatters: Dict[str, Callable[[Dict[str, Any]], Tuple[OutputFormatter, Out
 
 
 class Plumbing(object):
-    def __init__(self, options: Dict[str, Any] = {}, initial_cli_prompt: str = "", tags: Dict[str, ArgumentTag] = {}, delay_backend_init: bool = False):
+    def __init__(
+        self,
+        options: Dict[str, Any] = {},
+        initial_cli_prompt: str = "",
+        tags: Dict[str, ArgumentTag] = {},
+        delay_backend_init: bool = False,
+    ):
         # the printerr stuff needs to happen early
         self._printerr_buffer: List[str] = []
         self._lastChar: Optional[str] = None
-        self._initial_printerr_callback: Callable[[str], None] = lambda w: self._printerr_buffer.append(w)
+        self._initial_printerr_callback: Callable[[str], None] = (
+            lambda w: self._printerr_buffer.append(w)
+        )
         util.printerr_callback = self._initial_printerr_callback
         if not (options["stderr"]):
             util.printerr_disabled = True
         # some general callbacks that are veryuseful
-        self._on_interaction: Optional[Callable[[], None]] = None  
+        self._on_interaction: Optional[Callable[[], None]] = None
         self._on_interaction_finished: Optional[Callable[[], None]] = None
 
         # this is for the websock clients
@@ -267,7 +286,9 @@ class Plumbing(object):
         self.backend: Optional[AIBackend] = None
         self.template: PFTemplate = RawTemplate()
         if not delay_backend_init:
-            self.initializeBackend(LLMBackend[self.getOption("backend")], self.getOption("endpoint"))
+            self.initializeBackend(
+                LLMBackend[self.getOption("backend")], self.getOption("endpoint")
+            )
         self.session: Session = Session(chat_user=options.get("chat_user", ""))
         # FIXME: make this a function returning backend.getlAStResult()
         self.lastResult: Dict[str, Any] = {}
@@ -304,13 +325,18 @@ class Plumbing(object):
         # template
         self.loadTemplate(self.getOption("prompt_format"), startup=True)
 
-
         # whisper stuff. We do this with a special init function because it's lazy
-        self._on_transcription: Optional[Callable[[str], str]] = None  # Callable[[str],str] or None
-        self._on_activation: Optional[Callable[[], None]] = None  # Callable[[], None] or None
-        self._on_transcription_generation: Optional[Callable[[str], None]] = None  # Callable[[str], None]
+        self._on_transcription: Optional[Callable[[str], str]] = (
+            None  # Callable[[str],str] or None
+        )
+        self._on_activation: Optional[Callable[[], None]] = (
+            None  # Callable[[], None] or None
+        )
+        self._on_transcription_generation: Optional[Callable[[str], None]] = (
+            None  # Callable[[str], None]
+        )
         self.whisper: "WhisperTranscriber" = self._newTranscriber()
-        self.ct: Any = None # ContinuousTranscriber
+        self.ct: Any = None  # ContinuousTranscriber
         self._defaultSIGINTHandler: Any = signal.getsignal(signal.SIGINT)
         self._transcription_suspended: bool = False
 
@@ -356,29 +382,32 @@ class Plumbing(object):
                 self.backend = OpenAIBackend(api_key, **kwargs)
                 self.setOption("prompt_format", "auto")
             case LLMBackend.google:
-                if not(self.getOption("model")):
+                if not (self.getOption("model")):
                     self.setOption("model", self.getOption("google_prefered_model"))
                 google_api_key: str = self.getOption("google_api_key")
                 self.backend = GoogleBackend(
-                    api_key = google_api_key if google_api_key else api_key,
-                    model = self.getOption("model"),
-                    **kwargs
+                    api_key=google_api_key if google_api_key else api_key,
+                    model=self.getOption("model"),
+                    **kwargs,
                 )
                 self.setOption("prompt_format", "auto")
             case LLMBackend.deepseek:
                 deepseek_api_key: str = self.getOption("deepseek_api_key")
                 self.backend = DeepseekBackend(
-                    api_key = deepseek_api_key if deepseek_api_key else api_key,
-                    **kwargs
+                    api_key=deepseek_api_key if deepseek_api_key else api_key, **kwargs
                 )
                 self.verbose("Initialized deepseek backend.")
                 self.setOption("prompt_format", "auto")
 
                 # check the model
-                if not(self.getOption("model")):
+                if not (self.getOption("model")):
                     self.setOption(
                         "model",
-                        models[0].name if (models := self.getBackend().get_models()) != [] else "none"
+                        (
+                            models[0].name
+                            if (models := self.getBackend().get_models()) != []
+                            else "none"
+                        ),
                     )
             case LLMBackend.qwen:
                 qwen_api_key: str = self.getOption("qwen_api_key")
@@ -390,20 +419,23 @@ class Plumbing(object):
 
                 # set the endpoint, but only if the user provided something that deviates from the default
                 if endpoint != "http://localhost:8080":
-                    kwargs["endpoint"] = endpoint                
+                    kwargs["endpoint"] = endpoint
 
-                self.backend = QwenBackend(                
-                    api_key = qwen_api_key if qwen_api_key else api_key,
-                    **kwargs
+                self.backend = QwenBackend(
+                    api_key=qwen_api_key if qwen_api_key else api_key, **kwargs
                 )
                 self.verbose("Initialized qwen backend.")
                 self.setOption("prompt_format", "auto")
 
                 # check the model
-                if not(self.getOption("model")):
+                if not (self.getOption("model")):
                     self.setOption(
                         "model",
-                        models[0].name if (models := self.getBackend().get_models()) != [] else "none"
+                        (
+                            models[0].name
+                            if (models := self.getBackend().get_models()) != []
+                            else "none"
+                        ),
                     )
             case LLMBackend.iflow:
                 iflow_api_key: str = self.getOption("iflow_api_key")
@@ -415,21 +447,24 @@ class Plumbing(object):
 
                 # set the endpoint, but only if the user provided something that deviates from the default
                 if endpoint != "http://localhost:8080":
-                    kwargs["endpoint"] = endpoint                
+                    kwargs["endpoint"] = endpoint
 
-                self.backend = IFlowBackend(                
-                    api_key = iflow_api_key if iflow_api_key else api_key,
-                    **kwargs
+                self.backend = IFlowBackend(
+                    api_key=iflow_api_key if iflow_api_key else api_key, **kwargs
                 )
                 self.verbose("Initialized iflow backend.")
                 self.setOption("prompt_format", "auto")
 
                 # check the model
-                if not(self.getOption("model")):
+                if not (self.getOption("model")):
                     self.setOption(
                         "model",
-                        models[0].name if (models := self.getBackend().get_models()) != [] else "none"
-                    )                    
+                        (
+                            models[0].name
+                            if (models := self.getBackend().get_models()) != []
+                            else "none"
+                        ),
+                    )
             case LLMBackend.generic:
                 self.backend = OpenAIBackend(api_key, endpoint=endpoint, **kwargs)
                 self.setOption("prompt_format", "auto")
@@ -452,7 +487,7 @@ class Plumbing(object):
             case _ as unreachable:
                 # ensure total coverage
                 assert_never(unreachable)
-                
+
         # fill in the default sampler parameters that were not shown in the command line arguments, but are still supported
         for param in self.backend.sampling_parameters().values():
             if param.name not in self.options.keys():
@@ -470,7 +505,7 @@ class Plumbing(object):
                 )
             }
         )
-                
+
     def getBackend(self) -> AIBackend:
         if self.backend is None:
             raise RuntimeError(f"Uninitialized backend.")
@@ -541,23 +576,35 @@ class Plumbing(object):
                     del d["grammar"]
 
         # props is only supported by llama.cpp and it can help with some things
-        if self.getOption("backend") == LLMBackend.llamacpp.name and isinstance((llamacpp_backend := self.getBackend()), LlamaCPPBackend):
+        if self.getOption("backend") == LLMBackend.llamacpp.name and isinstance(
+            (llamacpp_backend := self.getBackend()), LlamaCPPBackend
+        ):
             if self.getOption("llamacpp_auto_enable_thinking"):
-                if (enable_thinking := llamacpp_backend.has_thinking_model()) is not None:
-                    self.verbose(f"Setting enable_thinking to {enable_thinking} due to automatic detection.")
+                if (
+                    enable_thinking := llamacpp_backend.has_thinking_model()
+                ) is not None:
+                    self.verbose(
+                        f"Setting enable_thinking to {enable_thinking} due to automatic detection."
+                    )
                     self.setOption("enable_thinking", enable_thinking)
                 else:
-                    printerr(f"warning: Could not determine wether llama.cpp is using a thinking model. Leaving enable_thinking at default. Disable llamacpp_auto_enable_thinking to supress this warning.")
-                    
+                    printerr(
+                        f"warning: Could not determine wether llama.cpp is using a thinking model. Leaving enable_thinking at default. Disable llamacpp_auto_enable_thinking to supress this warning."
+                    )
+
         # these are currently exclusive to google ai studio
         if self.getOption("backend") == LLMBackend.google.name:
             d["model"] = self.getOption("model")
-            d["system"] = self.session.getSystem(history_retroactive_vars=self.getOption("history_retroactive_vars"))
+            d["system"] = self.session.getSystem(
+                history_retroactive_vars=self.getOption("history_retroactive_vars")
+            )
             if self.getOption("tts_modify_system_msg"):
                 d["system"] += self._getTTSSpecialMsg()
-            #d["story"] = self.session.stories.get().data
-            d["story"] = self.session.get_messages(history_retroactive_vars=self.getOption("history_retroactive_vars"))
-                    
+            # d["story"] = self.session.stories.get().data
+            d["story"] = self.session.get_messages(
+                history_retroactive_vars=self.getOption("history_retroactive_vars")
+            )
+
         if (
             self.getOption("backend") == LLMBackend.generic.name
             or self.getOption("backend") == LLMBackend.openai.name
@@ -566,13 +613,17 @@ class Plumbing(object):
         ):
             # openai chat/completion needs the 'messages' key
             # we also do this for llama in "auto" template mode
-            d["system"] = self.session.getSystem(history_retroactive_vars=self.getOption("history_retroactive_vars"))
+            d["system"] = self.session.getSystem(
+                history_retroactive_vars=self.getOption("history_retroactive_vars")
+            )
             if self.getOption("tts_modify_system_msg"):
                 d["system"] += self._getTTSSpecialMsg()
 
             d["messages"] = [
                 {"role": "system", "content": d["system"]}
-            ] + self.session.get_messages_json(history_retroactive_vars=self.getOption("history_retroactive_vars"))
+            ] + self.session.get_messages_json(
+                history_retroactive_vars=self.getOption("history_retroactive_vars")
+            )
             # FIXME: I don't even know if this does something right now
             self._images_dirty = False
 
@@ -635,9 +686,9 @@ class Plumbing(object):
             data = []
 
         try:
-            models: List[Dict[str, Any]] = dirtyGetJSON(self.getOption("endpoint") + "/v1/models").get(
-                "data", []
-            )
+            models: List[Dict[str, Any]] = dirtyGetJSON(
+                self.getOption("endpoint") + "/v1/models"
+            ).get("data", [])
             # hope it's just one
             model: str = os.path.basename(models[0]["id"])
         except:
@@ -656,7 +707,10 @@ class Plumbing(object):
 
         # FIXME: at this point it's not in the layers file, but we still have a model name. consider googling it on hugginface and grepping the html
         printerr(
-            "Failed to guess prompt format after exhausting all options ".encode('utf-8').decode('unicode_escape') + ". Defaulting."
+            "Failed to guess prompt format after exhausting all options ".encode(
+                "utf-8"
+            ).decode("unicode_escape")
+            + ". Defaulting."
         )
         return "raw"
 
@@ -674,7 +728,9 @@ class Plumbing(object):
         if name == "guess":
             name = self.guessPromptFormat()
 
-        allpaths: List[str] = [p + "/" + name for p in self.getOption("template_include")]
+        allpaths: List[str] = [
+            p + "/" + name for p in self.getOption("template_include")
+        ]
         failure: bool | str | Exception = True
         template: PFTemplate = RawTemplate()
         for path in allpaths:
@@ -712,7 +768,9 @@ class Plumbing(object):
         self.options["prompt_format"] = name
         printerr("Using '" + name + "' as prompt format template.")
 
-    def loadConfig(self, json_data: str, override: bool = True, protected_keys: List[str] = []) -> str:
+    def loadConfig(
+        self, json_data: str, override: bool = True, protected_keys: List[str] = []
+    ) -> str:
         """Loads a config file provided as json into options. Override=False means that command line options that have been provided will not be overriden by the config file."""
         d: Dict[str, Any] = json.loads(json_data)
         if type(d) != type({}):
@@ -740,7 +798,7 @@ class Plumbing(object):
 
         # now actually load the options, with a partial ordering
         items: List[Tuple[str, Any]] = sorted(
-            d.items(), key=cmp_to_key(lambda a, b: -1 if a[0] == "mode" else 1) # type: ignore
+            d.items(), key=cmp_to_key(lambda a, b: -1 if a[0] == "mode" else 1)  # type: ignore
         )
         for k, v in items:
             if not (k in protected_keys):
@@ -792,7 +850,9 @@ class Plumbing(object):
             return True
         return self.getOption(name) != newValue
 
-    def getFormatters(self) -> Tuple[OutputFormatter, OutputFormatter, OutputFormatter, OutputFormatter]:
+    def getFormatters(
+        self,
+    ) -> Tuple[OutputFormatter, OutputFormatter, OutputFormatter, OutputFormatter]:
         mode: str = self.getOption("mode")
         if not (self.isValidMode(mode)):
             mode = "default"
@@ -845,10 +905,10 @@ class Plumbing(object):
         else:
             hint = ""
 
-        if (rformat := self.getOption("response_format")) and (
-                type(rformat) == dict
-        ) and (
-            rformat["type"] != "text"
+        if (
+            (rformat := self.getOption("response_format"))
+            and (type(rformat) == dict)
+            and (rformat["type"] != "text")
         ):
             # don't use formatters if user expects structured data
             addition: str = hint + w
@@ -867,7 +927,9 @@ class Plumbing(object):
         # FIXME: we're currently rawdogging system msgs. is this correct?
         self.session.stories.get().addSystemText(w)
 
-    def applyTools(self, w: str = "", json_data: Dict[str, Any] = {}) -> Tuple[List[ChatMessage], Optional[ChatMessage]]:
+    def applyTools(
+        self, w: str = "", json_data: Dict[str, Any] = {}
+    ) -> Tuple[List[ChatMessage], Optional[ChatMessage]]:
         """Takes an AI generated string w and optionally the json result from an OpenAI API compatible tool request. Tries to detect a tool request in both. If detected, will apply the tools and then return their results as structured data, as well as the fully parsed original tool call.
         Ideally the JSON result makes tool use obvious through the field
         json["choices"][0]["finish_reason"] == "tool_calls"
@@ -1170,7 +1232,9 @@ class Plumbing(object):
 
         # now we need an activation phrase or it ain't happenin
         # strip the transcription
-        test: str = w.translate(str.maketrans("", "", string.punctuation)).strip().lower()
+        test: str = (
+            w.translate(str.maketrans("", "", string.punctuation)).strip().lower()
+        )
         try:
             n: int = test.index(phrase)
         except ValueError:
@@ -1227,7 +1291,12 @@ class Plumbing(object):
         if self._on_activation is not None:
             self._on_activation()
 
-    def _streamCallback(self, token: str, user_callback: Optional[Callable[[str], None]] = None, only_once: Optional[str] = None) -> None:
+    def _streamCallback(
+        self,
+        token: str,
+        user_callback: Optional[Callable[[str], None]] = None,
+        only_once: Optional[str] = None,
+    ) -> None:
         if only_once not in self._stream_only_once_token_bag:
             # this is so that we can print tokens/sentences without interrupting the TTS every time
             # except that we want to interrupt the TTS exactly once -> when we start streaming
@@ -1485,7 +1554,7 @@ class Plumbing(object):
         # filter the ban list
         for filtered_str in self.getOption("tts_filter"):
             w = w.replace(filtered_str, "")
-        
+
         # strip whitespace, we especially don't want to send pure whitespace like ' \n' or '  ' to a tts, this is known to crash some of them. It also shouldn't change the resulting output.
         w = w.strip()
 
@@ -1594,7 +1663,7 @@ class Plumbing(object):
         self.multiline_buffer = ""
         return w
 
-    def expandDynamicFileVars(self, w: str, depth: int =0) -> str:
+    def expandDynamicFileVars(self, w: str, depth: int = 0) -> str:
         """Expands strings of the form `{[FILEPATH]}` by replacing them with the contents of FILE1 if it is found and readable."""
         if not (self.getOption("dynamic_file_vars")):
             return w
@@ -1602,9 +1671,9 @@ class Plumbing(object):
         pattern: str = r"\{\[(.*?)\]\}"
         matches: List[str] = re.findall(pattern, w)
 
-        if not(matches):
+        if not (matches):
             return w
-        
+
         for match in matches:
             var: str = "{[[" + match + "]]}"
             # users will probably mess around with this so we wanna be real careful
@@ -1631,12 +1700,13 @@ class Plumbing(object):
                 )
                 printerr(traceback.format_exc())
 
-
         if self.getOption("dynamic_file_vars_unsafe"):
             if depth >= (limit := self.getOption("dynamic_file_vars_max_depth")):
-                printerr(f"warning: Exceeded maximum dynamic file variable depth limit of {limit}. Not expanding.")
+                printerr(
+                    f"warning: Exceeded maximum dynamic file variable depth limit of {limit}. Not expanding."
+                )
                 return w
-            return self.expandDynamicFileVars(w, depth+1)
+            return self.expandDynamicFileVars(w, depth + 1)
         return w
 
     def modifyInput(self, w: str) -> Tuple[str, str]:
@@ -1657,18 +1727,18 @@ class Plumbing(object):
 
         # dynamic vars must come before other vars for security reasons
         w = self.expandDynamicFileVars(w)
-        if not(self.getOption("history_retroactive_vars")):
+        if not (self.getOption("history_retroactive_vars")):
             w = self.session.expandVars(w)
         (w, ai_hint) = self.adjustForChat(w)
 
         # tool_hint = agency.makeToolInstructionMsg() if prog.getOption("use_tools") else ""
 
         # user may also provide a hint. unclear how to best append it, we put it at the end
-        if not(self.getOption("history_retroactive_vars")):
+        if not (self.getOption("history_retroactive_vars")):
             user_hint: str = self.session.expandVars(self.getOption("hint"))
         else:
             user_hint = self.getOption("hint")
-            
+
         if user_hint and self.getOption("warn_hint"):
             printerr(
                 "warning: Hint is set. Try /raw to see what you're sending. Use /set hint '' to disable the hint, or /set warn_hint False to suppress this message."
@@ -1701,7 +1771,9 @@ class Plumbing(object):
             vars["system_msg"] += "\n" + tool_hint
         return self.getTemplate().header(**vars)
 
-    def showStory(self, story_folder: Optional["StoryFolder"] = None, append_hint: bool = True) -> str:
+    def showStory(
+        self, story_folder: Optional["StoryFolder"] = None, append_hint: bool = True
+    ) -> str:
         """Returns the current story as a unformatted string, injecting the current prompt template."""
         # new and possibly FIXME: we need to add another hint from agency.makeToolInstructionMsg when using tools, so we disable the hint here
         if self.getOption("use_tools"):
@@ -1718,7 +1790,9 @@ class Plumbing(object):
             )
         return self.getTemplate().body(sf.get(), append_hint, **self.session.getVars())
 
-    def formatStory(self, story_folder: Optional["StoryFolder"] = None, with_color: bool = False) -> str:
+    def formatStory(
+        self, story_folder: Optional["StoryFolder"] = None, with_color: bool = False
+    ) -> str:
         """Pretty print the current story (or a provided one) in a nicely formatted way. Returns pretty story as a string."""
         if story_folder is None:
             sf = self.session.stories
@@ -1786,13 +1860,20 @@ class Plumbing(object):
         """Triggers when there is a server, network, or other error during backend generation."""
         # FIXME: in the future, allow API users to configure hooks here
         printerr("error: " + last_error)
-        self.verbose("Additional information (like /lastrequest):\n" + json.dumps(self.getBackend().getLastRequest(), indent=4))
+        self.verbose(
+            "Additional information (like /lastrequest):\n"
+            + json.dumps(self.getBackend().getLastRequest(), indent=4)
+        )
         # generation error means there was no AI message. So sometimes we drop the last history item (usually this makes sense)
         if self.getOption("history_drop_on_generation_error"):
             self.session.stories.get().drop()
-            self.verbose("Dropped last prompt due to error. You'll have to repeat it manually. Toggle history_drop_on_generation_error to disable this.")
-                
-    def communicate(self, prompt_text: str, stream_callback: Optional[Callable[[str], None]] = None) -> str:
+            self.verbose(
+                "Dropped last prompt due to error. You'll have to repeat it manually. Toggle history_drop_on_generation_error to disable this."
+            )
+
+    def communicate(
+        self, prompt_text: str, stream_callback: Optional[Callable[[str], None]] = None
+    ) -> str:
         """Sends prompt_text to the backend and returns results."""
         backend: AIBackend = self.getBackend()
         payload: Dict[str, Any] = self.makeGeneratePayload(prompt_text)
@@ -1817,7 +1898,7 @@ class Plumbing(object):
                 )
             if backend.generateStreaming(
                 payload,
-                lambda token, only_once=uuid.uuid4(): self._streamCallback( # type: ignore
+                lambda token, only_once=uuid.uuid4(): self._streamCallback(  # type: ignore
                     token, user_callback=stream_callback, only_once=str(only_once)
                 ),
             ):
@@ -1859,7 +1940,7 @@ class Plumbing(object):
         def loop_interact(w_inner: str) -> None:
             while self._busy.is_set():
                 # another interaction might be happening
-                # respect the jinja template 
+                # respect the jinja template
                 time.sleep(0.1)
 
             self._stop_generation.clear()
@@ -1873,6 +1954,7 @@ class Plumbing(object):
             (modified_w, hint) = self.modifyInput(w_inner)
             self.addUserText(modified_w)
             while communicating:
+                output: str = ""
                 # this only runs more than once if there is auto-activation, e.g. with tool use
                 generated_w: str = self.communicate(
                     self.buildPrompt(hint), stream_callback=stream_callback
@@ -1889,10 +1971,9 @@ class Plumbing(object):
                     generated_w, json_data=self.lastResult
                 )
 
-                output: str = ""
                 if tool_results != []:
                     # need to add both the calls and result to the history
-                    self.session.stories.get().addMessages([tool_call] + tool_results) # type: ignore
+                    self.session.stories.get().addMessages([tool_call] + tool_results)  # type: ignore
                     (w_inner, hint) = ("", "")
                     if self.getOption("verbose"):
                         output = json.dumps(tool_results)
@@ -1969,15 +2050,23 @@ class Plumbing(object):
             current_msg: ChatMessage = history[i]
             if before_msg.role == current_msg.role:
                 # if roles happen to be the same, we merge them
-                if isinstance(before_msg.content, str) and isinstance(current_msg.content, str):
+                if isinstance(before_msg.content, str) and isinstance(
+                    current_msg.content, str
+                ):
                     before_msg.content = before_msg.content + "\n" + current_msg.content
-                elif isinstance(before_msg.content, list) and isinstance(current_msg.content, list):
+                elif isinstance(before_msg.content, list) and isinstance(
+                    current_msg.content, list
+                ):
                     before_msg.content.extend(current_msg.content)
-                elif isinstance(before_msg.content, dict) and isinstance(current_msg.content, dict):
+                elif isinstance(before_msg.content, dict) and isinstance(
+                    current_msg.content, dict
+                ):
                     before_msg.content.update(current_msg.content)
                 else:
                     # Fallback for mixed types or other complex scenarios
-                    before_msg.content = str(before_msg.content) + "\n" + str(current_msg.content)
+                    before_msg.content = (
+                        str(before_msg.content) + "\n" + str(current_msg.content)
+                    )
                 del history[i]
             # if they are different, it's fine
             i += 1
@@ -2055,9 +2144,13 @@ class Plumbing(object):
                 # we are going to merge the two messages
                 if isinstance(before.content, str) and isinstance(last.content, str):
                     before.content = before.content + "\n" + last.content
-                elif isinstance(before.content, list) and isinstance(last.content, list):
+                elif isinstance(before.content, list) and isinstance(
+                    last.content, list
+                ):
                     before.content.extend(last.content)
-                elif isinstance(before.content, dict) and isinstance(last.content, dict):
+                elif isinstance(before.content, dict) and isinstance(
+                    last.content, dict
+                ):
                     before.content.update(last.content)
                 else:
                     before.content = str(before.content) + "\n" + str(last.content)
@@ -2081,13 +2174,16 @@ class Plumbing(object):
         # this is backend dependent
         if self.getOption("backend") == LLMBackend.google.name:
             try:
-                return str(self.lastResult.get("usage_metadata", {}).get("total_token_count", 0))
+                return str(
+                    self.lastResult.get("usage_metadata", {}).get(
+                        "total_token_count", 0
+                    )
+                )
             except AttributeError:
                 return "0"
         else:
             return str(self.lastResult.get("usage", {}).get("total_tokens", 0))
 
-        
     def setLastJSON(self, json_result: Dict[str, Any]) -> None:
         self.lastResult = json_result
         try:
@@ -2204,7 +2300,7 @@ class Plumbing(object):
                     + ": Connection closed."
                 )
                 clients_to_remove.append(i)
-        
+
         for i in sorted(clients_to_remove, reverse=True):
             del self.websock_clients[i]
 
@@ -2225,7 +2321,7 @@ class Plumbing(object):
                 printerr(traceback.format_exc())
                 self.stopWebsock()
                 return ""
-        return "" # Should not be reached if server is running
+        return ""  # Should not be reached if server is running
 
     def _runWebsockServer(self) -> None:
         import websockets
@@ -2260,7 +2356,7 @@ class Plumbing(object):
 
         self.websock_server_running.set()
         self.websock_server = WS.serve(
-            handler, self.getOption("websock_host"), self.getOption("websock_port") # type: ignore
+            handler, self.getOption("websock_host"), self.getOption("websock_port")  # type: ignore
         )
         printerr(
             "WebSocket server running on ws://"
@@ -2272,13 +2368,12 @@ class Plumbing(object):
 
     def _startCLIPrinter(self) -> None:
         """Checks wether we are busy. If we are busy and then aren't, we print the CLI prompt."""
+
         # we don't want to use the self.print, nor printerr for this as both of them have side effects
         # this really is just for terminal users
         def print_cli(prefix: str = "") -> None:
             prompt: str = prefix + self.showCLIPrompt()
-            print(
-                prompt, file=sys.stderr, end="", flush=True
-            )
+            print(prompt, file=sys.stderr, end="", flush=True)
             if self.getOption("websock"):
                 self.websockSend(client_cli_token + prompt)
 
@@ -2289,7 +2384,7 @@ class Plumbing(object):
 
             while self.running:
                 self._busy.wait()
-               
+
                 while self._busy.is_set():
                     # don't blow up potato cpu
                     # user can wait for their coveted cli for 100ms
@@ -2312,7 +2407,9 @@ class Plumbing(object):
                 else:
                     print_cli(prefix="\n")
 
-        self._cli_printer_thread: threading.Thread = threading.Thread(target=cli_printer, daemon=True)
+        self._cli_printer_thread: threading.Thread = threading.Thread(
+            target=cli_printer, daemon=True
+        )
         self._cli_printer_thread.start()
 
     def triggerCLI(self, check: Optional[str] = None) -> None:
@@ -2359,17 +2456,27 @@ class Plumbing(object):
 
 def get_api_keys(config_file: str, args: Dict[Any, Any]) -> Dict[str, Any]:
     """Loads api keys from various sources."""
-    key_names: List[str] = ["api_key","google_api_key", "deepseek_api_key", "qwen_api_key"]
-    arg_keys: Dict[str, Any] = {k:v for k, v in args.items() if k in key_names and v != ""}
-    
+    key_names: List[str] = [
+        "api_key",
+        "google_api_key",
+        "deepseek_api_key",
+        "qwen_api_key",
+    ]
+    arg_keys: Dict[str, Any] = {
+        k: v for k, v in args.items() if k in key_names and v != ""
+    }
+
     try:
         with open(config_file, "r") as f:
             config: Dict[str, Any] = json.load(f)
     except:
-        printerr(f"warning: Couldn't load config file {config_file} while trying to get API keys. Full traceback:\n{traceback.format_exc()}")
+        printerr(
+            f"warning: Couldn't load config file {config_file} while trying to get API keys. Full traceback:\n{traceback.format_exc()}"
+        )
         return arg_keys
-    return {k:v for k, v in config.items() if k in key_names} | arg_keys
-    
+    return {k: v for k, v in config.items() if k in key_names} | arg_keys
+
+
 def main() -> None:
     just_fix_windows_console()
     tagged_parser: TaggedArgumentParser = makeTaggedParser(backends.default_params)
@@ -2378,12 +2485,14 @@ def main() -> None:
     if args.sound_list_output_devices:
         list_output_devices()
         return
-    
-    
+
     if args.client:
         # we do something completely different
         client: GhostboxClient = GhostboxClient(
-            remote_host=args.remote_host, remote_port=args.remote_port, logging=args.verbose, options=dict(args)
+            remote_host=args.remote_host,
+            remote_port=args.remote_port,
+            logging=args.verbose,
+            options=dict(args),
         )
         client.input_loop()
         return
@@ -2391,15 +2500,17 @@ def main() -> None:
     # user config setup happens later, but unfortunately we need the API keys right now
     # this may involve the config file as well as environment vars, if they aren't given as command line args
     keys: Dict[str, Any] = get_api_keys(userConfigFile(), args.__dict__)
-    
+
     prog: Plumbing = Plumbing(
-        options= args.__dict__ | keys,
+        options=args.__dict__ | keys,
         initial_cli_prompt=args.cli_prompt,
         tags=tagged_parser.get_tags(),
-        delay_backend_init = True,
+        delay_backend_init=True,
     )
     setup_plumbing(prog, args)
-    prog.initializeBackend(LLMBackend[prog.getOption("backend")], prog.getOption("endpoint"))
+    prog.initializeBackend(
+        LLMBackend[prog.getOption("backend")], prog.getOption("endpoint")
+    )
     if (prompt := prog.getOption("prompt")) is not None:
 
         def input_once() -> str:
