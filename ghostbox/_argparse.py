@@ -1,11 +1,11 @@
 import argparse, os
 from .util import *
 from . import backends
-from .definitions import Config, ArgumentTag, ArgumentType, ArgumentGroup, LLMBackend, TTSModel, ZonosTTSModel, TTSOutputMethod
+from .definitions import Config, ArgumentTag, ArgumentType, ArgumentGroup, LLMBackend, TTSModel, ZonosTTSModel, TTSOutputMethod, get_ghostbox_data
 from typing import Dict, Any, List, Optional, Union, get_origin, get_args, Type
 from pydantic_core import PydanticUndefined
 from enum import Enum
-#from ghostbox import get_ghostbox_data
+
 
 
 class TaggedArgumentParser:
@@ -19,7 +19,6 @@ class TaggedArgumentParser:
         self.tags: Dict[str, ArgumentTag] = {}
 
     def add_argument(self, *args: Any, **kwargs: Any) -> None:
-        print(f"[DEBUG] TaggedArgumentParser.add_argument called with args: {args}, kwargs: {kwargs}")
         if "tag" in kwargs:
             arg: str = (
                 sorted(args, key=lambda w: len(w), reverse=True)[0]
@@ -38,40 +37,31 @@ class TaggedArgumentParser:
         return self.tags
 
 
-def makeTaggedParser(default_params: Dict[str, Any]) -> TaggedArgumentParser:
-    print("[DEBUG] makeTaggedParser started.")
+def makeTaggedParser() -> TaggedArgumentParser:
     parser: TaggedArgumentParser = TaggedArgumentParser(
         description="LLM Command Line Interface",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
     
     for field_name, field_info in Config.model_fields.items():
-        print(f"[DEBUG] Processing field: {field_name}")
-        print(f"[DEBUG]   field_info type: {type(field_info)}") # Should be pydantic.fields.FieldInfo
-        print(f"[DEBUG]   field_info.annotation: {field_info.annotation}") # Should be Annotated[...]
 
         # Skip internal/hidden fields
         if field_name.startswith("__"): 
-            print(f"[DEBUG]   Skipping internal field: {field_name}")
             continue
 
         extracted_arg_tag: Optional[ArgumentTag] = None
         
         # Get all arguments from the Annotated type, including the actual type and metadata
         annotated_args = get_args(field_info.annotation)
-        print(f"[DEBUG]   annotated_args: {annotated_args}")
 
-        # Iterate over the metadata arguments (skipping the first one which is the actual type)
-        if len(annotated_args) > 1:
-            for annotation_arg in annotated_args[1:]: # Iterate over metadata arguments
-                print(f"[DEBUG]     Checking annotation_arg: {annotation_arg} (type: {type(annotation_arg)})")
-                if isinstance(annotation_arg, ArgumentTag):
-                    extracted_arg_tag = annotation_arg.model_copy(deep=True) # type: ignore[call-arg]
-                    print(f"[DEBUG]     Found ArgumentTag for {field_name}")
-                    break # Found the tag, no need to check other metadata args for this purpose
+        # the ARgumenTag will be stored in the matadata
+        for annotation_arg in field_info.metadata:
+            if isinstance(annotation_arg, ArgumentTag):
+                extracted_arg_tag = annotation_arg.model_copy(deep=True) # type: ignore[call-arg]
+                break # Found the tag, no need to check other metadata args for this purpose
         
         if extracted_arg_tag is None:
-            print(f"[DEBUG]   No ArgumentTag found for {field_name}, skipping.")
+
             continue
 
         # Now, use field_info directly for argparse metadata and defaults
@@ -80,11 +70,10 @@ def makeTaggedParser(default_params: Dict[str, Any]) -> TaggedArgumentParser:
             isinstance(field_info.json_schema_extra, dict)
             and "argparse" in field_info.json_schema_extra
         ):
-            print(f"[DEBUG]   No 'argparse' metadata in json_schema_extra for {field_name}, skipping.")
             continue
         
         argparse_meta = field_info.json_schema_extra["argparse"]
-        print(f"[DEBUG]   argparse_meta for {field_name}: {argparse_meta}")
+
 
         # Populate name, help, and default_value in the ArgumentTag instance
         extracted_arg_tag.name = field_name
@@ -102,7 +91,7 @@ def makeTaggedParser(default_params: Dict[str, Any]) -> TaggedArgumentParser:
 
         # Prepare kwargs for parser.add_argument
         kwargs: Dict[str, Any] = {}
-        
+
         # Short and long arguments
         short_arg = argparse_meta.get("short")
         long_arg = argparse_meta.get("long", f"--{field_name}")
@@ -131,7 +120,8 @@ def makeTaggedParser(default_params: Dict[str, Any]) -> TaggedArgumentParser:
         if cli_type:
             kwargs["type"] = cli_type
         else:
-            raw_type = get_args(field_info.annotation)[0] # This is the ActualType
+            raw_type = get_args(field_info.annotation)
+
             origin = get_origin(raw_type)
             type_args = get_args(raw_type)
 
@@ -185,10 +175,10 @@ def makeTaggedParser(default_params: Dict[str, Any]) -> TaggedArgumentParser:
             elif "default" not in kwargs and nargs in ("*", "+") and kwargs.get("action") != "append":
                 kwargs["default"] = []
 
-        print(f"[DEBUG]   Adding argument: {args_list} with kwargs: {kwargs}")
+
         parser.add_argument(*args_list, tag=extracted_arg_tag, **kwargs)
 
-    print("[DEBUG] makeTaggedParser finished.")
+
     return parser
 
 

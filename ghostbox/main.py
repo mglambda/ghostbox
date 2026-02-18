@@ -2480,7 +2480,7 @@ def get_api_keys(config_file: str, args: Dict[Any, Any]) -> Dict[str, Any]:
 
 def main() -> None:
     just_fix_windows_console()
-    tagged_parser: TaggedArgumentParser = makeTaggedParser(backends.default_params)
+    tagged_parser: TaggedArgumentParser = makeTaggedParser()
     parser: argparse.ArgumentParser = tagged_parser.get_parser()
     args: Namespace = parser.parse_args()
     if args.sound_list_output_devices:

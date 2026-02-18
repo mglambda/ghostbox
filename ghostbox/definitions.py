@@ -5,8 +5,20 @@ import copy
 from pydantic.types import Json
 from typing import *
 from .util import *
-if TYPE_CHECKING:
-    from ghostbox import get_ghostbox_data    
+
+_ROOT = os.path.abspath(os.path.dirname(__file__))
+
+def get_ghostbox_data(path: str) -> str:
+    """Returns PATH preceded by the location of the ghostbox data dir, which is part of the python site-package."""
+    return os.path.join(_ROOT, "data", path)
+
+
+def get_ghostbox_html_path() -> str:
+    """Returns the path to the index.html and javascript files for the integrated HTTP server."""
+    return os.path.join(_ROOT, "html")
+
+
+
 
     
 
@@ -331,6 +343,16 @@ class ModelStats(BaseModel):
         
 
 class Config(BaseModel):
+    """Master list of all options.
+    These can be set in various ways:
+     - Through command line arguments, e.g. --temperature 0.9
+     - As keyword arguments in ghostbox constructors, e.g. box = ghostbox.from_generic(temperature=.09)
+     - Through various api methods, e.g. box.set_options(temperature=0.9)    
+     - As key/value paris in a json config file for eithe a user or a character_folder, e.g. {"temperature": 0.9}
+     - By providing them as arguments to the /set command in the CLI, e.g.: /set temperature 0.9
+        Consult the CLI's /help options for more.
+    """
+    
     include: Annotated[
         List[str],
         Field(
