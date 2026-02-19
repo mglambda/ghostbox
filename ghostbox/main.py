@@ -2611,7 +2611,7 @@ def regpl(prog: Plumbing, input_function: Callable[[], str] = input) -> None:
                     w = prog.flushMultilineBuffer()[:-1]
             else:
                 # ad hoc multilines
-                if w.endswith("\\") and not (w.endswith("\\")):
+                if w.endswith("\\") and not (w.endswith("\\\\")):
                     prog.bufferMultilineInput(w)
                     continue
                 elif prog.isMultilineBuffering():
