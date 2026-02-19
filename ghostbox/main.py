@@ -1675,7 +1675,8 @@ class Plumbing(object):
             return w
 
         for match in matches:
-            var: str = "{[[" + match + "]]}"
+            # note: don't make this an f-string as it then is in danger of replacing brace bracket match brace bracket. it also confuses the AI more I think
+            var: str = "{[" + match + "]}"
             # users will probably mess around with this so we wanna be real careful
             common_error_msg: str = "error: Unable to expand '" + var + "'. "
             try:
