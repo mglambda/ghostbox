@@ -107,7 +107,7 @@ def showOptions(prog: 'Plumbing', argv: List[str]) -> str:
     elif argv[0] == "--emacs":
         # undocumented, outputs all options in a neat form to put as keywords in ghostbox.el
         w = "`("
-        for name in prog.options.keys():
+        for name in prog.options.model_dump().keys():
             w += f"\"{name}\""
         w = w[:-2] + ")"
         printerr(w)
@@ -116,7 +116,7 @@ def showOptions(prog: 'Plumbing', argv: List[str]) -> str:
         target = " ".join(argv)
 
     w = ""
-    for k, v in prog.options.items():
+    for k, v in prog.options.model_dump().items():
         if target in k:
             w += k + ": " + str(v) + "\n"
     return w.strip()
@@ -681,7 +681,7 @@ def toggleImageWatch(prog: 'Plumbing', argv: List[str]) -> str:
         prog.setOption("image_watch", dir)
 
     # toggle
-    prog.options["image_watch"] = not (prog.getOption("image_watch"))
+    prog.set_options(image_watch = not (prog.getOption("image_watch")))
     if prog.getOption("image_watch"):
         prog.startImageWatch()
     else:
