@@ -281,7 +281,8 @@ class Plumbing(object):
         self._stdout_ringbuffer_size: int = 1024
         self._frozen: bool = False
         self._freeze_queue: Queue[Tuple[str, Any]] = Queue()
-        self.options: Dict[str, Any] = options
+        self.options: Config = Config(**options)
+        self._old_options: Config = self.options.copy(deep=True)
         self.tags: Dict[str, ArgumentTag] = tags
         self.backend: Optional[AIBackend] = None
         self.template: PFTemplate = RawTemplate()
@@ -317,7 +318,7 @@ class Plumbing(object):
         self.multiline_buffer: str = ""
         if self.getOption("json_grammar"):
             self.setOption("grammar", getJSONGrammar())
-            del self.options["json"]
+            #del self.options["json"]
         elif self.getOption("grammar_file"):
             self.loadGrammar(self.getOption("grammar_file"))
         else:
@@ -477,7 +478,7 @@ class Plumbing(object):
                         "warning: Setting prompt_format to 'raw' as using 'auto' as prompt_format with the legacy backend will yield server errors. This backend exists specifically to *not* apply templates server side. You can manually reset this if you want."
                     )
                     # doing it without setOption as backend isn't fully initialized yet
-                    self.options["prompt_format"] = (
+                    self.optionsprompt_format = (
                         PromptFormatTemplateSpecialValue.raw.name
                     )
 
@@ -490,7 +491,7 @@ class Plumbing(object):
 
         # fill in the default sampler parameters that were not shown in the command line arguments, but are still supported
         for param in self.backend.sampling_parameters().values():
-            if param.name not in self.options.keys():
+            if param.name not in self.options.model_dump().keys():
                 self.setOption(param.name, param.default_value)
 
         # this is so llamacpp uses the /chat/completions endpoint if we use auto templating
@@ -540,7 +541,7 @@ class Plumbing(object):
         all_params: Set[str] = set(backends.sampling_parameters.keys())
         supported_params: Set[str] = set(self.getBackend().sampling_parameters().keys())
         for param in all_params:
-            if param in self.options:
+            if param in self.options.model_dump():
                 if param not in supported_params and not (
                     self.getOption("force_params")
                 ):
@@ -752,12 +753,12 @@ class Plumbing(object):
         if failure:
             printerr("warning: " + str(failure) + "\nDefaulting to 'raw' template.")
             self.template = RawTemplate()
-            self.options["prompt_format"] = "raw"
+            self.options.prompt_format = "raw"
             return
         # actually load template
         # first unload old stops
-        self.options["stop"] = list(
-            filter(lambda w: w not in self.template.stops(), self.options["stop"])
+        self.options.stop = list(
+            filter(lambda w: w not in self.template.stops(), self.options.stop)
         )
 
         self.template = template
@@ -765,7 +766,7 @@ class Plumbing(object):
             if not (w):
                 continue
             self.appendOption("stop", w)
-        self.options["prompt_format"] = name
+        self.options.prompt_format = name
         printerr("Using '" + name + "' as prompt format template.")
 
     def loadConfig(
@@ -832,7 +833,7 @@ class Plumbing(object):
         if not (self.isValidMode(mode)):
             return
 
-        self.options["mode"] = mode
+        self.options.mode = mode
         if mode.startswith("chat"):
             userPrompt: str = mkChatPrompt(self.getOption("chat_user"))
             self.setOption("cli_prompt", "\n" + userPrompt)
@@ -840,13 +841,14 @@ class Plumbing(object):
             self.appendOption("stop", userPrompt.strip(), duplicates=False)
 
         else:  # default
-            self.options["cli_prompt"] = self.initial_cli_prompt
+            self.options.cli_prompt = self.initial_cli_prompt
 
     def getOption(self, key: str) -> Any:
-        return self.options.get(key, None)
+        """Deprecated. Use self.options direct access instead."""
+        return getattr(self.options, key)
 
     def optionDiffers(self, name: str, newValue: Any) -> bool:
-        if name not in self.options:
+        if name not in self.options.model_dump():
             return True
         return self.getOption(name) != newValue
 
@@ -857,7 +859,7 @@ class Plumbing(object):
         if not (self.isValidMode(mode)):
             mode = "default"
             printerr("warning: Unsupported mode '" + mode + "'.. Using 'default'.")
-        return mode_formatters[mode](self.options | self.session.getVars())
+        return mode_formatters[mode](self.options.model_dump() | self.session.getVars())
 
     def getDisplayFormatter(self) -> OutputFormatter:
         return self.getFormatters()[0]
@@ -1027,7 +1029,7 @@ class Plumbing(object):
         return w
 
     def appendOption(self, name: str, value: Any, duplicates: bool = True) -> None:
-        if name not in self.options:
+        if name not in self.options.model_dump():
             printerr("warning: unrecognized option '" + name + "'")
             return
 
@@ -1041,7 +1043,8 @@ class Plumbing(object):
         if not (duplicates):
             if value in xs:
                 return
-        self.options[name].append(value)
+        ys = xs + [value]
+        self.set_options(**{name: ys})
 
     def freeze(self) -> None:
         self._frozen = True
@@ -1054,20 +1057,28 @@ class Plumbing(object):
             if self.getOption("verbose"):
                 printerr("unfreezing " + name + " : " + str(value))
 
-    def setOption(self, name: str, value: bool | str | List[str] | int | float) -> None:
-        # we freeze state during some parts of execution, applying options after we unfreeze
-        if self._frozen:
-            self._freeze_queue.put((name, value))
-            return
+    def set_options(self, **kwargs: Unpack[ConfigKwargs]) -> None:
+       
+        self._old_options = self.options.copy(deep=True)
 
-        # mode gets to call dibs
-        if name == "mode":
-            self.setMode(str(value))
-            return
 
-        oldValue: Any = self.options.get(name, None)
-        differs: bool = self.optionDiffers(name, value)
-        self.options[name] = value
+        for key, value in kwargs.items():
+            if self._frozen:
+                self._freeze_queue.put((key, value))
+                continue
+
+            if key == "mode":
+                self.setMode(str(value))
+                continue
+            if value == (old_value := self._old_options.__dict__.get(key)):
+                # skip if there's no actual change in value
+                continue
+            setattr(self.options, key, value)
+            self._option_apply_side_effect(key, old_value, value)
+
+    def _option_apply_side_effect(self, name: str, old_value: Any, value: Any) -> None:
+        # differs is set here due to legacy reasons. you can refactor it out if you want
+        differs = True
         # for some options we do extra stuff
         if (
             name == "tts_voice"
@@ -1100,9 +1111,9 @@ class Plumbing(object):
             self.loadTemplate(str(value))
         elif name == "chat_user":
             # userpormpt might be in stopwords, which we have to refresh
-            prompt: str = mkChatPrompt(str(oldValue))
+            prompt: str = mkChatPrompt(str(old_value))
             badwords: List[str] = [prompt, prompt.strip()]
-            self.options["stop"] = list(
+            self.options.stop = list(
                 filter(lambda w: w not in badwords, self.getOption("stop"))
             )
 
@@ -1111,10 +1122,10 @@ class Plumbing(object):
         elif name == "stop":
             # user may change this in a char config.json. This may be buggy, but let's make sure at least the template is in.
             if self.template:
-                self.options[name] = self.template.stops()
+                self.optionsstop = self.template.stops()
             else:
-                self.options[name] = []
-            self.options[name] += value
+                self.optionsstop = []
+            self.options.stop += value
         elif name == "chat_ai":
             self.session.setVar(name, str(value))
         elif name == "http" and differs:
@@ -1152,6 +1163,11 @@ class Plumbing(object):
                 self.setOption("stream", False)
                 printerr
         return
+            
+    def setOption(self, name: str, value: bool | str | List[str] | int | float) -> None:
+        """Deprecated. Use self.set_options instead."""
+        self.set_options(**{name: value}) # type: ignore
+
 
     def _ctPauseHandler(self, sig: Any, frame: Any) -> None:
         printerr("Recording paused. CTRL + c to resume, /text to stop.")
@@ -1419,7 +1435,7 @@ class Plumbing(object):
             voices: List[str] = getVoices(self)
             if voices == []:
                 return "error: Cannot initialize TTS: No voices available."
-            self.options["tts_voice"] = random.choice(voices)
+            self.options.tts_voice = random.choice(voices)
             printerr("Voice '" + self.getOption("tts_voice") + "' was chosen randomly.")
 
         if self.tts is not None:
@@ -1438,7 +1454,7 @@ class Plumbing(object):
         self.tts = feedwater.run(
             tts_program,
             env=envFromDict(
-                self.options
+                self.options.model_dump()
                 | {
                     "tts_voice_abs_dir": tts_voice_abs_dir,
                     "ONNX_PROVIDER": "CUDAExecutionProvider",
@@ -2200,15 +2216,15 @@ class Plumbing(object):
         """Sets the datetime special var in the current session."""
         self.session.setVar("datetime", getAITime())
 
-    def backup(self) -> Tuple[Session, Dict[str, Any]]:
+    def backup(self) -> Tuple[Session, Config]:
         """Returns a data structure that can be restored to return to a previous state of the program."""
         # copy strings etc., avoid copying high resource stuff or tricky things, like models and subprocesses
-        return (self.session.copy(), copy.deepcopy(self.options))
+        return (self.session.copy(), self.options.copy(deep=True))
 
-    def restore(self, backup: Tuple[Session, Dict[str, Any]]) -> None:
+    def restore(self, backup: Tuple[Session, Config]) -> None:
         (session, options) = backup
         self.session = session
-        for k, v in options.items():
+        for k, v in options.model_dump().items():
             self.setOption(k, v)
 
     def _stopHTTP(self) -> None:
@@ -2536,7 +2552,7 @@ def setup_plumbing(
         )
 
     if prog.getOption("config_file"):
-        printerr(loadConfig(prog, [prog.options["config_file"]]))
+        printerr(loadConfig(prog, [prog.options.config_file]))
 
     try:
         # this can fail if called from api
@@ -2556,19 +2572,19 @@ def setup_plumbing(
         prog.tts_flag = True
 
     if prog.getOption("image_watch"):
-        del prog.options["image_watch"]
+        prog.options.image_watch = False
         prog.setOption("image_watch", True)
 
     if prog.getOption("http"):
-        del prog.options["http"]
+        prog.options.http = False
         prog.setOption("http", True)
 
     if prog.getOption("websock") and not (prog.websock_server_running.is_set()):
-        del prog.options["websock"]
+        prog.options.websock = False
         prog.setOption("websock", True)
 
     if prog.getOption("audio") and prog.ct is None:
-        del prog.options["audio"]
+        prog.options.audio = False
         prog.setOption("audio", True)
 
 
@@ -2586,12 +2602,12 @@ def regpl(prog: Plumbing, input_function: Callable[[], str] = input) -> None:
         )
 
     while prog.running:
-        last_state: Tuple[Session, Dict[str, Any]] = prog.backup()
+        last_state: Tuple[Session, Config] = prog.backup()
         try:
             # have to do TTS here for complex reasons; flag means to reinitialize tts, which can happen e.g. due to voice change
             if prog.tts_flag:
                 prog.tts_flag = False
-                prog.options["tts"] = False
+                prog.options.tts = False
                 printerr(toggleTTS(prog, []))
 
             if prog.initial_print_flag:
