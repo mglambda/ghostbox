@@ -57,7 +57,7 @@ def makeTaggedParser() -> TaggedArgumentParser:
         # the ARgumenTag will be stored in the matadata
         for annotation_arg in field_info.metadata:
             if isinstance(annotation_arg, ArgumentTag):
-                extracted_arg_tag = annotation_arg.model_copy(deep=True) # type: ignore[call-arg]
+                extracted_arg_tag = annotation_arg.model_copy(deep=True)
                 break # Found the tag, no need to check other metadata args for this purpose
         
         if extracted_arg_tag is None:
@@ -72,7 +72,7 @@ def makeTaggedParser() -> TaggedArgumentParser:
         ):
             continue
         
-        argparse_meta = field_info.json_schema_extra["argparse"]
+        argparse_meta: Dict[str, Any] = cast(Dict[str, Any], field_info.json_schema_extra["argparse"])
 
 
         # Populate name, help, and default_value in the ArgumentTag instance
@@ -81,7 +81,7 @@ def makeTaggedParser() -> TaggedArgumentParser:
 
         # Determine default value for the ArgumentTag
         if field_info.default_factory:
-            extracted_arg_tag.default_value = field_info.default_factory()
+            extracted_arg_tag.default_value = field_info.default_factory() # type: ignore
         elif field_info.default is not PydanticUndefined:
             extracted_arg_tag.default_value = field_info.default
         elif get_origin(field_info.annotation) is Union and type(None) in get_args(field_info.annotation):
@@ -108,7 +108,7 @@ def makeTaggedParser() -> TaggedArgumentParser:
         # Default value for argparse.add_argument
         if not argparse_meta.get("boolean_optional_action"):
             if field_info.default_factory:
-                kwargs["default"] = field_info.default_factory()
+                kwargs["default"] = field_info.default_factory() # type: ignore
             elif field_info.default is not PydanticUndefined:
                 kwargs["default"] = field_info.default
             elif get_origin(field_info.annotation) is Union and type(None) in get_args(field_info.annotation):
@@ -140,10 +140,10 @@ def makeTaggedParser() -> TaggedArgumentParser:
 
             if isinstance(raw_type, type) and issubclass(raw_type, Enum):
                 kwargs["type"] = str
-                kwargs["choices"] = [e.value for e in raw_type]
-            elif raw_type is bool:
+                kwargs["choices"] = [e.value for e in raw_type] # type: ignore
+            elif raw_type is bool: # type: ignore
                 pass
-            elif raw_type in (int, float, str):
+            elif raw_type in (int, float, str): # type: ignore
                 kwargs["type"] = raw_type
             elif origin is list:
                 if type_args:
@@ -157,7 +157,7 @@ def makeTaggedParser() -> TaggedArgumentParser:
                         kwargs["type"] = str
                 else:
                     kwargs["type"] = str
-            elif origin is dict or raw_type is Any:
+            elif origin is dict or raw_type is Any: # type: ignore
                 kwargs["type"] = str
             else:
                 kwargs["type"] = str
@@ -188,6 +188,6 @@ def makeTaggedParser() -> TaggedArgumentParser:
 
 def makeDefaultOptions() -> Tuple[argparse.Namespace, Dict[str, ArgumentTag]]:
     """Returns a pair of default options and tags."""
-    tp: TaggedArgumentParser = makeTaggedParser({}) 
+    tp: TaggedArgumentParser = makeTaggedParser() 
     parser: argparse.ArgumentParser = tp.get_parser()
     return parser.parse_args(args=""), tp.get_tags()
