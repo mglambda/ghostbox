@@ -1493,7 +1493,7 @@ class Config(BaseModel):
         bool,
         Field(
             default=True,
-            description="Clear the current story/message hisotry when a new image is automatically detected.",
+            description="Clear the current story/message history when a new image is automatically detected.",
             json_schema_extra={
                 "argparse": {
                     "long": "--image_watch_clear_history",
