@@ -87,6 +87,7 @@ def makeTaggedParser() -> TaggedArgumentParser:
         elif get_origin(field_info.annotation) is Union and type(None) in get_args(field_info.annotation):
             extracted_arg_tag.default_value = None
         else:
+            printerr(f"warning: Config option {field_name} has no legal default value.")
             extracted_arg_tag.default_value = None
 
         # Prepare kwargs for parser.add_argument
@@ -114,7 +115,10 @@ def makeTaggedParser() -> TaggedArgumentParser:
                 kwargs["default"] = None
             elif argparse_meta.get("action") == "append":
                 kwargs["default"] = []
-
+        else:
+            # booleanoptionalaction
+            kwargs["default"] = field_info.default
+            
         # Type
         cli_type = argparse_meta.get("type")
         if cli_type:
