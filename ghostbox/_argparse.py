@@ -95,7 +95,9 @@ def makeTaggedParser() -> TaggedArgumentParser:
 
         # Short and long arguments
         short_arg = argparse_meta.get("short")
-        long_arg = argparse_meta.get("long", f"--{field_name}")
+        # Convert field_name (underscore) to hyphenated for CLI long argument
+        hyphenated_field_name = field_name.replace("_", "-")
+        long_arg = argparse_meta.get("long", f"--{hyphenated_field_name}").replace("_", "-")
         
         args_list = []
         if short_arg:
