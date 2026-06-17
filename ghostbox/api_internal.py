@@ -33,7 +33,7 @@ def start_session(plumbing: Any, filepath: str, keep: bool = False) -> str:
     configpath = path + "/config.json"
     if os.path.isfile(configpath):
         w += load_config(plumbing, configpath, override=False) + "\n"
-    plumbing.options["character_folder"] = path
+    plumbing.optionscharacter_folder = path
 
     # this might be very useful for people to debug their chars, so we are a bit verbose here by default
     w += "Found vars " + ", ".join([k for k in plumbing.session.getVars().keys() if k not in Session.special_files]) + "\n"

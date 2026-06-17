@@ -54,11 +54,11 @@ def makeTaggedParser() -> TaggedArgumentParser:
         # Get all arguments from the Annotated type, including the actual type and metadata
         annotated_args = get_args(field_info.annotation)
 
-        # the ARgumenTag will be stored in the matadata
-        for annotation_arg in field_info.metadata:
-            if isinstance(annotation_arg, ArgumentTag):
-                extracted_arg_tag = annotation_arg.model_copy(deep=True)
-                break # Found the tag, no need to check other metadata args for this purpose
+        # the ArgumentTag will be stored in the json_schema_extra
+        if (isinstance(field_info.json_schema_extra, dict) and
+            "argument_tag" in field_info.json_schema_extra and
+            isinstance(field_info.json_schema_extra["argument_tag"], ArgumentTag)):
+            extracted_arg_tag = field_info.json_schema_extra["argument_tag"].model_copy(deep=True)
         
         if extracted_arg_tag is None:
 

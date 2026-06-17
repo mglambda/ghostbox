@@ -635,10 +635,10 @@ class Plumbing(object):
         return d
 
     def isContinue(self) -> bool:
-        return bool(self.getOption("continue"))
+        return bool(self.getOption("__continue__"))
 
     def resetContinue(self) -> None:
-        self.setOption("continue", False)
+        self.setOption("__continue__", False)
 
     def _newTranscriber(self) -> "WhisperTranscriber":
         # makes a lazy WhisperTranscriber, because model loading can be slow
@@ -656,11 +656,11 @@ class Plumbing(object):
 
     def continueWith(self, newUserInput: str) -> None:
         # FIXME: the entire 'continue' architecture is a trashfire. This should be refactored along with other modeswitching/input rewriting stuff in the main loop
-        self.setOption("continue", "1")
+        self.setOption("__continue__", "1")
         self.continue_with = newUserInput
 
     def popContinueString(self) -> str:
-        self.setOption("continue", False)
+        self.setOption("__continue__", False)
         tmp: str = self.continue_with
         self.continue_with = ""
         return tmp
@@ -896,7 +896,7 @@ class Plumbing(object):
         if w == "":
             return ""
 
-        if self.getOption("continue"):
+        if self.getOption("__continue__"):
             continuation: str = self.getAIFormatter().format(w)
             self.session.stories.get().extendAssistantText(continuation)
             return continuation

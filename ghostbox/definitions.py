@@ -353,6 +353,8 @@ class Config(BaseModel):
      - By providing them as arguments to the /set command in the CLI, e.g.: /set temperature 0.9
         Consult the CLI's /help options for more.
     """
+
+    # here come the normal config options
     
     include: Annotated[
         List[str],
@@ -364,10 +366,10 @@ class Config(BaseModel):
                     "short": "-I",
                     "long": "--include",
                     "action": "append",
-                }
+                },
+                "argument_tag": ArgumentTag(type=ArgumentType.Porcelain, group=ArgumentGroup.Characters, motd=True)
             }
-        ),
-        ArgumentTag(type=ArgumentType.Porcelain, group=ArgumentGroup.Characters, motd=True)
+        )
     ]
     template_include: Annotated[
         List[str],
@@ -378,10 +380,10 @@ class Config(BaseModel):
                 "argparse": {
                     "long": "--template_include",
                     "action": "append",
-                }
+                },
+                "argument_tag": ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.Templates)
             }
-        ),
-        ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.Templates)
+        )
     ]
     history: Annotated[
         bool,
@@ -392,10 +394,10 @@ class Config(BaseModel):
                 "argparse": {
                     "long": "--history",
                     "boolean_optional_action": True,
-                }
+                },
+                "argument_tag": ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.General)
             }
-        ),
-        ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.General)
+        )
     ]
     history_retroactive_vars: Annotated[
         bool,
@@ -406,10 +408,10 @@ class Config(BaseModel):
                 "argparse": {
                     "long": "--history_retroactive_vars",
                     "boolean_optional_action": True,
-                }
+                },
+                "argument_tag": ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.General)
             }
-        ),
-        ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.General)
+        )
     ]
     history_force_alternating_roles: Annotated[
         bool,
@@ -420,10 +422,10 @@ class Config(BaseModel):
                 "argparse": {
                     "long": "--history_force_alternating_roles",
                     "boolean_optional_action": True,
-                }
+                },
+                "argument_tag": ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.General)
             }
-        ),
-        ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.General)
+        )
     ]
     prompt_format: Annotated[
         str,
@@ -435,10 +437,10 @@ class Config(BaseModel):
                     "short": "-T",
                     "long": "--prompt_format",
                     "type": str,
-                }
+                },
+                "argument_tag": ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.Templates)
             }
-        ),
-        ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.Templates)
+        )
     ]
     stop: Annotated[
         List[str],
@@ -450,10 +452,10 @@ class Config(BaseModel):
                     "short": "-s",
                     "long": "--stop",
                     "action": "append",
-                }
+                },
+                "argument_tag": ArgumentTag(type=ArgumentType.Porcelain, group=ArgumentGroup.Generation, motd=True)
             }
-        ),
-        ArgumentTag(type=ArgumentType.Porcelain, group=ArgumentGroup.Generation, motd=True)
+        )
     ]
     character_folder: Annotated[
         str,
@@ -465,10 +467,10 @@ class Config(BaseModel):
                     "short": "-c",
                     "long": "--character_folder",
                     "type": str,
-                }
+                },
+                "argument_tag": ArgumentTag(type=ArgumentType.Porcelain, group=ArgumentGroup.Characters, very_important=True, motd=True)
             }
-        ),
-        ArgumentTag(type=ArgumentType.Porcelain, group=ArgumentGroup.Characters, very_important=True, motd=True)
+        )
     ]
     prompt: Annotated[
         Optional[str],
@@ -480,10 +482,10 @@ class Config(BaseModel):
                     "short": "-p",
                     "long": "--prompt",
                     "type": str,
-                }
+                },
+                "argument_tag": ArgumentTag(type=ArgumentType.Porcelain, group=ArgumentGroup.Generation)
             }
-        ),
-        ArgumentTag(type=ArgumentType.Porcelain, group=ArgumentGroup.Generation)
+        )
     ]
     endpoint: Annotated[
         str,
@@ -494,10 +496,10 @@ class Config(BaseModel):
                 "argparse": {
                     "long": "--endpoint",
                     "type": str,
-                }
+                },
+                "argument_tag": ArgumentTag(type=ArgumentType.Porcelain, group=ArgumentGroup.Backend)
             }
-        ),
-        ArgumentTag(type=ArgumentType.Porcelain, group=ArgumentGroup.Backend)
+        )
     ]
     client: Annotated[
         bool,
@@ -508,10 +510,10 @@ class Config(BaseModel):
                 "argparse": {
                     "long": "--client",
                     "boolean_optional_action": True,
-                }
+                },
+                "argument_tag": ArgumentTag(type=ArgumentType.Porcelain, group=ArgumentGroup.General)
             }
-        ),
-        ArgumentTag(type=ArgumentType.Porcelain, group=ArgumentGroup.General)
+        )
     ]
     remote_host: Annotated[
         str,
@@ -522,10 +524,10 @@ class Config(BaseModel):
                 "argparse": {
                     "long": "--remote_host",
                     "type": str,
-                }
+                },
+                "argument_tag": ArgumentTag(type=ArgumentType.Porcelain, group=ArgumentGroup.General)
             }
-        ),
-        ArgumentTag(type=ArgumentType.Porcelain, group=ArgumentGroup.General)
+        )
     ]
     remote_port: Annotated[
         int,
@@ -536,10 +538,10 @@ class Config(BaseModel):
                 "argparse": {
                     "long": "--remote_port",
                     "type": int,
-                }
+                },
+                "argument_tag": ArgumentTag(type=ArgumentType.Porcelain, group=ArgumentGroup.General)
             }
-        ),
-        ArgumentTag(type=ArgumentType.Porcelain, group=ArgumentGroup.General)
+        )
     ]
     backend: Annotated[
         LLMBackend,
@@ -551,10 +553,10 @@ class Config(BaseModel):
                     "long": "--backend",
                     "type": str,
                     "choices": [e.value for e in LLMBackend],
-                }
+                },
+                "argument_tag": ArgumentTag(type=ArgumentType.Porcelain, group=ArgumentGroup.Backend, very_important=True)
             }
-        ),
-        ArgumentTag(type=ArgumentType.Porcelain, group=ArgumentGroup.Backend, very_important=True)
+        )
     ]
     api_key: Annotated[
         str,
@@ -565,10 +567,10 @@ class Config(BaseModel):
                 "argparse": {
                     "long": "--api_key",
                     "type": str,
-                }
+                },
+                "argument_tag": ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.OpenAI)
             }
-        ),
-        ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.OpenAI)
+        )
     ]
     google_api_key: Annotated[
         str,
@@ -579,10 +581,10 @@ class Config(BaseModel):
                 "argparse": {
                     "long": "--google_api_key",
                     "type": str,
-                }
+                },
+                "argument_tag": ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.Google)
             }
-        ),
-        ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.Google)
+        )
     ]
     deepseek_api_key: Annotated[
         str,
@@ -593,10 +595,10 @@ class Config(BaseModel):
                 "argparse": {
                     "long": "--deepseek_api_key",
                     "type": str,
-                }
+                },
+                "argument_tag": ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.Backend)
             }
-        ),
-        ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.Backend)
+        )
     ]
     qwen_api_key: Annotated[
         str,
@@ -607,10 +609,10 @@ class Config(BaseModel):
                 "argparse": {
                     "long": "--qwen_api_key",
                     "type": str,
-                }
+                },
+                "argument_tag": ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.Backend)
             }
-        ),
-        ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.Backend)
+        )
     ]
     iflow_api_key: Annotated[
         str,
@@ -621,10 +623,10 @@ class Config(BaseModel):
                 "argparse": {
                     "long": "--iflow_api_key",
                     "type": str,
-                }
+                },
+                "argument_tag": ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.Backend)
             }
-        ),
-        ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.Backend)
+        )
     ]
     iflow_prefered_model: Annotated[
         str,
@@ -635,10 +637,10 @@ class Config(BaseModel):
                 "argparse": {
                     "long": "--iflow_prefered_model",
                     "type": str,
-                }
+                },
+                "argument_tag": ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.Backend)
             }
-        ),
-        ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.Backend)
+        )
     ]
     google_prefered_model: Annotated[
         str,
@@ -649,10 +651,10 @@ class Config(BaseModel):
                 "argparse": {
                     "long": "--google_prefered_model",
                     "type": str,
-                }
+                },
+                "argument_tag": ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.Google)
             }
-        ),
-        ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.Google)
+        )
     ]
     qwen_prefered_model: Annotated[
         str,
@@ -663,10 +665,10 @@ class Config(BaseModel):
                 "argparse": {
                     "long": "--qwen_prefered_model",
                     "type": str,
-                }
+                },
+                "argument_tag": ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.Backend)
             }
-        ),
-        ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.Backend)
+        )
     ]
     max_length: Annotated[
         int,
@@ -677,10 +679,10 @@ class Config(BaseModel):
                 "argparse": {
                     "long": "--max_length",
                     "type": int,
-                }
+                },
+                "argument_tag": ArgumentTag(type=ArgumentType.Porcelain, group=ArgumentGroup.Generation, very_important=True)
             }
-        ),
-        ArgumentTag(type=ArgumentType.Porcelain, group=ArgumentGroup.Generation, very_important=True)
+        )
     ]
     max_context_length: Annotated[
         int,
@@ -691,10 +693,10 @@ class Config(BaseModel):
                 "argparse": {
                     "long": "--max_context_length",
                     "type": int,
-                }
+                },
+                "argument_tag": ArgumentTag(type=ArgumentType.Porcelain, group=ArgumentGroup.Generation, very_important=True)
             }
-        ),
-        ArgumentTag(type=ArgumentType.Porcelain, group=ArgumentGroup.Generation, very_important=True)
+        )
     ]
     chat_user: Annotated[
         str,
@@ -706,10 +708,10 @@ class Config(BaseModel):
                     "short": "-u",
                     "long": "--chat_user",
                     "type": str,
-                }
+                },
+                "argument_tag": ArgumentTag(type=ArgumentType.Porcelain, group=ArgumentGroup.General, very_important=True)
             }
-        ),
-        ArgumentTag(type=ArgumentType.Porcelain, group=ArgumentGroup.General, very_important=True)
+        )
     ]
     mode: Annotated[
         str,
@@ -721,10 +723,10 @@ class Config(BaseModel):
                     "short": "-M",
                     "long": "--mode",
                     "type": str,
-                }
+                },
+                "argument_tag": ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.Templates)
             }
-        ),
-        ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.Templates)
+        )
     ]
     force_params: Annotated[
         bool,
@@ -736,10 +738,10 @@ class Config(BaseModel):
                     "long": "--force_params",
                     "boolean_optional_action": True,
                     "type": bool,
-                }
+                },
+                "argument_tag": ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.Backend)
             }
-        ),
-        ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.Backend)
+        )
     ]
     llamacpp_thinking_json_fix: Annotated[
         bool,
@@ -751,10 +753,10 @@ class Config(BaseModel):
                     "long": "--llamacpp_thinking_json_fix",
                     "boolean_optional_action": True,
                     "type": bool,
-                }
+                },
+                "argument_tag": ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.Backend)
             }
-        ),
-        ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.Backend)
+        )
     ]
     llamacpp_auto_enable_thinking: Annotated[
         bool,
@@ -766,10 +768,10 @@ class Config(BaseModel):
                     "long": "--llamacpp_auto_enable_thinking",
                     "boolean_optional_action": True,
                     "type": bool,
-                }
+                },
+                "argument_tag": ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.Backend)
             }
-        ),
-        ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.Backend)
+        )
     ]
     model: Annotated[
         str,
@@ -781,10 +783,10 @@ class Config(BaseModel):
                     "short": "-m",
                     "long": "--model",
                     "type": str,
-                }
+                },
+                "argument_tag": ArgumentTag(type=ArgumentType.Porcelain, group=ArgumentGroup.Backend, very_important=True)
             }
-        ),
-        ArgumentTag(type=ArgumentType.Porcelain, group=ArgumentGroup.Backend, very_important=True)
+        )
     ]
     grammar_file: Annotated[
         str,
@@ -796,10 +798,10 @@ class Config(BaseModel):
                     "short": "-g",
                     "long": "--grammar_file",
                     "type": str,
-                }
+                },
+                "argument_tag": ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.Generation, motd=True)
             }
-        ),
-        ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.Generation, motd=True)
+        )
     ]
     chat_ai: Annotated[
         str,
@@ -810,10 +812,10 @@ class Config(BaseModel):
                 "argparse": {
                     "long": "--chat_ai",
                     "type": str,
-                }
+                },
+                "argument_tag": ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.Characters)
             }
-        ),
-        ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.Characters)
+        )
     ]
     stream: Annotated[
         bool,
@@ -824,10 +826,10 @@ class Config(BaseModel):
                 "argparse": {
                     "long": "--stream",
                     "boolean_optional_action": True,
-                }
+                },
+                "argument_tag": ArgumentTag(type=ArgumentType.Porcelain, group=ArgumentGroup.Generation, very_important=True)
             }
-        ),
-        ArgumentTag(type=ArgumentType.Porcelain, group=ArgumentGroup.Generation, very_important=True)
+        )
     ]
     http: Annotated[
         bool,
@@ -838,10 +840,10 @@ class Config(BaseModel):
                 "argparse": {
                     "long": "--http",
                     "boolean_optional_action": True,
-                }
+                },
+                "argument_tag": ArgumentTag(type=ArgumentType.Porcelain, group=ArgumentGroup.Interface, service=True)
             }
-        ),
-        ArgumentTag(type=ArgumentType.Porcelain, group=ArgumentGroup.Interface, service=True)
+        )
     ]
     websock: Annotated[
         bool,
@@ -852,10 +854,10 @@ class Config(BaseModel):
                 "argparse": {
                     "long": "--websock",
                     "boolean_optional_action": True,
-                }
+                },
+                "argument_tag": ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.Interface, service=True, motd=True)
             }
-        ),
-        ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.Interface, service=True, motd=True)
+        )
     ]
     websock_host: Annotated[
         str,
@@ -866,10 +868,10 @@ class Config(BaseModel):
                 "argparse": {
                     "long": "--websock_host",
                     "type": str,
-                }
+                },
+                "argument_tag": ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.Interface)
             }
-        ),
-        ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.Interface)
+        )
     ]
     websock_port: Annotated[
         int,
@@ -880,10 +882,10 @@ class Config(BaseModel):
                 "argparse": {
                     "long": "--websock_port",
                     "type": int,
-                }
+                },
+                "argument_tag": ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.Interface)
             }
-        ),
-        ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.Interface)
+        )
     ]
     http_host: Annotated[
         str,
@@ -894,10 +896,10 @@ class Config(BaseModel):
                 "argparse": {
                     "long": "--http_host",
                     "type": str,
-                }
+                },
+                "argument_tag": ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.Interface)
             }
-        ),
-        ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.Interface)
+        )
     ]
     http_port: Annotated[
         int,
@@ -908,10 +910,10 @@ class Config(BaseModel):
                 "argparse": {
                     "long": "--http_port",
                     "type": int,
-                }
+                },
+                "argument_tag": ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.Interface)
             }
-        ),
-        ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.Interface)
+        )
     ]
     http_override: Annotated[
         bool,
@@ -922,10 +924,10 @@ class Config(BaseModel):
                 "argparse": {
                     "long": "--http_override",
                     "boolean_optional_action": True,
-                }
+                },
+                "argument_tag": ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.Interface)
             }
-        ),
-        ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.Interface)
+        )
     ]
     multiline: Annotated[
         bool,
@@ -936,10 +938,10 @@ class Config(BaseModel):
                 "argparse": {
                     "long": "--multiline",
                     "boolean_optional_action": True,
-                }
+                },
+                "argument_tag": ArgumentTag(type=ArgumentType.Porcelain, group=ArgumentGroup.Interface)
             }
-        ),
-        ArgumentTag(type=ArgumentType.Porcelain, group=ArgumentGroup.Interface)
+        )
     ]
     multiline_delimiter: Annotated[
         str,
@@ -950,10 +952,10 @@ class Config(BaseModel):
                 "argparse": {
                     "long": "--multiline_delimiter",
                     "type": str,
-                }
+                },
+                "argument_tag": ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.Interface)
             }
-        ),
-        ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.Interface)
+        )
     ]
     color: Annotated[
         bool,
@@ -964,10 +966,10 @@ class Config(BaseModel):
                 "argparse": {
                     "long": "--color",
                     "boolean_optional_action": True,
-                }
+                },
+                "argument_tag": ArgumentTag(type=ArgumentType.Porcelain, group=ArgumentGroup.Interface, motd=True)
             }
-        ),
-        ArgumentTag(type=ArgumentType.Porcelain, group=ArgumentGroup.Interface, motd=True)
+        )
     ]
     text_ai_color: Annotated[
         str,
@@ -978,10 +980,10 @@ class Config(BaseModel):
                 "argparse": {
                     "long": "--text_ai_color",
                     "type": str,
-                }
+                },
+                "argument_tag": ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.Interface, motd=True)
             }
-        ),
-        ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.Interface, motd=True)
+        )
     ]
     text_ai_style: Annotated[
         str,
@@ -992,10 +994,10 @@ class Config(BaseModel):
                 "argparse": {
                     "long": "--text_ai_style",
                     "type": str,
-                }
+                },
+                "argument_tag": ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.Interface)
             }
-        ),
-        ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.Interface)
+        )
     ]
     dynamic_file_vars: Annotated[
         bool,
@@ -1006,10 +1008,10 @@ class Config(BaseModel):
                 "argparse": {
                     "long": "--dynamic_file_vars",
                     "boolean_optional_action": True,
-                }
+                },
+                "argument_tag": ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.Templates, motd=True)
             }
-        ),
-        ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.Templates, motd=True)
+        )
     ]
     dynamic_file_vars_unsafe: Annotated[
         bool,
@@ -1020,10 +1022,10 @@ class Config(BaseModel):
                 "argparse": {
                     "long": "--dynamic_file_vars_unsafe",
                     "boolean_optional_action": True,
-                }
+                },
+                "argument_tag": ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.Templates, motd=True)
             }
-        ),
-        ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.Templates, motd=True)
+        )
     ]
     dynamic_file_vars_max_depth: Annotated[
         int,
@@ -1034,10 +1036,10 @@ class Config(BaseModel):
                 "argparse": {
                     "long": "--dynamic_file_vars_max_depth",
                     "type": int,
-                }
+                },
+                "argument_tag": ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.Templates, motd=True)
             }
-        ),
-        ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.Templates, motd=True)
+        )
     ]
     warn_trailing_space: Annotated[
         bool,
@@ -1048,10 +1050,10 @@ class Config(BaseModel):
                 "argparse": {
                     "long": "--warn_trailing_space",
                     "boolean_optional_action": True,
-                }
+                },
+                "argument_tag": ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.Generation)
             }
-        ),
-        ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.Generation)
+        )
     ]
     warn_unsupported_sampling_parameter: Annotated[
         bool,
@@ -1062,10 +1064,10 @@ class Config(BaseModel):
                 "argparse": {
                     "long": "--warn_unsupported_sampling_parameter",
                     "boolean_optional_action": True,
-                }
+                },
+                "argument_tag": ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.SamplingParameters)
             }
-        ),
-        ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.SamplingParameters)
+        )
     ]
     warn_audio_activation_phrase: Annotated[
         bool,
@@ -1076,10 +1078,10 @@ class Config(BaseModel):
                 "argparse": {
                     "long": "--warn_audio_activation_phrase",
                     "boolean_optional_action": True,
-                }
+                },
+                "argument_tag": ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.Audio)
             }
-        ),
-        ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.Audio)
+        )
     ]
     warn_hint: Annotated[
         bool,
@@ -1090,10 +1092,10 @@ class Config(BaseModel):
                 "argparse": {
                     "long": "--warn_hint",
                     "boolean_optional_action": True,
-                }
+                },
+                "argument_tag": ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.Generation)
             }
-        ),
-        ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.Generation)
+        )
     ]
     json_grammar: Annotated[
         bool,
@@ -1104,10 +1106,10 @@ class Config(BaseModel):
                 "argparse": {
                     "long": "--json_grammar",
                     "boolean_optional_action": True,
-                }
+                },
+                "argument_tag": ArgumentTag(type=ArgumentType.Porcelain, group=ArgumentGroup.Generation, motd=True)
             }
-        ),
-        ArgumentTag(type=ArgumentType.Porcelain, group=ArgumentGroup.Generation, motd=True)
+        )
     ]
     response_format: Annotated[
         Union[str, Dict[str, Any]],
@@ -1118,10 +1120,10 @@ class Config(BaseModel):
                 "argparse": {
                     "long": "--response_format",
                     "type": str,
-                }
+                },
+                "argument_tag": ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.Generation, motd=True)
             }
-        ),
-        ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.Generation, motd=True)
+        )
     ]
     stream_flush: Annotated[
         str,
@@ -1132,10 +1134,10 @@ class Config(BaseModel):
                 "argparse": {
                     "long": "--stream_flush",
                     "type": str,
-                }
+                },
+                "argument_tag": ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.Generation, motd=True)
             }
-        ),
-        ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.Generation, motd=True)
+        )
     ]
     stream_flush_flex_value: Annotated[
         int,
@@ -1146,10 +1148,10 @@ class Config(BaseModel):
                 "argparse": {
                     "long": "--stream_flush_flex_value",
                     "type": int,
-                }
+                },
+                "argument_tag": ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.Generation, motd=False)
             }
-        ),
-        ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.Generation, motd=False)
+        )
     ]
     cli_prompt: Annotated[
         str,
@@ -1160,10 +1162,10 @@ class Config(BaseModel):
                 "argparse": {
                     "long": "--cli_prompt",
                     "type": str,
-                }
+                },
+                "argument_tag": ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.Interface, motd=True)
             }
-        ),
-        ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.Interface, motd=True)
+        )
     ]
     cli_prompt_color: Annotated[
         str,
@@ -1174,10 +1176,10 @@ class Config(BaseModel):
                 "argparse": {
                     "long": "--cli_prompt_color",
                     "type": str,
-                }
+                },
+                "argument_tag": ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.Interface)
             }
-        ),
-        ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.Interface)
+        )
     ]
     hint: Annotated[
         str,
@@ -1188,10 +1190,10 @@ class Config(BaseModel):
                 "argparse": {
                     "long": "--hint",
                     "type": str,
-                }
+                },
+                "argument_tag": ArgumentTag(type=ArgumentType.Porcelain, group=ArgumentGroup.Generation)
             }
-        ),
-        ArgumentTag(type=ArgumentType.Porcelain, group=ArgumentGroup.Generation)
+        )
     ]
     hint_sticky: Annotated[
         bool,
@@ -1202,10 +1204,10 @@ class Config(BaseModel):
                 "argparse": {
                     "long": "--hint_sticky",
                     "boolean_optional_action": True,
-                }
+                },
+                "argument_tag": ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.Generation)
             }
-        ),
-        ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.Generation)
+        )
     ]
     tts: Annotated[
         bool,
@@ -1216,10 +1218,10 @@ class Config(BaseModel):
                 "argparse": {
                     "long": "--tts",
                     "boolean_optional_action": True,
-                }
+                },
+                "argument_tag": ArgumentTag(type=ArgumentType.Porcelain, group=ArgumentGroup.TTS, very_important=True, service=True)
             }
-        ),
-        ArgumentTag(type=ArgumentType.Porcelain, group=ArgumentGroup.TTS, very_important=True, service=True)
+        )
     ]
     tts_model: Annotated[
         TTSModel,
@@ -1231,10 +1233,10 @@ class Config(BaseModel):
                     "long": "--tts_model",
                     "type": str,
                     "choices": [e.value for e in TTSModel],
-                }
+                },
+                "argument_tag": ArgumentTag(type=ArgumentType.Porcelain, group=ArgumentGroup.TTS)
             }
-        ),
-        ArgumentTag(type=ArgumentType.Porcelain, group=ArgumentGroup.TTS)
+        )
     ]
     tts_zonos_model: Annotated[
         ZonosTTSModel,
@@ -1246,10 +1248,10 @@ class Config(BaseModel):
                     "long": "--tts_zonos_model",
                     "type": str,
                     "choices": [e.value for e in ZonosTTSModel],
-                }
+                },
+                "argument_tag": ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.TTS)
             }
-        ),
-        ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.TTS)
+        )
     ]
     tts_orpheus_model: Annotated[
         str,
@@ -1260,10 +1262,10 @@ class Config(BaseModel):
                 "argparse": {
                     "long": "--tts_orpheus_model",
                     "type": str,
-                }
+                },
+                "argument_tag": ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.TTS)
             }
-        ),
-        ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.TTS)
+        )
     ]
     tts_llm_server: Annotated[
         str,
@@ -1274,10 +1276,10 @@ class Config(BaseModel):
                 "argparse": {
                     "long": "--tts_llm_server",
                     "type": str,
-                }
+                },
+                "argument_tag": ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.TTS)
             }
-        ),
-        ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.TTS)
+        )
     ]
     tts_language: Annotated[
         str,
@@ -1288,10 +1290,10 @@ class Config(BaseModel):
                 "argparse": {
                     "long": "--tts_language",
                     "type": str,
-                }
+                },
+                "argument_tag": ArgumentTag(type=ArgumentType.Porcelain, group=ArgumentGroup.TTS)
             }
-        ),
-        ArgumentTag(type=ArgumentType.Porcelain, group=ArgumentGroup.TTS)
+        )
     ]
     tts_output_method: Annotated[
         TTSOutputMethod,
@@ -1303,10 +1305,10 @@ class Config(BaseModel):
                     "long": "--tts_output_method",
                     "type": str,
                     "choices": [e.value for e in TTSOutputMethod],
-                }
+                },
+                "argument_tag": ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.TTS)
             }
-        ),
-        ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.TTS)
+        )
     ]
     tts_filter: Annotated[
         List[str],
@@ -1317,10 +1319,10 @@ class Config(BaseModel):
                 "argparse": {
                     "long": "--tts_filter",
                     "nargs": "+",
-                }
+                },
+                "argument_tag": ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.TTS)
             }
-        ),
-        ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.TTS)
+        )
     ]
     tts_websock: Annotated[
         bool,
@@ -1331,10 +1333,10 @@ class Config(BaseModel):
                 "argparse": {
                     "long": "--tts_websock",
                     "boolean_optional_action": True,
-                }
+                },
+                "argument_tag": ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.TTS)
             }
-        ),
-        ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.TTS)
+        )
     ]
     tts_websock_host: Annotated[
         str,
@@ -1345,10 +1347,10 @@ class Config(BaseModel):
                 "argparse": {
                     "long": "--tts_websock_host",
                     "type": str,
-                }
+                },
+                "argument_tag": ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.TTS)
             }
-        ),
-        ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.TTS)
+        )
     ]
     tts_websock_port: Annotated[
         int,
@@ -1359,10 +1361,10 @@ class Config(BaseModel):
                 "argparse": {
                     "long": "--tts_websock_port",
                     "type": int,
-                }
+                },
+                "argument_tag": ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.TTS)
             }
-        ),
-        ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.TTS)
+        )
     ]
     tts_interrupt: Annotated[
         bool,
@@ -1373,10 +1375,10 @@ class Config(BaseModel):
                 "argparse": {
                     "long": "--tts_interrupt",
                     "boolean_optional_action": True,
-                }
+                },
+                "argument_tag": ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.TTS)
             }
-        ),
-        ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.TTS)
+        )
     ]
     tts_program: Annotated[
         str,
@@ -1387,10 +1389,10 @@ class Config(BaseModel):
                 "argparse": {
                     "long": "--tts_program",
                     "type": str,
-                }
+                },
+                "argument_tag": ArgumentTag(type=ArgumentType.Porcelain, group=ArgumentGroup.TTS)
             }
-        ),
-        ArgumentTag(type=ArgumentType.Porcelain, group=ArgumentGroup.TTS)
+        )
     ]
     tts_clone_dir: Annotated[
         str,
@@ -1401,10 +1403,10 @@ class Config(BaseModel):
                 "argparse": {
                     "long": "--tts_clone_dir",
                     "type": str,
-                }
+                },
+                "argument_tag": ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.TTS)
             }
-        ),
-        ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.TTS)
+        )
     ]
     tts_tortoise_quality: Annotated[
         str,
@@ -1415,10 +1417,10 @@ class Config(BaseModel):
                 "argparse": {
                     "long": "--tts_tortoise_quality",
                     "type": str,
-                }
+                },
+                "argument_tag": ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.TTS)
             }
-        ),
-        ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.TTS)
+        )
     ]
     tts_volume: Annotated[
         float,
@@ -1429,10 +1431,10 @@ class Config(BaseModel):
                 "argparse": {
                     "long": "--tts_volume",
                     "type": float,
-                }
+                },
+                "argument_tag": ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.TTS)
             }
-        ),
-        ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.TTS)
+        )
     ]
     tts_modify_system_msg: Annotated[
         bool,
@@ -1443,10 +1445,10 @@ class Config(BaseModel):
                 "argparse": {
                     "long": "--tts_modify_system_msg",
                     "boolean_optional_action": True,
-                }
+                },
+                "argument_tag": ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.TTS)
             }
-        ),
-        ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.TTS)
+        )
     ]
     tts_rate: Annotated[
         int,
@@ -1457,10 +1459,10 @@ class Config(BaseModel):
                 "argparse": {
                     "long": "--tts_rate",
                     "type": int,
-                }
+                },
+                "argument_tag": ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.TTS)
             }
-        ),
-        ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.TTS)
+        )
     ]
     tts_additional_arguments: Annotated[
         str,
@@ -1471,10 +1473,10 @@ class Config(BaseModel):
                 "argparse": {
                     "long": "--tts_additional_arguments",
                     "type": str,
-                }
+                },
+                "argument_tag": ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.TTS)
             }
-        ),
-        ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.TTS)
+        )
     ]
     image_watch: Annotated[
         bool,
@@ -1485,10 +1487,10 @@ class Config(BaseModel):
                 "argparse": {
                     "long": "--image_watch",
                     "boolean_optional_action": True,
-                }
+                },
+                "argument_tag": ArgumentTag(type=ArgumentType.Porcelain, group=ArgumentGroup.Images, service=True, motd=True)
             }
-        ),
-        ArgumentTag(type=ArgumentType.Porcelain, group=ArgumentGroup.Images, service=True, motd=True)
+        )
     ]
     image_watch_clear_history: Annotated[
         bool,
@@ -1499,10 +1501,10 @@ class Config(BaseModel):
                 "argparse": {
                     "long": "--image_watch_clear_history",
                     "boolean_optional_action": True,
-                }
+                },
+                "argument_tag": ArgumentTag(type=ArgumentType.Porcelain, group=ArgumentGroup.Images, service=True, motd=True)
             }
-        ),
-        ArgumentTag(type=ArgumentType.Porcelain, group=ArgumentGroup.Images, service=True, motd=True)
+        )
     ]
     image_watch_dir: Annotated[
         str,
@@ -1513,10 +1515,10 @@ class Config(BaseModel):
                 "argparse": {
                     "long": "--image_watch_dir",
                     "type": str,
-                }
+                },
+                "argument_tag": ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.Images)
             }
-        ),
-        ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.Images)
+        )
     ]
     image_watch_msg: Annotated[
         str,
@@ -1527,10 +1529,10 @@ class Config(BaseModel):
                 "argparse": {
                     "long": "--image_watch_msg",
                     "type": str,
-                }
+                },
+                "argument_tag": ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.Images, motd=True)
             }
-        ),
-        ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.Images, motd=True)
+        )
     ]
     image_watch_hint: Annotated[
         str,
@@ -1541,10 +1543,10 @@ class Config(BaseModel):
                 "argparse": {
                     "long": "--image_watch_hint",
                     "type": str,
-                }
+                },
+                "argument_tag": ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.Images, motd=True)
             }
-        ),
-        ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.Images, motd=True)
+        )
     ]
     whisper_model: Annotated[
         str,
@@ -1555,10 +1557,10 @@ class Config(BaseModel):
                 "argparse": {
                     "long": "--whisper_model",
                     "type": str,
-                }
+                },
+                "argument_tag": ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.Audio)
             }
-        ),
-        ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.Audio)
+        )
     ]
     tts_voice: Annotated[
         str,
@@ -1570,10 +1572,10 @@ class Config(BaseModel):
                     "short": "-y",
                     "long": "--tts_voice",
                     "type": str,
-                }
+                },
+                "argument_tag": ArgumentTag(type=ArgumentType.Porcelain, group=ArgumentGroup.TTS)
             }
-        ),
-        ArgumentTag(type=ArgumentType.Porcelain, group=ArgumentGroup.TTS)
+        )
     ]
     tts_subtitles: Annotated[
         bool,
@@ -1584,10 +1586,10 @@ class Config(BaseModel):
                 "argparse": {
                     "long": "--tts_subtitles",
                     "boolean_optional_action": True,
-                }
+                },
+                "argument_tag": ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.TTS)
             }
-        ),
-        ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.TTS)
+        )
     ]
     config_file: Annotated[
         str,
@@ -1598,10 +1600,10 @@ class Config(BaseModel):
                 "argparse": {
                     "long": "--config_file",
                     "type": str,
-                }
+                },
+                "argument_tag": ArgumentTag(type=ArgumentType.Porcelain, group=ArgumentGroup.General)
             }
-        ),
-        ArgumentTag(type=ArgumentType.Porcelain, group=ArgumentGroup.General)
+        )
     ]
     chat_show_ai_prompt: Annotated[
         bool,
@@ -1612,10 +1614,10 @@ class Config(BaseModel):
                 "argparse": {
                     "long": "--chat_show_ai_prompt",
                     "boolean_optional_action": True,
-                }
+                },
+                "argument_tag": ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.Interface)
             }
-        ),
-        ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.Interface)
+        )
     ]
     smart_context: Annotated[
         bool,
@@ -1626,10 +1628,10 @@ class Config(BaseModel):
                 "argparse": {
                     "long": "--smart_context",
                     "boolean_optional_action": True,
-                }
+                },
+                "argument_tag": ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.Generation, motd=True)
             }
-        ),
-        ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.Generation, motd=True)
+        )
     ]
     hide: Annotated[
         bool,
@@ -1640,10 +1642,10 @@ class Config(BaseModel):
                 "argparse": {
                     "long": "--hide",
                     "boolean_optional_action": True,
-                }
+                },
+                "argument_tag": ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.Interface, motd=True)
             }
-        ),
-        ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.Interface, motd=True)
+        )
     ]
     sound_output_device_index: Annotated[
         Optional[int],
@@ -1654,10 +1656,10 @@ class Config(BaseModel):
                 "argparse": {
                     "long": "--sound_output_device_index",
                     "type": int,
-                }
+                },
+                "argument_tag": ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.General)
             }
-        ),
-        ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.General)
+        )
     ]
     sound_input_device_index: Annotated[
         Optional[int],
@@ -1668,10 +1670,10 @@ class Config(BaseModel):
                 "argparse": {
                     "long": "--sound_input_device_index",
                     "type": int,
-                }
+                },
+                "argument_tag": ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.General)
             }
-        ),
-        ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.General)
+        )
     ]
     sound_list_output_devices: Annotated[
         bool,
@@ -1682,10 +1684,10 @@ class Config(BaseModel):
                 "argparse": {
                     "long": "--sound_list_output_devices",
                     "type": bool,
-                }
+                },
+                "argument_tag": ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.General)
             }
-        ),
-        ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.General)
+        )
     ]
     audio: Annotated[
         bool,
@@ -1696,10 +1698,10 @@ class Config(BaseModel):
                 "argparse": {
                     "long": "--audio",
                     "boolean_optional_action": True,
-                }
+                },
+                "argument_tag": ArgumentTag(type=ArgumentType.Porcelain, group=ArgumentGroup.Audio, service=True, very_important=True)
             }
-        ),
-        ArgumentTag(type=ArgumentType.Porcelain, group=ArgumentGroup.Audio, service=True, very_important=True)
+        )
     ]
     audio_silence_threshold: Annotated[
         int,
@@ -1710,10 +1712,10 @@ class Config(BaseModel):
                 "argparse": {
                     "long": "--audio_silence_threshold",
                     "type": int,
-                }
+                },
+                "argument_tag": ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.Audio, motd=True)
             }
-        ),
-        ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.Audio, motd=True)
+        )
     ]
     audio_activation_phrase: Annotated[
         str,
@@ -1724,10 +1726,10 @@ class Config(BaseModel):
                 "argparse": {
                     "long": "--audio_activation_phrase",
                     "type": str,
-                }
+                },
+                "argument_tag": ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.Audio, motd=True)
             }
-        ),
-        ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.Audio, motd=True)
+        )
     ]
     audio_activation_period_ms: Annotated[
         int,
@@ -1738,10 +1740,10 @@ class Config(BaseModel):
                 "argparse": {
                     "long": "--audio_activation_period_ms",
                     "type": int,
-                }
+                },
+                "argument_tag": ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.Audio)
             }
-        ),
-        ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.Audio)
+        )
     ]
     audio_interrupt: Annotated[
         bool,
@@ -1752,10 +1754,10 @@ class Config(BaseModel):
                 "argparse": {
                     "long": "--audio_interrupt",
                     "boolean_optional_action": True,
-                }
+                },
+                "argument_tag": ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.Audio)
             }
-        ),
-        ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.Audio)
+        )
     ]
     audio_activation_phrase_keep: Annotated[
         bool,
@@ -1766,10 +1768,10 @@ class Config(BaseModel):
                 "argparse": {
                     "long": "--audio_activation_phrase_keep",
                     "boolean_optional_action": True,
-                }
+                },
+                "argument_tag": ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.Audio)
             }
-        ),
-        ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.Audio)
+        )
     ]
     audio_show_transcript: Annotated[
         bool,
@@ -1780,10 +1782,10 @@ class Config(BaseModel):
                 "argparse": {
                     "long": "--audio_show_transcript",
                     "boolean_optional_action": True,
-                }
+                },
+                "argument_tag": ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.Audio)
             }
-        ),
-        ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.Audio)
+        )
     ]
     audio_websock: Annotated[
         bool,
@@ -1794,10 +1796,10 @@ class Config(BaseModel):
                 "argparse": {
                     "long": "--audio_websock",
                     "boolean_optional_action": True,
-                }
+                },
+                "argument_tag": ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.Audio)
             }
-        ),
-        ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.Audio)
+        )
     ]
     audio_websock_host: Annotated[
         str,
@@ -1808,10 +1810,10 @@ class Config(BaseModel):
                 "argparse": {
                     "long": "--audio_websock_host",
                     "type": str,
-                }
+                },
+                "argument_tag": ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.Audio)
             }
-        ),
-        ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.Audio)
+        )
     ]
     audio_websock_port: Annotated[
         int,
@@ -1822,10 +1824,10 @@ class Config(BaseModel):
                 "argparse": {
                     "long": "--audio_websock_port",
                     "type": int,
-                }
+                },
+                "argument_tag": ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.Audio)
             }
-        ),
-        ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.Audio)
+        )
     ]
     verbose: Annotated[
         bool,
@@ -1836,10 +1838,10 @@ class Config(BaseModel):
                 "argparse": {
                     "long": "--verbose",
                     "boolean_optional_action": True,
-                }
+                },
+                "argument_tag": ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.General)
             }
-        ),
-        ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.General)
+        )
     ]
     log_time: Annotated[
         bool,
@@ -1850,10 +1852,10 @@ class Config(BaseModel):
                 "argparse": {
                     "long": "--log_time",
                     "boolean_optional_action": True,
-                }
+                },
+                "argument_tag": ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.General)
             }
-        ),
-        ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.General)
+        )
     ]
     quiet: Annotated[
         bool,
@@ -1865,10 +1867,10 @@ class Config(BaseModel):
                     "short": "-q",
                     "long": "--quiet",
                     "boolean_optional_action": True,
-                }
+                },
+                "argument_tag": ArgumentTag(type=ArgumentType.Porcelain, group=ArgumentGroup.Interface)
             }
-        ),
-        ArgumentTag(type=ArgumentType.Porcelain, group=ArgumentGroup.Interface)
+        )
     ]
     history_drop_on_generation_error: Annotated[
         bool,
@@ -1879,10 +1881,10 @@ class Config(BaseModel):
                 "argparse": {
                     "long": "--history_drop_on_generation_error",
                     "boolean_optional_action": True,
-                }
+                },
+                "argument_tag": ArgumentTag(type=ArgumentType.Porcelain, group=ArgumentGroup.Interface)
             }
-        ),
-        ArgumentTag(type=ArgumentType.Porcelain, group=ArgumentGroup.Interface)
+        )
     ]
     stderr: Annotated[
         bool,
@@ -1893,10 +1895,10 @@ class Config(BaseModel):
                 "argparse": {
                     "long": "--stderr",
                     "boolean_optional_action": True,
-                }
+                },
+                "argument_tag": ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.Interface)
             }
-        ),
-        ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.Interface)
+        )
     ]
     stdout: Annotated[
         bool,
@@ -1907,10 +1909,10 @@ class Config(BaseModel):
                 "argparse": {
                     "long": "--stdout",
                     "boolean_optional_action": True,
-                }
+                },
+                "argument_tag": ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.Interface)
             }
-        ),
-        ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.Interface)
+        )
     ]
     expand_user_input: Annotated[
         bool,
@@ -1921,10 +1923,10 @@ class Config(BaseModel):
                 "argparse": {
                     "long": "--expand_user_input",
                     "boolean_optional_action": True,
-                }
+                },
+                "argument_tag": ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.Interface)
             }
-        ),
-        ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.Interface)
+        )
     ]
     tools_unprotected_shell_access: Annotated[
         bool,
@@ -1935,10 +1937,10 @@ class Config(BaseModel):
                 "argparse": {
                     "long": "--tools_unprotected_shell_access",
                     "boolean_optional_action": True,
-                }
+                },
+                "argument_tag": ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.Tools)
             }
-        ),
-        ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.Tools)
+        )
     ]
     tools_forbidden: Annotated[
         List[str],
@@ -1950,10 +1952,10 @@ class Config(BaseModel):
                     "short": "-d",
                     "long": "--tools_forbidden",
                     "action": "append",
-                }
+                },
+                "argument_tag": ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.Tools, very_important=True, motd=True)
             }
-        ),
-        ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.Tools, very_important=True, motd=True)
+        )
     ]
     tools_hint: Annotated[
         str,
@@ -1964,10 +1966,10 @@ class Config(BaseModel):
                 "argparse": {
                     "long": "--tools_hint",
                     "type": str,
-                }
+                },
+                "argument_tag": ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.Tools)
             }
-        ),
-        ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.Tools)
+        )
     ]
     tools_inject_dependency_function: Annotated[
         str,
@@ -1978,10 +1980,10 @@ class Config(BaseModel):
                 "argparse": {
                     "long": "--tools_inject_dependency_function",
                     "type": str,
-                }
+                },
+                "argument_tag": ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.Tools, motd=True)
             }
-        ),
-        ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.Tools, motd=True)
+        )
     ]
     tools_inject_ghostbox: Annotated[
         bool,
@@ -1992,10 +1994,10 @@ class Config(BaseModel):
                 "argparse": {
                     "long": "--tools_inject_ghostbox",
                     "boolean_optional_action": True,
-                }
+                },
+                "argument_tag": ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.Tools)
             }
-        ),
-        ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.Tools)
+        )
     ]
     use_tools: Annotated[
         bool,
@@ -2006,10 +2008,10 @@ class Config(BaseModel):
                 "argparse": {
                     "long": "--use_tools",
                     "boolean_optional_action": True,
-                }
+                },
+                "argument_tag": ArgumentTag(type=ArgumentType.Porcelain, group=ArgumentGroup.Tools, very_important=True, motd=True)
             }
-        ),
-        ArgumentTag(type=ArgumentType.Porcelain, group=ArgumentGroup.Tools, very_important=True, motd=True)
+        )
     ]
     var_file: Annotated[
         List[str],
@@ -2021,10 +2023,10 @@ class Config(BaseModel):
                     "short": "-x",
                     "long": "--var_file",
                     "action": "append",
-                }
+                },
+                "argument_tag": ArgumentTag(type=ArgumentType.Porcelain, group=ArgumentGroup.Interface, motd=True)
             }
-        ),
-        ArgumentTag(type=ArgumentType.Porcelain, group=ArgumentGroup.Interface, motd=True)
+        )
     ]
 
     # Sampling Parameters (from backends.py)
@@ -2037,10 +2039,10 @@ class Config(BaseModel):
                 "argparse": {
                     "long": "--temperature",
                     "type": float,
-                }
+                },
+                "argument_tag": ArgumentTag(type=ArgumentType.Porcelain, group=ArgumentGroup.SamplingParameters, very_important=True, is_option=True)
             }
-        ),
-        ArgumentTag(type=ArgumentType.Porcelain, group=ArgumentGroup.SamplingParameters, very_important=True, is_option=True)
+        )
     ]
     dynatemp_range: Annotated[
         float,
@@ -2051,10 +2053,10 @@ class Config(BaseModel):
                 "argparse": {
                     "long": "--dynatemp_range",
                     "type": float,
-                }
+                },
+                "argument_tag": ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.SamplingParameters, is_option=True)
             }
-        ),
-        ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.SamplingParameters, is_option=True)
+        )
     ]
     dynatemp_exponent: Annotated[
         float,
@@ -2065,10 +2067,10 @@ class Config(BaseModel):
                 "argparse": {
                     "long": "--dynatemp_exponent",
                     "type": float,
-                }
+                },
+                "argument_tag": ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.SamplingParameters, is_option=True)
             }
-        ),
-        ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.SamplingParameters, is_option=True)
+        )
     ]
     top_k: Annotated[
         int,
@@ -2079,10 +2081,10 @@ class Config(BaseModel):
                 "argparse": {
                     "long": "--top_k",
                     "type": int,
-                }
+                },
+                "argument_tag": ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.SamplingParameters, is_option=True)
             }
-        ),
-        ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.SamplingParameters, is_option=True)
+        )
     ]
     top_p: Annotated[
         float,
@@ -2093,10 +2095,10 @@ class Config(BaseModel):
                 "argparse": {
                     "long": "--top_p",
                     "type": float,
-                }
+                },
+                "argument_tag": ArgumentTag(type=ArgumentType.Porcelain, group=ArgumentGroup.SamplingParameters, very_important=True, is_option=True)
             }
-        ),
-        ArgumentTag(type=ArgumentType.Porcelain, group=ArgumentGroup.SamplingParameters, very_important=True, is_option=True)
+        )
     ]
     min_p: Annotated[
         float,
@@ -2107,10 +2109,10 @@ class Config(BaseModel):
                 "argparse": {
                     "long": "--min_p",
                     "type": float,
-                }
+                },
+                "argument_tag": ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.SamplingParameters, is_option=True)
             }
-        ),
-        ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.SamplingParameters, is_option=True)
+        )
     ]
     n_indent: Annotated[
         int,
@@ -2121,10 +2123,10 @@ class Config(BaseModel):
                 "argparse": {
                     "long": "--n_indent",
                     "type": int,
-                }
+                },
+                "argument_tag": ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.SamplingParameters, is_option=True)
             }
-        ),
-        ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.SamplingParameters, is_option=True)
+        )
     ]
     n_keep: Annotated[
         int,
@@ -2135,10 +2137,10 @@ class Config(BaseModel):
                 "argparse": {
                     "long": "--n_keep",
                     "type": int,
-                }
+                },
+                "argument_tag": ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.SamplingParameters, is_option=True)
             }
-        ),
-        ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.SamplingParameters, is_option=True)
+        )
     ]
     typical_p: Annotated[
         float,
@@ -2149,10 +2151,10 @@ class Config(BaseModel):
                 "argparse": {
                     "long": "--typical_p",
                     "type": float,
-                }
+                },
+                "argument_tag": ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.SamplingParameters, is_option=True)
             }
-        ),
-        ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.SamplingParameters, is_option=True)
+        )
     ]
     repeat_penalty: Annotated[
         float,
@@ -2163,10 +2165,10 @@ class Config(BaseModel):
                 "argparse": {
                     "long": "--repeat_penalty",
                     "type": float,
-                }
+                },
+                "argument_tag": ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.SamplingParameters, very_important=True, is_option=True)
             }
-        ),
-        ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.SamplingParameters, very_important=True, is_option=True)
+        )
     ]
     repeat_last_n: Annotated[
         int,
@@ -2177,10 +2179,10 @@ class Config(BaseModel):
                 "argparse": {
                     "long": "--repeat_last_n",
                     "type": int,
-                }
+                },
+                "argument_tag": ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.SamplingParameters, is_option=True)
             }
-        ),
-        ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.SamplingParameters, is_option=True)
+        )
     ]
     presence_penalty: Annotated[
         float,
@@ -2191,10 +2193,10 @@ class Config(BaseModel):
                 "argparse": {
                     "long": "--presence_penalty",
                     "type": float,
-                }
+                },
+                "argument_tag": ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.SamplingParameters, very_important=True, is_option=True)
             }
-        ),
-        ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.SamplingParameters, very_important=True, is_option=True)
+        )
     ]
     frequency_penalty: Annotated[
         float,
@@ -2205,10 +2207,10 @@ class Config(BaseModel):
                 "argparse": {
                     "long": "--frequency_penalty",
                     "type": float,
-                }
+                },
+                "argument_tag": ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.SamplingParameters, very_important=True, is_option=True)
             }
-        ),
-        ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.SamplingParameters, very_important=True, is_option=True)
+        )
     ]
     dry_multiplier: Annotated[
         float,
@@ -2219,10 +2221,10 @@ class Config(BaseModel):
                 "argparse": {
                     "long": "--dry_multiplier",
                     "type": float,
-                }
+                },
+                "argument_tag": ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.SamplingParameters, is_option=True)
             }
-        ),
-        ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.SamplingParameters, is_option=True)
+        )
     ]
     dry_base: Annotated[
         float,
@@ -2233,10 +2235,10 @@ class Config(BaseModel):
                 "argparse": {
                     "long": "--dry_base",
                     "type": float,
-                }
+                },
+                "argument_tag": ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.SamplingParameters, is_option=True)
             }
-        ),
-        ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.SamplingParameters, is_option=True)
+        )
     ]
     dry_allowed_length: Annotated[
         int,
@@ -2247,10 +2249,10 @@ class Config(BaseModel):
                 "argparse": {
                     "long": "--dry_allowed_length",
                     "type": int,
-                }
+                },
+                "argument_tag": ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.SamplingParameters, is_option=True)
             }
-        ),
-        ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.SamplingParameters, is_option=True)
+        )
     ]
     dry_penalty_last_n: Annotated[
         int,
@@ -2261,10 +2263,10 @@ class Config(BaseModel):
                 "argparse": {
                     "long": "--dry_penalty_last_n",
                     "type": int,
-                }
+                },
+                "argument_tag": ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.SamplingParameters, is_option=True)
             }
-        ),
-        ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.SamplingParameters, is_option=True)
+        )
     ]
     dry_sequence_breakers: Annotated[
         List[str],
@@ -2274,10 +2276,10 @@ class Config(BaseModel):
             json_schema_extra={
                 "argparse": {
                     "long": "--dry_sequence_breakers",
-                }
+                },
+                "argument_tag": ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.SamplingParameters, is_option=True)
             }
-        ),
-        ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.SamplingParameters, is_option=True)
+        )
     ]
     xtc_probability: Annotated[
         float,
@@ -2288,10 +2290,10 @@ class Config(BaseModel):
                 "argparse": {
                     "long": "--xtc_probability",
                     "type": float,
-                }
+                },
+                "argument_tag": ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.SamplingParameters, is_option=True)
             }
-        ),
-        ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.SamplingParameters, is_option=True)
+        )
     ]
     xtc_threshold: Annotated[
         float,
@@ -2302,10 +2304,10 @@ class Config(BaseModel):
                 "argparse": {
                     "long": "--xtc_threshold",
                     "type": float,
-                }
+                },
+                "argument_tag": ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.SamplingParameters, is_option=True)
             }
-        ),
-        ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.SamplingParameters, is_option=True)
+        )
     ]
     mirostat: Annotated[
         int,
@@ -2316,10 +2318,10 @@ class Config(BaseModel):
                 "argparse": {
                     "long": "--mirostat",
                     "type": int,
-                }
+                },
+                "argument_tag": ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.SamplingParameters, is_option=True)
             }
-        ),
-        ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.SamplingParameters, is_option=True)
+        )
     ]
     mirostat_tau: Annotated[
         float,
@@ -2330,10 +2332,10 @@ class Config(BaseModel):
                 "argparse": {
                     "long": "--mirostat_tau",
                     "type": float,
-                }
+                },
+                "argument_tag": ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.SamplingParameters, is_option=True)
             }
-        ),
-        ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.SamplingParameters, is_option=True)
+        )
     ]
     mirostat_eta: Annotated[
         float,
@@ -2344,10 +2346,10 @@ class Config(BaseModel):
                 "argparse": {
                     "long": "--mirostat_eta",
                     "type": float,
-                }
+                },
+                "argument_tag": ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.SamplingParameters, is_option=True)
             }
-        ),
-        ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.SamplingParameters, is_option=True)
+        )
     ]
     grammar: Annotated[
         Optional[str],
@@ -2358,10 +2360,10 @@ class Config(BaseModel):
                 "argparse": {
                     "long": "--grammar",
                     "type": str,
-                }
+                },
+                "argument_tag": ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.SamplingParameters, is_option=True)
             }
-        ),
-        ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.SamplingParameters, is_option=True)
+        )
     ]
     grammar_lazy: Annotated[
         bool,
@@ -2372,10 +2374,10 @@ class Config(BaseModel):
                 "argparse": {
                     "long": "--grammar_lazy",
                     "type": bool,
-                }
+                },
+                "argument_tag": ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.SamplingParameters, is_option=True)
             }
-        ),
-        ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.SamplingParameters, is_option=True)
+        )
     ]
     grammar_triggers: Annotated[
         List[Dict[str, Any]],
@@ -2385,10 +2387,10 @@ class Config(BaseModel):
             json_schema_extra={
                 "argparse": {
                     "long": "--grammar_triggers",
-                }
+                },
+                "argument_tag": ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.SamplingParameters, is_option=True)
             }
-        ),
-        ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.SamplingParameters, is_option=True)
+        )
     ]
     preserved_tokens: Annotated[
         List[int],
@@ -2398,10 +2400,10 @@ class Config(BaseModel):
             json_schema_extra={
                 "argparse": {
                     "long": "--preserved_tokens",
-                }
+                },
+                "argument_tag": ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.SamplingParameters, is_option=True)
             }
-        ),
-        ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.SamplingParameters, is_option=True)
+        )
     ]
     enable_thinking: Annotated[
         bool,
@@ -2412,10 +2414,10 @@ class Config(BaseModel):
                 "argparse": {
                     "long": "--enable_thinking",
                     "type": bool,
-                }
+                },
+                "argument_tag": ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.SamplingParameters, is_option=True)
             }
-        ),
-        ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.SamplingParameters, is_option=True)
+        )
     ]
     chat_template_kwargs: Annotated[
         Dict[str, Any],
@@ -2425,10 +2427,10 @@ class Config(BaseModel):
             json_schema_extra={
                 "argparse": {
                     "long": "--chat_template_kwargs",
-                }
+                },
+                "argument_tag": ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.SamplingParameters, is_option=True)
             }
-        ),
-        ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.SamplingParameters, is_option=True)
+        )
     ]
     json_schema: Annotated[
         Optional[Dict[str, Any]],
@@ -2438,10 +2440,10 @@ class Config(BaseModel):
             json_schema_extra={
                 "argparse": {
                     "long": "--json_schema",
-                }
+                },
+                "argument_tag": ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.SamplingParameters, is_option=True)
             }
-        ),
-        ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.SamplingParameters, is_option=True)
+        )
     ]
     seed: Annotated[
         int,
@@ -2452,10 +2454,10 @@ class Config(BaseModel):
                 "argparse": {
                     "long": "--seed",
                     "type": int,
-                }
+                },
+                "argument_tag": ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.SamplingParameters, is_option=True)
             }
-        ),
-        ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.SamplingParameters, is_option=True)
+        )
     ]
     ignore_eos: Annotated[
         bool,
@@ -2466,10 +2468,10 @@ class Config(BaseModel):
                 "argparse": {
                     "long": "--ignore_eos",
                     "type": bool,
-                }
+                },
+                "argument_tag": ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.SamplingParameters, is_option=True)
             }
-        ),
-        ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.SamplingParameters, is_option=True)
+        )
     ]
     logit_bias: Annotated[
         List[List[Union[int, float, bool]]],
@@ -2479,10 +2481,10 @@ class Config(BaseModel):
             json_schema_extra={
                 "argparse": {
                     "long": "--logit_bias",
-                }
+                },
+                "argument_tag": ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.SamplingParameters, is_option=True)
             }
-        ),
-        ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.SamplingParameters, is_option=True)
+        )
     ]
     n_probs: Annotated[
         int,
@@ -2493,10 +2495,10 @@ class Config(BaseModel):
                 "argparse": {
                     "long": "--n_probs",
                     "type": int,
-                }
+                },
+                "argument_tag": ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.SamplingParameters, is_option=True)
             }
-        ),
-        ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.SamplingParameters, is_option=True)
+        )
     ]
     min_keep: Annotated[
         int,
@@ -2507,10 +2509,10 @@ class Config(BaseModel):
                 "argparse": {
                     "long": "--min_keep",
                     "type": int,
-                }
+                },
+                "argument_tag": ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.SamplingParameters, is_option=True)
             }
-        ),
-        ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.SamplingParameters, is_option=True)
+        )
     ]
     t_max_predict_ms: Annotated[
         int,
@@ -2521,10 +2523,10 @@ class Config(BaseModel):
                 "argparse": {
                     "long": "--t_max_predict_ms",
                     "type": int,
-                }
+                },
+                "argument_tag": ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.SamplingParameters, is_option=True)
             }
-        ),
-        ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.SamplingParameters, is_option=True)
+        )
     ]
     id_slot: Annotated[
         int,
@@ -2535,10 +2537,10 @@ class Config(BaseModel):
                 "argparse": {
                     "long": "--id_slot",
                     "type": int,
-                }
+                },
+                "argument_tag": ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.SamplingParameters, is_option=True)
             }
-        ),
-        ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.SamplingParameters, is_option=True)
+        )
     ]
     cache_prompt: Annotated[
         bool,
@@ -2549,10 +2551,10 @@ class Config(BaseModel):
                 "argparse": {
                     "long": "--cache_prompt",
                     "type": bool,
-                }
+                },
+                "argument_tag": ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.SamplingParameters, is_option=True)
             }
-        ),
-        ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.SamplingParameters, is_option=True)
+        )
     ]
     return_tokens: Annotated[
         bool,
@@ -2563,10 +2565,10 @@ class Config(BaseModel):
                 "argparse": {
                     "long": "--return_tokens",
                     "type": bool,
-                }
+                },
+                "argument_tag": ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.SamplingParameters, is_option=True)
             }
-        ),
-        ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.SamplingParameters, is_option=True)
+        )
     ]
     samplers: Annotated[
         List[str],
@@ -2578,10 +2580,10 @@ class Config(BaseModel):
                     "short": "-S",
                     "long": "--samplers",
                     "nargs": "*",
-                }
+                },
+                "argument_tag": ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.SamplingParameters, very_important=True, motd=True, is_option=True)
             }
-        ),
-        ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.SamplingParameters, very_important=True, motd=True, is_option=True)
+        )
     ]
     timings_per_token: Annotated[
         bool,
@@ -2592,10 +2594,10 @@ class Config(BaseModel):
                 "argparse": {
                     "long": "--timings_per_token",
                     "type": bool,
-                }
+                },
+                "argument_tag": ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.SamplingParameters, is_option=True)
             }
-        ),
-        ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.SamplingParameters, is_option=True)
+        )
     ]
     post_sampling_probs: Annotated[
         Optional[Any],
@@ -2605,10 +2607,10 @@ class Config(BaseModel):
             json_schema_extra={
                 "argparse": {
                     "long": "--post_sampling_probs",
-                }
+                },
+                "argument_tag": ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.SamplingParameters, is_option=True)
             }
-        ),
-        ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.SamplingParameters, is_option=True)
+        )
     ]
     response_fields: Annotated[
         Optional[List[str]],
@@ -2618,10 +2620,10 @@ class Config(BaseModel):
             json_schema_extra={
                 "argparse": {
                     "long": "--response_fields",
-                }
+                },
+                "argument_tag": ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.SamplingParameters, is_option=True)
             }
-        ),
-        ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.SamplingParameters, is_option=True)
+        )
     ]
     lora: Annotated[
         List[Dict[str, Any]],
@@ -2631,10 +2633,10 @@ class Config(BaseModel):
             json_schema_extra={
                 "argparse": {
                     "long": "--lora",
-                }
+                },
+                "argument_tag": ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.SamplingParameters, is_option=True)
             }
-        ),
-        ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.SamplingParameters, is_option=True)
+        )
     ]
     add_generation_prompt: Annotated[
         bool,
@@ -2645,17 +2647,17 @@ class Config(BaseModel):
                 "argparse": {
                     "long": "--add_generation_prompt",
                     "type": bool,
-                }
+                },
+                "argument_tag": ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.SamplingParameters, is_option=True)
             }
-        ),
-        ArgumentTag(type=ArgumentType.Plumbing, group=ArgumentGroup.SamplingParameters, is_option=True)
+        )
     ]
 
     # Hidden/Internal options (not directly exposed via CLI, but used internally or via API)
 
-    #__api__: bool = Field(default=False, exclude=True)    
+    __api__: bool = False
     user_config: str = Field(default="", exclude=True)
-
+    __continue__: bool = False
 
 # --- TypedDict for kwargs (for mypy static analysis) ---
 # This must manually mirror the Config class fields.
