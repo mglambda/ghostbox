@@ -17,7 +17,7 @@ from .api_internal import *
 #from .agency import Tool, Function, Property, Parameters
 
 
-def from_generic(endpoint: str ="http://localhost:8080", **kwargs: Dict[str, Any]) -> 'Ghostbox':
+def from_generic(endpoint: str ="http://localhost:8080", **kwargs: Unpack[ConfigKwargs]) -> 'Ghostbox':
     """Returns a Ghostbox instance that connects to an OpenAI API compatible endpoint.
     This generic backend adapter works with many backends, including llama.cpp, llama-box, ollama, as well as online providers, like OpenAI, Anthropic, etc. However, to use features specific to a given backend, that are not part of the OpenAI API, you may need to use a more specific backend.
     Note: Expects ENDPOINT to serve /v1/chat/completions and similar, so e.g. http://localhost:8080/v1/chat/completions should be reachable.
@@ -40,14 +40,14 @@ def from_qwen(**kwargs: Any) -> 'Ghostbox':
 
 
 
-def from_openai_legacy(endpoint: str ="http://localhost:8080", **kwargs: Dict[str, Any]) -> 'Ghostbox':
+def from_openai_legacy(endpoint: str ="http://localhost:8080", **kwargs: Unpack[ConfigKwargs]) -> 'Ghostbox':
     """Returns a Ghostbox instance that connects to an OpenAI API compatible endpoint using the legacy /v1/completions interface.
     This generic backend adapter works with many backends, including llama.cpp, llama-box, ollama, as well as online providers, like OpenAI, etc. However, to use features specific to a given backend, that are not part of the OpenAI API, you may need to use a more specific backend.
     Note: There is usually no reason to use this over the generic variant."""
     return Ghostbox(backend=LLMBackend.legacy, endpoint=endpoint, **kwargs)
 
 
-def from_llamacpp(endpoint: str ="http://localhost:8080", **kwargs: Dict[str, Any]) -> 'Ghostbox':
+def from_llamacpp(endpoint: str ="http://localhost:8080", **kwargs: Unpack[ConfigKwargs]) -> 'Ghostbox':
     """Returns a Ghostbox instance bound to the formidable LLama.cpp. See https://github.com/ggml-org/llama.cpp .
     This uses endpoints described in the llama-server documentation, and will make use of Llama.cpp specific features.
     """
@@ -63,12 +63,12 @@ def from_openai_official(**kwargs: Any) -> 'Ghostbox':
     return Ghostbox(backend=LLMBackend.openai, **kwargs)
 
 
-def from_google(**kwargs: Dict[str, Any]) -> 'Ghostbox':
+def from_google(**kwargs: Unpack[ConfigKwargs]) -> 'Ghostbox':
     """Returns a Ghostbox instance that connects to the powerful Google AI Studio API at their official servers."""
     return Ghostbox(backend=LLMBackend.google, endpoint="",**kwargs)
 
 
-def from_dummy(**kwargs: Dict[str, Any]) -> 'Ghostbox':
+def from_dummy(**kwargs: Unpack[ConfigKwargs]) -> 'Ghostbox':
     """Returns a non-functional dummy ghostbox object.
     Useful if something goes wrong and you still want to clean up."""
     return Ghostbox(endpoint="", backend="dummy", **kwargs)
