@@ -2659,6 +2659,11 @@ class Config(BaseModel):
     user_config: str = Field(default="", exclude=True)
     __continue__: bool = False
 
+
+    def items(self) -> Iterator[Tuple[str, Any]]:
+        """Return member fields as key value pairs, similar to a dictionary's items method."""
+        yield from self.model_dump().items()
+        
 # --- TypedDict for kwargs (for mypy static analysis) ---
 # This must manually mirror the Config class fields.
 class ConfigKwargs(TypedDict, total=False):
