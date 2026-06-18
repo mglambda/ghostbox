@@ -86,17 +86,17 @@ def load_config(plumbing: Any, filepath: str, override: bool = True, protected_k
 def hide_some_output(plumbing: Any) -> None:
     plumbing.options["cli_prompt"] = "\n"
     plumbing.options["audio_show_transcript"] = False
-    plumbing.options["tts_subtitles"] = False
+    plumbing.options.tts_subtitles = False
     #plumbing.options["stream"] = False
-    plumbing.options["chat_show_ai_prompt"] = False
-    plumbing.options["color"] = False
+    plumbing.optionschat_show_ai_prompt = False
+    plumbing.optionscolor = False
     
 
 def toggle_tts(plumbing: Any) -> str:
     prog = plumbing
-    prog.options["tts"] = not(prog.options["tts"])
+    prog.options.tts = not(prog.options.tts)
     w = ""
-    if prog.options["tts"]:
+    if prog.options.tts:
         err = prog.initializeTTS()
         if err:
             return err

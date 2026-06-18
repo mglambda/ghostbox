@@ -1527,15 +1527,15 @@ class Plumbing(object):
 
     def tryGetAbsVoiceDir(self) -> str:
         # this is sort of a heuristic. The problem is that we allow multiple include dirs, but have only one voice dir. So right now we must pick the best from a number of candidates.
-        if os.path.isabs(self.getOption("tts_voice_dir")) and os.path.isdir(
-            self.getOption("tts_voice_dir")
+        if os.path.isabs(self.getOption("tts_clone_dir")) and os.path.isdir(
+            self.getOption("tts_clone_dir")
         ):
-            return self.getOption("tts_voice_dir")
+            return self.getOption("tts_clone_dir")
 
         winner: str = ""
         ok: bool = False
         for path in self.getOption("include"):
-            file: str = path + "/" + self.getOption("tts_voice_dir")
+            file: str = path + "/" + self.getOption("tts_clone_dir")
             if os.path.isdir(file):
                 winner = file
                 ok = True
@@ -1544,7 +1544,7 @@ class Plumbing(object):
         abs_dir: str = os.path.abspath(winner)
         if not (ok):
             printerr(
-                "warning: Couldn't cleanly determine tts_voice_dir. Guessing it is '"
+                "warning: Couldn't cleanly determine tts_clone_dir. Guessing it is '"
                 + abs_dir
                 + "'."
             )

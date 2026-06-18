@@ -631,7 +631,7 @@ class Config(BaseModel):
     iflow_prefered_model: Annotated[
         str,
         Field(
-            default="qwen3-coder-plus",
+            default="iflowcn/qwen3-coder-plus",
             description="Prefered model to use with the Iflow backend (https://iflow.cn).",
             json_schema_extra={
                 "argparse": {

@@ -907,7 +907,13 @@ class OpenAIBackend(AIBackend):
         def openAICallback(d: Dict[str, Any]) -> None:
             last_result_callback(d)
             # FIXME: handle reasoning here
-            choices = d["choices"]
+            try:
+                choices = d["choices"]
+            except Exception as e:
+                # if this doesn't work we usually get a weird response from the backend
+                printerr(f"warning: Malformed response from backend:\n  dump: {d}")
+                return
+            
             if not(choices):
                 return
             choice = choices[0]
@@ -1651,6 +1657,7 @@ class IFlowBackend(OpenAIBackend):
             "Authorization": f"Bearer {self.api_key}",
             "Content-Type": "application/json",
         }
+        print(f" debug: {self.endpoint + "/v1/models"}")
         response = requests.get(self.endpoint + "/v1/models", headers=headers)
         if response.status_code != 200:
             self.log(f"Got status code {response.status_code} during model query.")
@@ -1658,6 +1665,7 @@ class IFlowBackend(OpenAIBackend):
 
         try:
             data = response.json()["data"]
+            print(f"{data}")
             return [ModelStats(
                 name=record["id"],
                 display_name=record["id"]
