@@ -112,7 +112,7 @@ class Ghostbox:
         # for arcane reasons we must startthe tts after everything else
         if self._plumbing.tts_flag:
             self._plumbing.tts_flag = False
-            self._plumbing.options["tts"] = False
+            self._plumbing.options.tts = False
             printerr(toggle_tts(self._plumbing))
 
         # this will unblock interact

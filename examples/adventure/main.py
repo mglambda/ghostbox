@@ -2,19 +2,21 @@
 from pydantic import BaseModel, ValidationError, Field
 from enum import Enum
 from typing import *
+from datetime import datetime
 import ghostbox, json, argparse, random, os
 import traceback
 
 
 default_options = {
-    "quiet": True,
     "stderr": False,
+    "stdout": False,
+    "quiet": True,
     "max_context_length": 32000,
     "max_length": -1,
     "tts": True,
     "tts_model": "kokoro",
     "tts_voice": "af_sky",
-    "temperature": 0.6,
+    "temperature": 0.9,
     "samplers": ["min_p", "dry", "xtc", "temperature"],
 }
 
@@ -25,6 +27,61 @@ MAX_STRESS = 20
 
 A = TypeVar("A")
 
+
+
+# The complete standard 78-card Tarot deck
+TAROT_DECK: Tuple[str, ...] = (
+    # Major Arcana (22)
+    "The Fool", "The Magician", "The High Priestess", "The Empress", "The Emperor",
+    "The Hierophant", "The Lovers", "The Chariot", "Strength", "The Hermit",
+    "Wheel of Fortune", "Justice", "The Hanged Man", "Death", "Temperance",
+    "The Devil", "The Tower", "The Star", "The Moon", "The Sun",
+    "Judgement", "The World",
+    
+    # Minor Arcana - Wands (14)
+    "Ace of Wands", "Two of Wands", "Three of Wands", "Four of Wands", "Five of Wands",
+    "Six of Wands", "Seven of Wands", "Eight of Wands", "Nine of Wands", "Ten of Wands",
+    "Page of Wands", "Knight of Wands", "Queen of Wands", "King of Wands",
+    
+    # Minor Arcana - Cups (14)
+    "Ace of Cups", "Two of Cups", "Three of Cups", "Four of Cups", "Five of Cups",
+    "Six of Cups", "Seven of Cups", "Eight of Cups", "Nine of Cups", "Ten of Cups",
+    "Page of Cups", "Knight of Cups", "Queen of Cups", "King of Cups",
+    
+    # Minor Arcana - Swords (14)
+    "Ace of Swords", "Two of Swords", "Three of Swords", "Four of Swords", "Five of Swords",
+    "Six of Swords", "Seven of Swords", "Eight of Swords", "Nine of Swords", "Ten of Swords",
+    "Page of Swords", "Knight of Swords", "Queen of Swords", "King of Swords",
+    
+    # Minor Arcana - Pentacles (14)
+    "Ace of Pentacles", "Two of Pentacles", "Three of Pentacles", "Four of Pentacles", "Five of Pentacles",
+    "Six of Pentacles", "Seven of Pentacles", "Eight of Pentacles", "Nine of Pentacles", "Ten of Pentacles",
+    "Page of Pentacles", "Knight of Pentacles", "Queen of Pentacles", "King of Pentacles"
+)
+
+
+def draw_tarot_cards(n: int = 1) -> Tuple[str, ...]:
+    """
+    Draws `n` unique Tarot cards without replacement.
+    If `n` exceeds the total size of the deck (78), full reset decks are 
+    shuffled and appended as needed to satisfy the requested count.
+    """
+    if n <= 0:
+        return ()
+
+    deck_size = len(TAROT_DECK)
+    drawn_cards = []
+
+    while n > 0:
+        # Determine how many cards to draw from the current fresh deck cycle
+        draw_count = min(n, deck_size)
+        
+        # sample without replacement handles exact uniform distribution
+        drawn_cards.extend(random.sample(TAROT_DECK, draw_count))
+        
+        n -= draw_count
+
+    return tuple(drawn_cards)
 
 class DialogChoice(BaseModel):
     text: str = ""
@@ -150,24 +207,25 @@ class PlayerCharacter(BaseModel):
     max_health: int = Field(ge=1, le=MAX_HP)
     max_stress: int = Field(ge=1, le=MAX_STRESS)
 
-    def show(pc, indent: str = "") -> str:
+    def show(pc, indent: str = "", include_special_abilities: bool =True) -> str:
         w = ""
         w += pc.name + "\n"
         w += indent + pc.description.replace("\n", "\n" + indent) + "\n"
         w += indent + "Class: " + pc.character_class + "\n"
         w += indent + f"Max Health: {pc.max_health}; Max Stress: {pc.max_stress}\n"
         w += indent + "Motivation: " + pc.motivation + "\n"
-        w += indent + "Special Abilities" + "\n"
-        for special in pc.special_abilities:
-            w += (
-                2 * indent
-                + " - "
-                + special.name
-                + ". "
-                + special.description
-                + f"({special.fate_cost} fate)"
-                + "\n"
-            )
+        if include_special_abilities:
+            w += indent + "Special Abilities" + "\n"
+            for special in pc.special_abilities:
+                w += (
+                    2 * indent
+                    + " - "
+                    + special.name
+                    + ". "
+                    + special.description
+                    + f"({special.fate_cost} fate)"
+                    + "\n"
+                )
         return w + "\n"
 
 
@@ -202,6 +260,30 @@ class ImportantFaction(BaseModel):
     description: str
 
 
+
+
+
+
+class ScoreEntry(BaseModel):
+    player_name: str = Field(default="John Doe")
+    character_class: str = Field(default="Tourist")
+    cause_of_death: Optional[str] = None
+    turns_survived: int = 0
+    total_fate_earned: int = 0
+    level_ups: int = 0
+    score_bonus: int = 0
+    date: str = Field(default_factory=lambda: datetime.now().strftime("%Y-%m-%d %H:%M"))
+
+
+    def total_score(self) -> int:
+        """Calculates total score based on the member fields."""
+        total = 0
+        total = 5 * self.turns_survived
+        total += 10 * self.total_fate_earned
+        total += 100 * self.level_ups
+        total += self.score_bonus
+        return total
+    
 class Scenario(BaseModel):
     """A fleshed out adventure scenario, with instructions for a game Master, world building notes, and style guidance."""
 
@@ -217,40 +299,61 @@ class Scenario(BaseModel):
     important_past_world_events: List[ImportantEvent]
     important_factions: List[ImportantFaction]
     important_characters: List[ImportantCharacter]
+    high_scores: List[ScoreEntry] = []
+    
 
     def show(self):
         w = ""
         for k, v in self.model_dump().items():
+            if k == "high_scores":
+                continue  # Skip high scores in the general text dump
             k_str = k.capitalize().replace("_", " ")
-            if type(v) == type([]):
+            if isinstance(v, list):
                 w += "\n# " + k_str + "\n"
                 for item in v:
-                    if type(item) == str:
+                    if isinstance(item, str):
                         w += " - " + item + "\n"
-                    else:
-                        # by convention, this is a dict with name and description properties
-                        w += " - " + item["name"] + ": " + item["description"] + "\n"
-
+                    elif isinstance(item, dict) and "name" in item:
+                        w += " - " + item["name"] + ": " + item.get("description", "") + "\n"
             else:
-                w += "\n# " + k_str + "\n\n" + v + "\n"
+                w += "\n# " + k_str + "\n\n" + str(v) + "\n"
         return w
 
-    def save(self) -> str:
-        """Saves the scenario to a file. Returns the filename."""
-
-        filename_candidate = self.name.lower().replace(" ", "_") + ".json"
-        while os.path.isfile(filename_candidate) or os.path.isdir(filename_candidate):
-            # we get json twice but i don't care
-            filename_candidate = (
-                filename_candidate + str(random.randint(1, 1024)) + ".json"
-            )
-
-        # we just crash if this doesn't work
+    def save(self, filepath: Optional[str] = None) -> str:
+        """Saves the scenario to a file. Returns the filename used."""
+        if filepath and os.path.isfile(filepath):
+            filename_candidate = filepath
+        else:
+            filename_candidate = self.name.lower().replace(" ", "_") + ".json"
+            while os.path.isfile(filename_candidate) or os.path.isdir(filename_candidate):
+                filename_candidate = (
+                    self.name.lower().replace(" ", "_") + f"_{random.randint(1, 1024)}.json"
+                )
         with open(filename_candidate, "w") as f:
             f.write(json.dumps(self.model_dump(), indent=4))
-
         return filename_candidate
+    
 
+def print_scoreboard(scenario: Scenario):
+    if not scenario.high_scores:
+        print("\n--- NO PREVIOUS RECORDED DEATHS IN THIS SCENARIO ---")
+        return
+
+    # Sort descending by score
+    sorted_scores = sorted(scenario.high_scores, key=lambda s: s.score(), reverse=True)
+
+    print("\n========================================================")
+    print(f"       HALL OF FAME / GRAVEYARD: {scenario.name.upper()}")
+    print("========================================================")
+    print(f"{'RANK':<5} {'NAME':<15} {'SCORE':<8} {'TURNS':<6} {'CAUSE OF DEATH'}")
+    print("-" * 65)
+
+    for rank, entry in enumerate(sorted_scores[:10], 1): # Top 10
+        print(
+            f"{rank:<5} {entry.player_name[:14]:<15} {entry.total_score():<8} "
+            f"{entry.turns_survived:<6} {entry.cause_of_death[:25]}"
+        )
+    print("========================================================\n")    
 
 class Choice(BaseModel):
     "A short text describing a player's possible action in a dramatic situation, from their perspective."
@@ -300,15 +403,61 @@ class GameState(BaseModel):
     fate: int = 1
     health: int
     stress: int = 0
-    debug: bool = False    
+    score_entry: ScoreEntry = Field(default_factory = ScoreEntry)
+    debug: bool = False
+    tarot: bool = True
 
     _turn: int = 1
 
+    def get_final_score_entry(self, box, final_reason: str) -> ScoreEntry:
+        """
+        Populates metadata and generates a concise cause of death string 
+        using Ghostbox and game history.
+        """
+        # Ensure character specs are populated
+        self.score_entry.player_name = self.player.name
+        self.score_entry.character_class = self.player.character_class
 
+        # Construct prompt for the LLM to distill the history into a quick cause-of-death epitaph
+
+        try:
+            cause_of_death_msg = box.text(self.prompt_final_death_reason(final_reason)).strip()
+            # Clean up potential extra quotes or markdown fences
+            cause_of_death = cause_of_death_msg.strip('"`')
+        except Exception as e:
+            if self.debug:
+                print(f"Error generating cause of death: {e}")
+            cause_of_death = "Unknown."
+
+        self.score_entry.cause_of_death = cause_of_death
+        return self.score_entry
+
+
+    def prompt_final_death_reason(self, final_reason: str) -> str:
+        return f"""A player character has met their end in an adventure. "
+Character Name: {self.player.name} ({self.player.character_class}).\n
+
+The final mechanical reason for their demise is the following:
+```
+{final_reason}
+```
+        
+In 1 short sentence (under 12 words), summarize the exact narrative cause of their death or madness. 
+Example: 'Eaten by a shadow-stalker in the dark' or 'Succumbed to eldritch insanity'.
+"""
+
+
+                
     def gain_fate(self, amount: int) -> str:
         """Gain a certain amount of fate, which may be negative. Returns a message indicating fate amount gained, or empty string if 0 fate is gained."""
+        # new and experimental: randomly double fate gained
+        if random.randint(1,20) == 20:
+            amount = amount * 2
+            print(f"You feel you are on the right path.")
+        
         self.fate += amount
         if amount > 0:
+            self.score_entry.total_fate_earned += amount            
             return f"You gain {amount} fate."
         elif amount < 0:
             return f"You lose {-1*amount} fate."
@@ -336,10 +485,28 @@ class GameState(BaseModel):
 
     def advancement_fate_required(self) -> int:
         """Returns the number of fate points required to level up and advance."""
-        base = 10
-        n = len(self.player.special_abilities)
+        base = 3
+        n = len(self.player.special_abilities) - 1
         return min(base + ((n**2) // 2), 200)
 
+    def turn_tick(self) -> None:
+        """Triggers various random events each turn."""
+        # 10% chance to reduce small amount of stress
+        if random.randint(1, 10) == 10:
+            print(f"You feel yourself taking a deep breath.")
+            self.gain_stress(-1)
+
+        # 5% chance to recover 1 health
+        if random.randint(1, 20) == 20:
+            print(f"You feel your wounds stitch together somewhat.")
+            self.gain_health(1)
+
+        # 5% chance to gain 1 fate randomly
+        if random.randint(1, 20) == 20:
+            print(f"Fortune smiles upon you.")
+            self.gain_fate(1)
+            
+            
     def status(self) -> str:
         """Returns a string showing fate and usable abilities."""
         abilities = [
@@ -383,11 +550,13 @@ class GameState(BaseModel):
         if self.stress > self.player.max_stress:
             # this is only a soft failure
             # if we can dump the stress into health, pc only panics/breaks down
-            if self.health >= self.stress:
-                self.health -= self.stress
+            # new: we only dump a quarter
+            stress_value = self.stress // 4
+            if self.health >= stress_value:
+                self.health -= stress_value
 
                 ws.append(
-                    f"You break down from stress! Your mental breakdown takes a toll on your body, and you lose {self.stress} health."
+                    f"You break down from stress! Your mental breakdown takes a toll on your body, and you lose {stress_value} health."
                 )
                 self.stress = 0
                 ws.append("You have narrowly averted permanent insanity.")
@@ -440,16 +609,33 @@ class GameState(BaseModel):
 
     def prompt_main_choices(self, history: List[ghostbox.ChatMessage]) -> str:
         """Called when the LLM is supposed to generate choices, which happens in the main loop."""
-        return "Generate some dramatic choices for the main character, along with a brief summary of the situation. These choices don't cost fate."
+        # we want 3 or 4 choices
+        n = random.randint(3, 4)
+        
+        tarot_msg = ""
+        if self.tarot:
+            # if tarot is enabled, we occasionally draw a tarot card to seed an additional choice that is inspired by the cards symbology
+            k = random.randint(1, 5)
+            if k == 1:
+                card = draw_tarot_cards(1)[0]
+                tarot_msg = f"\nGenerate one additional choice that is subtly inspired by the following tarot card: {card}. This choice should award at least 1 fate."
+
+
+            
+        return f"""Generate {n} dramatic choices for the main character, along with a brief summary of the situation. These choices don't cost fate.{tarot_msg}"""
 
     def prompt_consequences_special_ability(self, special: SpecialAbility) -> str:
         """Called when the player used a special ability and the LLM is supposed to generate consequences based on it and the current situation."""
-        return (
-            f"The player has used the following ability: {special.name}.\nPlease narrate the outcome of using this ability in this situation, or gently remind the player that this ability cannot be used, if it is not at all applicable to the current situation.",
-        )
+        return f"""The player has used the following ability:
+            ```
+{special.name} - {special.description}
+```
+
+Please narrate the outcome of using this ability in this situation, or gently remind the player that this ability cannot be used, if it is not at all applicable to the current situation."""
+
 
     def prompt_consequences(
-        self, choice: Choice, history: List[ghostbox.ChatMessage]
+            self, choice: Choice, history: List[ghostbox.ChatMessage], endpoint = "http://localhost:8080"
     ) -> str:
         """Called when the player made a choice and the LLM is supposed to generate consequences based on it and the current situation, hopefully leading into another situation with interesting choices."""
 
@@ -463,6 +649,7 @@ class GameState(BaseModel):
         if self._turn % 3 == 0:
             # every 3 turns, we invoke the GMs inner critic
             critic = ghostbox.from_generic(
+                endpoint = endpoint,
                 character_folder="critic", **(default_options | {"tts": False})
             )
             # the critic gets to look at the story so far, but without the sometimes enormous system prompt
@@ -479,9 +666,10 @@ class GameState(BaseModel):
             with critic.options(
                 temperature=0.3, samplers=["min_p", "temperature"], cache_prompt=False
             ):
-                advice = critic.new(Message, prompt).text
+                advice = critic.text(prompt)
 
-            if self.debug:
+            if True or self.debug:
+                # temporarily short circuited because we always want to see critic thoughts
                 print("Critic's advice: \n" + advice)
         else:
             # otherwise we just have some good general principles
@@ -502,9 +690,12 @@ class GameState(BaseModel):
 
     def prompt_game_over(self, msg) -> str:
         """Happens when player dies from lack of health or goes insane because stress can't be vented off anymore."""
-        return "The game is over for the player. Reason: "
-        +msg
-        +"\nPlease write a suitable goodbye narration to send them off."
+        return f"""The game is over for the player. Reason: "
+```
+{msg}
+```
+        
+Please write a suitable goodbye narration to send them off."""
 
 
 class Situation(BaseModel):
@@ -532,8 +723,8 @@ class Message(BaseModel):
 # dialog functions
 
 
-def scenario_creation_dialog(initial_prompt="") -> Scenario:
-    box = ghostbox.from_generic(character_folder="scenario_creator", **default_options)
+def scenario_creation_dialog(endpoint = "http://localhost:8080", initial_prompt="") -> Scenario:
+    box = ghostbox.from_generic(endpoint=endpoint, character_folder="scenario_creator", **default_options)
     hint = initial_prompt
     chosen_scenario = None
     while chosen_scenario is None:
@@ -541,7 +732,7 @@ def scenario_creation_dialog(initial_prompt="") -> Scenario:
         drafts = box.new(
             ScenarioDrafts,
             "Create a handful of interesting adventure scenarios. Present both fantasy and sci-fi options, and give a variety of tones and styles, with both dark and light hearted themes being explored. The description should be short and pithy, something that hooks and entices a potential player."
-            + hint,
+            + "\n" + hint,
         ).drafts
 
         def set_hint(w):
@@ -583,8 +774,8 @@ def scenario_creation_dialog(initial_prompt="") -> Scenario:
     )
 
 
-def player_creation_dialog(scenario, party=True):
-    box = ghostbox.from_generic(character_folder="player_creator", **default_options)
+def player_creation_dialog(scenario, endpoint="http://localhost:8080", party=True):
+    box = ghostbox.from_generic(endpoint=endpoint, character_folder="player_creator", **default_options)
     hint = ""
     chosen_player = None
     while chosen_player is None:
@@ -743,13 +934,21 @@ def main():
         default=False,
         help="Give additional debug output.",
     )
+
+    p.add_argument(
+        "--endpoint",
+        type=str,
+        default="http://localhost:8080",
+        help="Ghostbox endpoint. May be localhost, or an http address with an OpenAI compatible API."
+    )    
     args = p.parse_args()
 
     if args.debug:
         default_options["stderr"] = True
+        default_options["debug"] = True
 
     if args.scenario_file == "":
-        scenario = scenario_creation_dialog(initial_prompt=args.scenario_prompt)
+        scenario = scenario_creation_dialog(endpoint=args.endpoint, initial_prompt=args.scenario_prompt)
         if args.save_scenario:
             filename = scenario.save()
             print(
@@ -769,7 +968,7 @@ def main():
             return
 
     print(scenario.show())
-    pc, others = player_creation_dialog(scenario, party=args.party)
+    pc, others = player_creation_dialog(scenario, endpoint=args.endpoint, party=args.party)
     game = GameState(
         player=pc,
         party=others,
@@ -778,23 +977,24 @@ def main():
         health=pc.max_health,
         debug=args.debug,
     )
-    run(game)
+    run(game, args)
 
 
-def run(game):
-    box = ghostbox.from_generic(character_folder="game_master", **default_options)
+def run(game, args):
+    box = ghostbox.from_generic(endpoint=args.endpoint, character_folder="game_master", **default_options)
 
     # this is the main loop
     narration = ""
     intro_done = False
     while True:
+        game.score_entry.turns_survived += 1
         # this makes things like {{scenario}} or {{pc_health}} expand into their respective values in both the system_msg and
         # prompts that we use in box.new below
         box.set_vars(
             {
                 "scenario": game.adventure_scenario.show(),
-                "party": "\n".join([npc.show() for npc in game.party]),
-                "pc": game.player.show(),
+                "party": "\n".join([npc.show(include_special_abilities=False) for npc in game.party]),
+                "pc": game.player.show(include_special_abilities=False),
                 "fate": str(game.fate),
                 "pc_health": str(game.health),
                 "pc_stress": str(game.stress),
@@ -808,7 +1008,7 @@ def run(game):
             box.tts_say(intro, interrupt=False)
             intro_done = True
 
-        situation = box.new(Situation, game.prompt_main_choices(box.history()))
+        situation = box.new(Situation, game.prompt_main_choices(box.get_history()))
         print("\n" + situation.show() + "\n")
         box.tts_say(situation.brief_description, interrupt=False)
 
@@ -816,7 +1016,8 @@ def run(game):
         # in the loop player may do a bunch of stuff, but using an ability or making a choice will break it
         while True:
             # debug
-            # print(json.dumps([msg.model_dump() for msg in box.history()], indent=4))
+            if args.debug:
+                print(json.dumps([msg.model_dump() for msg in box.get_history()], indent=4))
 
             # type of choice is Optional[str | Choice | SpecialAbility]
             choice = choose_dialog(
@@ -869,6 +1070,7 @@ def run(game):
             if choice == "advance" and game.fate >= game.advancement_fate_required():
                 print("You have advanced your abilities!")
                 advancement_dialog(game, box)
+                game.score_entry.level_ups += 1
                 print("Done with advancement. Let's return to the story.")
                 continue
             if type(choice) == SpecialAbility:
@@ -883,13 +1085,17 @@ def run(game):
                     Consequences, game.prompt_consequences_special_ability(special)
                 )
                 break
-            # at this point, choice is a Choice -> player picked one of the options
-            fate_msg = game.gain_fate(choice.fate())
-            print(fate_msg + "\n" if fate_msg else "" + "Please wait...")
-            narration = box.new(
-                Consequences, game.prompt_consequences(choice, box.history())
-            )
-            break
+            else:
+                # at this point, choice is a Choice-> player picked one of the options
+        print(f"## Turn {game.score_entry.turns_survived}")
+        self.game.tick_turn()
+                
+                fate_msg = game.gain_fate(choice.fate())
+                print(fate_msg + "\n" if fate_msg else "" + "Please wait...")
+                narration = box.new(
+                    Consequences, game.prompt_consequences(choice, box.get_history(), endpoint=args.endpoint)
+                )
+                break
 
         # we have narration/consequences of choice or ability use
         box.tts_say(narration.text)
@@ -899,6 +1105,7 @@ def run(game):
         if failure == FailureState.Breakdown:
             # this is only a soft failure
             # it will influence the story, but shouldn't incur more penalties to the player, so they can have a chance to recover
+            game.score_entry.score_bonus -= 5
             breakdown_msg = box.new(
                 Message, game.prompt_consequences_stress_breakdown()
             ).text
@@ -908,13 +1115,25 @@ def run(game):
             break
         # there is also FailureState.NoFailure, which we just ignore and proceed
 
-    # game over man
+# Game over handling
     goodbye = box.new(
         Message,
         game.prompt_game_over(msg),
     ).text
     print(goodbye)
     box.tts_say(goodbye, interrupt=False)
+
+    # Process High Score & Leaderboard
+    final_entry = game.get_final_score_entry(box, final_reason=msg)
+    game.adventure_scenario.high_scores.append(final_entry)
+    
+    # Save back to disk
+    scenario_path = args.scenario_file if args.scenario_file else None
+    saved_file = game.adventure_scenario.save(filepath=scenario_path)
+    print(f"\nScore saved to {saved_file}!")
+    
+    # Print NetHack Graveyard
+    print_scoreboard(game.adventure_scenario)        
     input()
 
 

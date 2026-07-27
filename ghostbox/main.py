@@ -1156,7 +1156,7 @@ class Plumbing(object):
             )
             self.setOption("stream", False)
         elif name == "stream":
-            if bool(value) and self.getOption("tool_use"):
+            if bool(value) and self.options.use_tools:
                 printerr(
                     "warning: Streaming is currently not supported with tool use. Setting stream = False."
                 )

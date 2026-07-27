@@ -1657,7 +1657,6 @@ class IFlowBackend(OpenAIBackend):
             "Authorization": f"Bearer {self.api_key}",
             "Content-Type": "application/json",
         }
-        print(f" debug: {self.endpoint + "/v1/models"}")
         response = requests.get(self.endpoint + "/v1/models", headers=headers)
         if response.status_code != 200:
             self.log(f"Got status code {response.status_code} during model query.")
