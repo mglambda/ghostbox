@@ -206,6 +206,7 @@ class PlayerCharacter(BaseModel):
     special_abilities: List[SpecialAbility]
     max_health: int = Field(ge=1, le=MAX_HP)
     max_stress: int = Field(ge=1, le=MAX_STRESS)
+    level: int = 1
 
     def show(pc, indent: str = "", include_special_abilities: bool =True) -> str:
         w = ""
@@ -272,17 +273,33 @@ class ScoreEntry(BaseModel):
     total_fate_earned: int = 0
     level_ups: int = 0
     score_bonus: int = 0
+    win_ending: bool = False
     date: str = Field(default_factory=lambda: datetime.now().strftime("%Y-%m-%d %H:%M"))
 
 
     def total_score(self) -> int:
         """Calculates total score based on the member fields."""
         total = 0
-        total = 5 * self.turns_survived
+            
         total += 10 * self.total_fate_earned
         total += 100 * self.level_ups
         total += self.score_bonus
-        return total
+
+        # we modify score based on floor and ceiling of turns
+        # this is to avoid degenerate 3 turn strategies
+        if self.turns_survived <= 3:
+            total *= 0.2
+        elif self.turns_survived <= 5:
+            total *= 0.3
+        else:
+            total += min(self.turns_survived * 5, 250)
+        
+
+        if self.win_ending:
+            total *= 10
+
+                
+        return int(total)
     
 class Scenario(BaseModel):
     """A fleshed out adventure scenario, with instructions for a game Master, world building notes, and style guidance."""
@@ -361,7 +378,15 @@ class Choice(BaseModel):
     text: str
     is_dangerous: bool
     is_part_of_player_motivation: bool
+    tags: List[str]  
 
+    def has_tag(self, tag: str) -> bool:
+        for w in self.tags:
+            if w.lower() == tag.lower():
+                return True
+        return False
+        
+    
     def fate(self) -> int:
         """Returns the amount of fate points this choice is worth."""
         fate = 0
@@ -371,6 +396,8 @@ class Choice(BaseModel):
         if self.is_part_of_player_motivation:
             fate += 1
 
+        if self.has_tag("tarot"):
+            self.fate += 1
         return fate
 
     def show(self) -> str:
@@ -404,11 +431,41 @@ class GameState(BaseModel):
     health: int
     stress: int = 0
     score_entry: ScoreEntry = Field(default_factory = ScoreEntry)
+    story: List[str] = Field(default_factory = list)
+    latest_criticism: str = ""
+    
     debug: bool = False
     tarot: bool = True
 
     _turn: int = 1
 
+    def update_score(self) -> None:
+        """Keeps the score entry and gamestate syncrhonized."""
+        self.score_entry.level_ups = self.player.level - 1
+        self.score_entry.turns_survived = self._turn
+        
+
+    def story_append_beat(self, story_beat: str) -> None:
+        """Appends a standard story beat to the story. This could be plot points, character descriptions, or other types of narration."""
+        w = story_beat.strip()
+        if w:
+            self.story.append(w)
+
+    def story_append_choice(self, player_choice: str) -> None:
+        """Appends a player choice (given as text) to the story, handling the proper formatting."""
+        w = player_choice.strip()
+        if w:
+            self.story.append(f"Player choice: `{w}`")
+
+    def story_get(self, limit: Optional[int] = None) -> List[str]:
+        """Returns a number of story beats. If a limit is provided. returns only the latest story beats up to the limit."""
+        if limit is None:
+            return self.story
+        return self.story[(-1) * limit:]
+
+    def story_get_str(self, limit: Optional[int] = None) -> str:
+        return "\n\n".join(self.story_get(limit))
+                           
     def get_final_score_entry(self, box, final_reason: str) -> ScoreEntry:
         """
         Populates metadata and generates a concise cause of death string 
@@ -486,7 +543,9 @@ Example: 'Eaten by a shadow-stalker in the dark' or 'Succumbed to eldritch insan
     def advancement_fate_required(self) -> int:
         """Returns the number of fate points required to level up and advance."""
         base = 3
-        n = len(self.player.special_abilities) - 1
+        # used to be based on abilities, is now based on level
+        #n = len(self.player.special_abilities) - 1
+        n = self.player.level
         return min(base + ((n**2) // 2), 200)
 
     def turn_tick(self) -> None:
@@ -523,10 +582,12 @@ Example: 'Eaten by a shadow-stalker in the dark' or 'Succumbed to eldritch insan
         else:
             advancement = ""
 
+            lvl_str = f"lvl: {self.player.level}"
         health_str = f"Health: {self.health}/{self.player.max_health}"
         stress_str = f"Stress: {self.stress}/{self.player.max_stress}"
+        score_str = f"Score: {self.score_entry.total_score()}"
         return (
-            f"{health_str} {stress_str} Fate: {self.fate}\tSpecial: {ability_str}"
+            f"{health_str} {stress_str} Fate: {self.fate} {lvl_str} {score_str}\tSpecial: {ability_str}"
             + advancement
         )
 
@@ -645,9 +706,9 @@ Please narrate the outcome of using this ability in this situation, or gently re
         # so, it turns out most LLMs are so aligned and cooperative, if they know the player has high stress/health, they will not damage them further
         # so it's actually important to to keep that info from them
         #player_status_str = ""
-
-        if self._turn % 3 == 0:
+        if self._turn % 3 == 0 or self._turn == 1:
             # every 3 turns, we invoke the GMs inner critic
+            # also happens on the first
             critic = ghostbox.from_generic(
                 endpoint = endpoint,
                 character_folder="critic", **(default_options | {"tts": False})
@@ -656,8 +717,7 @@ Please narrate the outcome of using this ability in this situation, or gently re
             # they are a literary critic, not a game master
             prompt = (
                 "A game master and a player are playing a role playing game. Here is their story so far:\n\n```\n"
-                + "\n".join([msg.content for msg in history
-                             if msg.role == "assistant"])
+                + self.story_get_str()
                 + "\n```\n\nPlease criticise the story so far, and give helpful advice on how to improve it, and where to steer it next."
             )
             # the critic uses slightly different settings from the ddefaults
@@ -667,22 +727,23 @@ Please narrate the outcome of using this ability in this situation, or gently re
                 temperature=0.3, samplers=["min_p", "temperature"], cache_prompt=False
             ):
                 advice = critic.text(prompt)
-
+            self.latest_criticism = f"\n\nBelow is some helpful criticism of the story so far. Implement it as best you can:\n```{advice}\n```"
+                
             if True or self.debug:
                 # temporarily short circuited because we always want to see critic thoughts
                 print("Critic's advice: \n" + advice)
         else:
-            # otherwise we just have some good general principles
-            advice = "Keep it brief and focused, but evocative. Do not generate new choices as part of this response. Be sure to adhere to the scenario's style guide in your narration."
+            # other turns we erase the criticism so the GM doesn't overcorrect
+            self.latest_criticism = ""
+
 
         prompt = (
             "The player has chosen the following: \n"
             + choice.show()
             + "\nPlease narrate the consequences of the players choice. Drive the story forward and lead into a new dramatic situation.\n"
         )
-        return player_status_str + prompt + advice
+        return player_status_str + prompt 
 
-        # return "Briefly describe the situation to the player, including the current location, characters present, and the most relevant details. Give them some dramatic choices. Choices are always from the players perspective. Do not include the consequences in the choice text. Do not mention fate points. Try to include a mix of choices, and take the scenario, players, and history into account. Do not include special abilities in choices, the player will activate those seperately. Likewise, avoid mentioning the other party members in the choices. Do not list the choices in the description text. Remember that choices that are dangerous or involve the players motivation let them earn fate, so be sparing with those.",
 
     def prompt_consequences_stress_breakdown(self) -> str:
         """Called when stress reaches >= maximum stress for a character, and they suffer a momentary mental breakdown. This is asoft failure, not a game over."""
@@ -826,12 +887,14 @@ def player_creation_dialog(scenario, endpoint="http://localhost:8080", party=Tru
 
 def advancement_dialog(game, box):
     """Happens when player chooses to level up."""
+    game.player.level += 1
     # deduct the level up fate cost
     print(game.gain_fate(-1 * game.advancement_fate_required()))
 
     # max hp and max stress advance through roll-over
     if random.randint(1, MAX_HP) > game.player.max_health:
         game.player.max_health += 1
+        game.health += 1
         print("Your maximum health has increased by 1.")
 
     if random.randint(1, MAX_STRESS) > game.player.max_stress:
@@ -883,6 +946,78 @@ def advancement_dialog(game, box):
         print(f"You lose {game.player.special_abilities[drop_i]}.")
         del game.player.special_abilities[drop_i]
 
+def metamorphosis_dialog(game, box):
+    """
+    Triggered during a stress breakdown. Gives the player a chance to 
+    undergo a Metamorphosis and alter their core motivation.
+    """
+    print("\n*** METAMORPHOSIS EVENT ***")
+    print("The crushing weight of stress shatters your mind, altering your core perspective on existence...")
+
+    # Pydantic schema for generating new motivations
+    class NewMotivations(BaseModel):
+        """A set of new motivations born from trauma and severe stress."""
+        motivations: List[str] = Field(
+            ..., 
+            description="Short, evocative statements of core character motivation (e.g. 'Seek vengeance against the cult', 'Protect the innocent at all costs')."
+        )
+
+    # Prompt LLM for 3 choices based on character, story history, and trauma
+    prompt = (
+        f"The character {game.player.name} ({game.player.character_class}) has suffered a severe mental breakdown.\n"
+        f"Current Motivation: '{game.player.motivation}'\n\n"
+        "Generate exactly 3 brand new, dramatic motivations that reflect a radical shift in their mindset "
+        "caused by this trauma. They should contrast with or evolve from their original motivation."
+    )
+
+    try:
+        generated_motivations = box.new(NewMotivations, prompt).motivations
+    except Exception as e:
+        if game.debug:
+            print(f"Error generating motivations: {e}")
+        generated_motivations = [
+            "Survive at any cost, regardless of who gets hurt.",
+            "Seek absolute control over my surroundings to prevent future chaos.",
+            "Abandon my old life and find a quiet place away from danger."
+        ]
+
+    # Build choices for choose_dialog
+    choices = [
+        DialogChoice(text=m, value=m) for m in generated_motivations
+    ]
+
+    # 1 in 6 chance for Special Metamorphosis (allows custom input for 5 Fate)
+    special_chance = (random.randint(1, 6) == 6)
+    if special_chance and game.fate >= 5:
+        print("\n*** Special Metamorphosis! *** You may spend 5 Fate to forge your own path.")
+        choices.append(
+            DialogChoice(
+                selection_string="custom",
+                text="[Special] Spend 5 Fate to enter a custom motivation",
+                value="custom"
+            )
+        )
+
+    selected = choose_dialog(
+        choices,
+        before="\nChoose a new core motivation to emerge from this breakdown:",
+        prompt=" or hit Enter to keep your current motivation: ",
+        exit_on_newline=True,
+    )
+
+    if selected is None:
+        print(f"{game.player.name} clings to their original motivation: '{game.player.motivation}'.")
+        return
+
+    if selected == "custom":
+        print(game.gain_fate(-5))
+        custom_mot = input("Enter your new core motivation: ").strip()
+        if custom_mot:
+            game.player.motivation = custom_mot
+            print(f"\nYour spirit transforms. New Motivation: '{game.player.motivation}'")
+    else:
+        game.player.motivation = selected
+        print(f"\nYour spirit transforms. New Motivation: '{game.player.motivation}'")        
 
 def question_dialog(game, box) -> str:
     """Happens when the player asks the GM a question with ?. Expect lots of soft hacking with this one."""
@@ -987,7 +1122,7 @@ def run(game, args):
     narration = ""
     intro_done = False
     while True:
-        game.score_entry.turns_survived += 1
+        game.update_score_entry()
         # this makes things like {{scenario}} or {{pc_health}} expand into their respective values in both the system_msg and
         # prompts that we use in box.new below
         box.set_vars(
@@ -998,12 +1133,15 @@ def run(game, args):
                 "fate": str(game.fate),
                 "pc_health": str(game.health),
                 "pc_stress": str(game.stress),
+                "story_str": game.story_get_str(),
+                "latest_criticism": game.latest_criticism,
             }
         )
-
+        box.clear_history()
         if not (intro_done):
             # give an intro message that sets the scene
-            intro = box.new(Message, game.prompt_intro()).text
+            intro = box.text(game.prompt_intro())
+            game.story_append_beat(intro)
             print(intro)
             box.tts_say(intro, interrupt=False)
             intro_done = True
@@ -1063,6 +1201,7 @@ def run(game, args):
 
             if choice == "?":
                 if msg := question_dialog(game, box):
+                    game.story_append_beat(msg)
                     print(msg)
                     box.tts_say(msg, interrupt=False)
                 continue
@@ -1070,7 +1209,6 @@ def run(game, args):
             if choice == "advance" and game.fate >= game.advancement_fate_required():
                 print("You have advanced your abilities!")
                 advancement_dialog(game, box)
-                game.score_entry.level_ups += 1
                 print("Done with advancement. Let's return to the story.")
                 continue
             if type(choice) == SpecialAbility:
@@ -1087,9 +1225,9 @@ def run(game, args):
                 break
             else:
                 # at this point, choice is a Choice-> player picked one of the options
-        print(f"## Turn {game.score_entry.turns_survived}")
-        self.game.tick_turn()
-                
+                print(f"\n## Turn {game.score_entry.turns_survived}\n")
+                game.story_append_choice(choice.show())
+                game.turn_tick()
                 fate_msg = game.gain_fate(choice.fate())
                 print(fate_msg + "\n" if fate_msg else "" + "Please wait...")
                 narration = box.new(
@@ -1098,6 +1236,7 @@ def run(game, args):
                 break
 
         # we have narration/consequences of choice or ability use
+        game.story_append_beat(narration.text)
         box.tts_say(narration.text)
         print(narration.text)
         msg, failure = game.handle_consequences(narration)
@@ -1109,8 +1248,13 @@ def run(game, args):
             breakdown_msg = box.new(
                 Message, game.prompt_consequences_stress_breakdown()
             ).text
+            game.story_append_beat(breakdown_msg)
             print(breakdown_msg)
             box.tts_say(breakdown_msg, interrupt=False)
+
+            # possible metamorphosis in the spirit of ovid (chars change when they can't take it anymore)
+            if random.randint(1, 4) == 1:
+                metamorphosis_dialog(game, box)
         elif failure == FailureState.GameOver:
             break
         # there is also FailureState.NoFailure, which we just ignore and proceed
@@ -1120,6 +1264,7 @@ def run(game, args):
         Message,
         game.prompt_game_over(msg),
     ).text
+    game.story_append_beat(goodbye)
     print(goodbye)
     box.tts_say(goodbye, interrupt=False)
 
