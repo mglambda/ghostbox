@@ -2,6 +2,7 @@
 from pydantic import BaseModel, ValidationError, Field
 from enum import Enum
 from typing import *
+from collections import Counter
 from datetime import datetime
 import ghostbox, json, argparse, random, os
 import traceback
@@ -190,7 +191,7 @@ def choose_dialog(
 
 
 class SpecialAbility(BaseModel):
-    """A special ability that is usable by a player character during play. Its fate cost should reflect its power to influence the story, with higher impact abilities costing more fate. The description should not refer to game mechanics."""
+    """A special ability that is usable by a player character during play. Its fate cost should reflect its power to influence the story, with higher impact abilities costing more fate. The description should not refer to game mechanics, as it will be interpreted and applied by an LLM."""
 
     name: str
     description: str
@@ -273,6 +274,9 @@ class ScoreEntry(BaseModel):
     total_fate_earned: int = 0
     level_ups: int = 0
     score_bonus: int = 0
+    star_uses: int = 0
+    tarot_chosen: int = 0
+    unique_tags_collected: int = 0
     win_ending: bool = False
     date: str = Field(default_factory=lambda: datetime.now().strftime("%Y-%m-%d %H:%M"))
 
@@ -285,6 +289,13 @@ class ScoreEntry(BaseModel):
         total += 100 * self.level_ups
         total += self.score_bonus
 
+        # random crap
+        total -= 10 * self.star_uses
+        total += 5 * self.tarot_chosen
+        total += 3 * self.unique_tags_collected
+        
+
+        
         # we modify score based on floor and ceiling of turns
         # this is to avoid degenerate 3 turn strategies
         if self.turns_survived <= 3:
@@ -294,7 +305,8 @@ class ScoreEntry(BaseModel):
         else:
             total += min(self.turns_survived * 5, 250)
         
-
+            
+        # a scenario win catapults you into anothe rtier via x10
         if self.win_ending:
             total *= 10
 
@@ -316,6 +328,7 @@ class Scenario(BaseModel):
     important_past_world_events: List[ImportantEvent]
     important_factions: List[ImportantFaction]
     important_characters: List[ImportantCharacter]
+    critic_system_prompt: str = "You are a literary critic. You analyse stories and narrative works for their quality. You are ruthless in spotting tired tropes, stereotypes, bad writing, tiresome and repetetive narration, unengaging ideas, confusing story structure, aimless drivel, and many other problems in writing.\nYou love stories that are action packed, tight, engaging, and economical. You are accepting of poetic description and purple prose, as long as it serves a purpose and is used sparingly. Although you are familiar with and bored of all literary tropes, you understand their purpose and necessity. In a story, the most important thing for you is that it makes the reader feel something.\nWhen you give advice, you are ruthless and unsparing. You do not waste time with praise. You know that the bitter truth inevitably serves to improve the writer and bring the best out of a story. However, you always give tips on how to improve and where to steer the story  next."
     high_scores: List[ScoreEntry] = []
     
 
@@ -324,6 +337,8 @@ class Scenario(BaseModel):
         for k, v in self.model_dump().items():
             if k == "high_scores":
                 continue  # Skip high scores in the general text dump
+            elif k == "critic_system_prompt":
+                continue
             k_str = k.capitalize().replace("_", " ")
             if isinstance(v, list):
                 w += "\n# " + k_str + "\n"
@@ -351,26 +366,6 @@ class Scenario(BaseModel):
         return filename_candidate
     
 
-def print_scoreboard(scenario: Scenario):
-    if not scenario.high_scores:
-        print("\n--- NO PREVIOUS RECORDED DEATHS IN THIS SCENARIO ---")
-        return
-
-    # Sort descending by score
-    sorted_scores = sorted(scenario.high_scores, key=lambda s: s.score(), reverse=True)
-
-    print("\n========================================================")
-    print(f"       HALL OF FAME / GRAVEYARD: {scenario.name.upper()}")
-    print("========================================================")
-    print(f"{'RANK':<5} {'NAME':<15} {'SCORE':<8} {'TURNS':<6} {'CAUSE OF DEATH'}")
-    print("-" * 65)
-
-    for rank, entry in enumerate(sorted_scores[:10], 1): # Top 10
-        print(
-            f"{rank:<5} {entry.player_name[:14]:<15} {entry.total_score():<8} "
-            f"{entry.turns_survived:<6} {entry.cause_of_death[:25]}"
-        )
-    print("========================================================\n")    
 
 class Choice(BaseModel):
     "A short text describing a player's possible action in a dramatic situation, from their perspective."
@@ -397,7 +392,7 @@ class Choice(BaseModel):
             fate += 1
 
         if self.has_tag("tarot"):
-            self.fate += 1
+            fate += 1
         return fate
 
     def show(self) -> str:
@@ -430,6 +425,7 @@ class GameState(BaseModel):
     fate: int = 1
     health: int
     stress: int = 0
+    tags: Counter = Field(default_factory = Counter)
     score_entry: ScoreEntry = Field(default_factory = ScoreEntry)
     story: List[str] = Field(default_factory = list)
     latest_criticism: str = ""
@@ -439,10 +435,16 @@ class GameState(BaseModel):
 
     _turn: int = 1
 
-    def update_score(self) -> None:
+    def tags_add(self, new_tags: List[str]) -> None:
+        """Adds tags to the internal counter."""
+        print(f"debug: {", ".join([tag for tag in new_tags])}")
+        self.tags.update([w.lower() for w in new_tags])
+    def update_score_entry(self) -> None:
         """Keeps the score entry and gamestate syncrhonized."""
         self.score_entry.level_ups = self.player.level - 1
         self.score_entry.turns_survived = self._turn
+        self.score_entry.tarot_chosen = max(0, self.tags["tarot"])
+        self.score_entry.unique_tags_collected = len(list(self.tags.keys()))
         
 
     def story_append_beat(self, story_beat: str) -> None:
@@ -508,7 +510,7 @@ Example: 'Eaten by a shadow-stalker in the dark' or 'Succumbed to eldritch insan
     def gain_fate(self, amount: int) -> str:
         """Gain a certain amount of fate, which may be negative. Returns a message indicating fate amount gained, or empty string if 0 fate is gained."""
         # new and experimental: randomly double fate gained
-        if random.randint(1,20) == 20:
+        if amount > 0 and random.randint(1,20) == 20:
             amount = amount * 2
             print(f"You feel you are on the right path.")
         
@@ -582,7 +584,7 @@ Example: 'Eaten by a shadow-stalker in the dark' or 'Succumbed to eldritch insan
         else:
             advancement = ""
 
-            lvl_str = f"lvl: {self.player.level}"
+        lvl_str = f"lvl: {self.player.level}"
         health_str = f"Health: {self.health}/{self.player.max_health}"
         stress_str = f"Stress: {self.stress}/{self.player.max_stress}"
         score_str = f"Score: {self.score_entry.total_score()}"
@@ -679,11 +681,9 @@ Example: 'Eaten by a shadow-stalker in the dark' or 'Succumbed to eldritch insan
             k = random.randint(1, 5)
             if k == 1:
                 card = draw_tarot_cards(1)[0]
-                tarot_msg = f"\nGenerate one additional choice that is subtly inspired by the following tarot card: {card}. This choice should award at least 1 fate."
-
-
+                tarot_msg = f"\nGenerate one additional choice that is subtly inspired by the following tarot card: {card}. Please tag this choice with 'tarot'."
             
-        return f"""Generate {n} dramatic choices for the main character, along with a brief summary of the situation. These choices don't cost fate.{tarot_msg}"""
+        return f"""Generate {n} dramatic choices for the main character, along with a brief summary of the situation. {tarot_msg}"""
 
     def prompt_consequences_special_ability(self, special: SpecialAbility) -> str:
         """Called when the player used a special ability and the LLM is supposed to generate consequences based on it and the current situation."""
@@ -720,18 +720,20 @@ Please narrate the outcome of using this ability in this situation, or gently re
                 + self.story_get_str()
                 + "\n```\n\nPlease criticise the story so far, and give helpful advice on how to improve it, and where to steer it next."
             )
+            
             # the critic uses slightly different settings from the ddefaults
             # most importantly, we don't want it to invalidate the cache
             # though that's only relevant if we are running a local LLM
             with critic.options(
-                temperature=0.3, samplers=["min_p", "temperature"], cache_prompt=False
+                    temperature=0.3, samplers=["min_p", "temperature"], cache_prompt=False
             ):
+                # unfortunately this takes a moment, so we hint to the player
+                print(f"Consulting literary critic...")
                 advice = critic.text(prompt)
             self.latest_criticism = f"\n\nBelow is some helpful criticism of the story so far. Implement it as best you can:\n```{advice}\n```"
                 
             if True or self.debug:
-                # temporarily short circuited because we always want to see critic thoughts
-                print("Critic's advice: \n" + advice)
+                print("Critic's advice: \n" + advice + "\n## end advice\n")
         else:
             # other turns we erase the criticism so the GM doesn't overcorrect
             self.latest_criticism = ""
@@ -886,17 +888,16 @@ def player_creation_dialog(scenario, endpoint="http://localhost:8080", party=Tru
 
 
 def advancement_dialog(game, box):
-    """Happens when player chooses to level up."""
+    """Happens when player chooses to level up. Forces a drop if abilities exceed 5."""
     game.player.level += 1
     # deduct the level up fate cost
     print(game.gain_fate(-1 * game.advancement_fate_required()))
-
+    
     # max hp and max stress advance through roll-over
     if random.randint(1, MAX_HP) > game.player.max_health:
         game.player.max_health += 1
         game.health += 1
         print("Your maximum health has increased by 1.")
-
     if random.randint(1, MAX_STRESS) > game.player.max_stress:
         game.player.max_stress += 1
         print("Your maximum stress has increased by 1.")
@@ -904,13 +905,13 @@ def advancement_dialog(game, box):
     # there is a 1 in 6 chance that we have a special level up
     if random.randint(1, 6) == 6:
         print("***Special Advancement***")
-        hint = input("You may suggest something for your new abilities: ")
+        player_suggestion = input("You may suggest something for your new abilities: ")
+        hint = f"\nIn addition, the player suggested the following for the ability, which you should incorporate: `{player_suggestion}`"
     else:
         hint = ""
-
+    
     class NewSpecialAbilities(BaseModel):
         """A handful of abilities, one of which the player may choose for their level up."""
-
         special_ability_choices: List[SpecialAbility]
 
     new_abilities = box.new(
@@ -918,6 +919,7 @@ def advancement_dialog(game, box):
         "Generate a handful of new special abilities the player may choose from for their advancement. Make sure to take their character, the adventure, and the story so far into account. Give a variety of choices. Focus on things the player cannot do yet. Do not generate abilities the player already has."
         + hint,
     ).special_ability_choices
+
     choice = choose_dialog(
         [
             DialogChoice(text=f"{special.name}: {special.description}", value=special)
@@ -929,22 +931,28 @@ def advancement_dialog(game, box):
     print("You gain " + choice.name)
     game.player.special_abilities.append(choice)
 
-    maybe_drop_i = choose_dialog(
-        [
-            DialogChoice(
-                text=f"{game.player.special_abilities[i].name}: {game.player.special_abilities[i].description}",
-                value=i,
+    # Force the player to drop an ability if they exceed the cap of 5
+    if len(game.player.special_abilities) > 5:
+        print("\nYour brain is full (Max 5 abilities). Life is about loss. Pick one to trash.")
+        
+        while len(game.player.special_abilities) > 5:
+            drop_i = choose_dialog(
+                [
+                    DialogChoice(
+                        text=f"{game.player.special_abilities[i].name}: {game.player.special_abilities[i].description}",
+                        value=i,
+                    )
+                    for i in range(len(game.player.special_abilities))
+                ],
+                before="You MUST choose to drop one of your special abilities.",
+                show_extra_selection_strings=False,
+                exit_on_newline=False,
             )
-            for i in range(len(game.player.special_abilities))
-        ],
-        before="You can choose to drop one of your special abilities.",
-        prompt=" or hit enter to proceed without dropping: ",
-        exit_on_newline=True,
-    )
-
-    if (drop_i := maybe_drop_i) is not None:
-        print(f"You lose {game.player.special_abilities[drop_i]}.")
-        del game.player.special_abilities[drop_i]
+            
+            if drop_i is not None:
+                trashed_name = game.player.special_abilities[drop_i].name
+                print(f"You lose {trashed_name}. It was completely useless anyway.")
+                del game.player.special_abilities[drop_i]
 
 def metamorphosis_dialog(game, box):
     """
@@ -1033,7 +1041,29 @@ def question_dialog(game, box) -> str:
         + w,
     ).text
 
+def print_scoreboard(scenario: Scenario):
+    if not scenario.high_scores:
+        print("\n--- NO PREVIOUS RECORDED DEATHS IN THIS SCENARIO ---")
+        return
 
+    # Sort descending by score
+    sorted_scores = sorted(scenario.high_scores, key=lambda s: s.score(), reverse=True)
+
+    print("\n========================================================")
+    print(f"       HALL OF FAME / GRAVEYARD: {scenario.name.upper()}")
+    print("========================================================")
+    print(f"{'RANK':<5} {'NAME':<15} {'SCORE':<8} {'TURNS':<6} {'CAUSE OF DEATH'}")
+    print("-" * 65)
+
+    for rank, entry in enumerate(sorted_scores[:10], 1): # Top 10
+        print(
+            f"{rank:<5} {entry.player_name[:14]:<15} {entry.total_score():<8} "
+            f"{entry.turns_survived:<6} {entry.cause_of_death[:25]}"
+        )
+    print("========================================================\n")    
+
+
+    
 def main():
     p = argparse.ArgumentParser(description="An LLM adventure game example.")
     p.add_argument(
@@ -1127,6 +1157,7 @@ def run(game, args):
         # prompts that we use in box.new below
         box.set_vars(
             {
+                "critic_system_prompt": game.adventure_scenario.critic_system_prompt,
                 "scenario": game.adventure_scenario.show(),
                 "party": "\n".join([npc.show(include_special_abilities=False) for npc in game.party]),
                 "pc": game.player.show(include_special_abilities=False),
@@ -1188,12 +1219,14 @@ def run(game, args):
             if choice == "*":
                 # player gets to write their own
                 if game.fate >= 3:
+                    game.score_entry.star_uses += 1
                     print(game.gain_fate(-3))
                     player_text = input("Your choice: ")
                     choice = Choice(
                         text=player_text,
                         is_dangerous=False,
                         is_part_of_player_motivation=False,
+                        tags = []
                     )
                 else:
                     print("Insufficient fate!")
@@ -1226,6 +1259,7 @@ def run(game, args):
             else:
                 # at this point, choice is a Choice-> player picked one of the options
                 print(f"\n## Turn {game.score_entry.turns_survived}\n")
+                game.tags_add(choice.tags)
                 game.story_append_choice(choice.show())
                 game.turn_tick()
                 fate_msg = game.gain_fate(choice.fate())
