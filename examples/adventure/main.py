@@ -660,22 +660,26 @@ def main():
             return
             
         print(scenario_file.scenario.show())
-        
-        # See if a save file exists and load it to resume a run
+
+# Figure out if we have a save file to resume
+    save_file_record = None
+    if args.scenario_file:
         save_file_record = SaveFile.load_game(args.scenario_file)
-        if save_file_record is not None:
-            game = save_file_record.saved_game_state
-        else:
-            pc, others = player_creation_dialog(scenario_file.scenario, endpoint=args.endpoint, party=args.party)
-            
-            game = GameState(
-                player=pc,
-                party=others,
-                adventure_scenario=scenario_file,
-                fate=1,
-                health=pc.max_health,
-                debug=args.debug,
-            )
+
+    # If we have a save, load it. Otherwise, create a new game.
+    if save_file_record is not None:
+        game = save_file_record.saved_game_state
+    else:
+        pc, others = player_creation_dialog(scenario_file.scenario, endpoint=args.endpoint, party=args.party)
+        
+        game = GameState(
+            player=pc,
+            party=others,
+            adventure_scenario=scenario_file,
+            fate=1,
+            health=pc.max_health,
+            debug=args.debug,
+        )
 
     run(game, args)
 
@@ -707,7 +711,7 @@ def run(game, args):
             game.story_append_beat(intro)
             print("## Intro\n" + intro)
             box.tts_say(intro, interrupt=False)
-            intro_done = True
+            game.intro_done = True
             
         situation = box.new(Situation, game.prompt_main_choices(box.get_history()))
         print("\n" + situation.show() + "\n")

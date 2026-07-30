@@ -1,5 +1,6 @@
 from typing import  *
 from pydantic import BaseModel, Field
+import random
 
 # The complete standard 78-card Tarot deck
 TAROT_DECK: Tuple[str, ...] = (
