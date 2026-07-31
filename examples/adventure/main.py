@@ -43,6 +43,7 @@ class GameState(BaseModel):
     score_entry: ScoreEntry = Field(default_factory = ScoreEntry)
     story: List[str] = Field(default_factory = list)
     latest_criticism: str = ""
+    last_narrative_mode: Optional[Mode] = None
     
     debug: bool = False
     tarot: bool = True
@@ -54,6 +55,19 @@ class GameState(BaseModel):
         print(f"debug: {', '.join([tag for tag in new_tags])}")
         self.tags.update([w.lower() for w in new_tags])
 
+    def tags_draw_random(self, n: int) -> List[str]:
+        """Returns n random tags chosen from the accumulated tags.
+        Tags are put back after each draw, and drawing is weighted by the tag count."""
+        if not self.tags or n <= 0:
+            return []
+            
+        return random.choices(
+            population=list(self.tags.keys()),
+            weights=list(self.tags.values()),
+            k=n
+        )
+        
+        
     def update_score_entry(self) -> None:
         """Keeps the score entry and gamestate syncrhonized."""
         self.score_entry.level_ups = self.player.level - 1
@@ -101,6 +115,22 @@ class GameState(BaseModel):
         self.score_entry.cause_of_death = cause_of_death
         return self.score_entry
 
+
+    def prompt_generate_special_abilities(self, hint: str, n: int = 3) -> str:
+        """Used during advancement to prompt for new abilities."""
+        #old
+        #"Generate a handful of new special abilities the player may choose from for their advancement. Make sure to take their character, the adventure, and the story so far into account. Give a variety of choices. Focus on things the player cannot do yet. Do not generate abilities the player already has." + hint,
+
+        # we draw a number of tags based on the tags collected by the player so far
+        # currently the number of tags is equal to the number of abilities requested.
+        tags = self.tags_draw_random(n)
+        
+        return f"""Generate {n} new abilities for the player character.
+The abilities should be based on the following tags: {tags}
+{hint}
+"""
+    
+        
     def prompt_final_death_reason(self, final_reason: str) -> str:
         return f"""A player character has met their end in an adventure. "Character Name: {self.player.name} ({self.player.character_class}).\nThe final mechanical reason for their demise is the following:
 ```{final_reason}```
@@ -150,14 +180,16 @@ class GameState(BaseModel):
     def turn_tick(self) -> None:
         """Triggers various random events each turn."""
         if random.randint(1, 10) == 10:
-            print(f"You feel yourself taking a deep breath.")
-            self.gain_stress(-1)
+            stress_str =             self.gain_stress(-1)
+            print(f"You feel yourself taking a deep breath. {stress_str}")
+
         if random.randint(1, 20) == 20:
-            print(f"You feel your wounds stitch together somewhat.")
-            self.gain_health(1)
+            health_str = self.gain_health(1)
+            print(f"You feel your wounds stitch together somewhat. {health_str}")
+            
         if random.randint(1, 20) == 20:
-            print(f"Fortune smiles upon you.")
-            self.gain_fate(1)
+            fate_str = self.gain_fate(1)
+                        print(f"Fortune smiles upon you. {fate_str}")
 
     def status(self) -> str:
         """Returns a string showing fate and usable abilities."""
@@ -185,11 +217,59 @@ class GameState(BaseModel):
             + advancement
         )
 
+
+    def mode_adjustments(self, current_narrative_mode: Mode) -> None:
+        """Change state based on transitioning into a new mode or staying in the same mode."""
+        match current_narrative_mode:
+            case Mode.action:
+                # just being in action mode causes stress
+                stress_str = self.gain_stress(1)
+                print(f"You feel your heart pumping. {stress_str}")
+            case Mode.downtime:
+                stress_str = self.gain_stress(-1)
+                print(f"You feel relaxed. {stress_str}")
+            case Mode.reflection:
+                # 20% chance to gain fate during reflection
+                if random.randint(1, 5) == 1:
+                    fate_str = self.gain_fate(1)
+                    print(f"You have an insightful feeling. {fate_str}")
+            case Mode.exploration:
+                # 10% chance for stress, calm, or fate
+                r = random.randint(1, 20)
+                if r == 1:
+                    stress_str = self.gain_stress(1)
+                    print(f"You have a tense feeling. {stress_str}")
+                elif r == 2:
+                    stress_str = self.gain_stress(-1)
+                    print(f"You have a hopeful feeling. {stress_str}.")
+                elif r == 3:
+                    fate_str = self.gain_fate(1)
+                    print(f"You feel confident in your decisions. {fate_str}")
+            case Mode.dialog:
+                # the effect depends on from which mode we transitioned into dialog
+                match self.last_narrative_mode:
+                    case Mode.action:
+                        stress_str = self.gain_stress(-1)
+                        print(f"You feel your heartrate slowing down. {stress_str}")
+                    case Mode.downtime:
+                        if random.randint(1, 5) == 1:
+                            stress_str = self.gain_stress(-1)
+                            print(f"You feel connected. {stress_str}")
+
+                            
     def handle_consequences(
         self, consequences: Consequences
     ) -> Tuple[str, FailureState]:
         """Takes a consequence object, applies it to the current state, and then returns a pair of a message and a bool indicating if the game is over."""
         self._turn += 1
+        current_narrative_mode = consequences.current_narrative_mode
+        print(f"debug: {current_narrative_mode}")
+        if self.last_narrative_mode != current_narrative_mode:
+            self.score_entry.narrative_transitions += 1
+
+        # do some things based solely on mode
+        self.mode_adjustments(current_narrative_mode)
+        self.last_narrative_mode = consequences.current_narrative_mode
         ws = [
             self.gain_health(
                 (-1 * consequences.health_lost) + consequences.health_gained
@@ -245,7 +325,7 @@ class GameState(BaseModel):
     def prompt_intro(self) -> str:
         return "Write a short introductory paragraph to the adventure that sets the scene. Make sure it leads directly into a dramatic situation, and the goals and stakes are clear. Adhere to the scenario's style guide, and use the sources of inspiration for guidance. This will be the first thing the player hears when they start the adventure, so make sure it really pops."
 
-    def prompt_main_choices(self, history: List[ghostbox.ChatMessage]) -> str:
+    def prompt_main_choices(self, story_box: ghostbox.Ghostbox) -> str:
         n = random.randint(3, 4)
         tarot_msg = ""
         if self.tarot:
@@ -254,15 +334,40 @@ class GameState(BaseModel):
                 card = draw_tarot_cards(1)[0]
                 tarot_msg = f"\nGenerate one additional choice that is subtly inspired by the following tarot card: {card}. Please tag this choice with 'tarot'."
         
-        return f"""Generate {n} dramatic choices for the main character, along with a brief summary of the situation. {tarot_msg}"""
+        return f"""
+{self.prompt_narrative_mode()}        
+Generate {n} dramatic choices for the main character, along with a brief summary of the situation that is appropriate to the current mode. If and only if there is a clear and present danger in the form of an NPC or a hostile faction that is part of the current scene, generate an additional combat choice. {tarot_msg}
+"""
 
     def prompt_consequences_special_ability(self, special: SpecialAbility) -> str:
         return f"""The player has used the following ability:
             ```{special.name} - {special.description}```
+
+{self.prompt_narrative_mode()}
+        
 Please narrate the outcome of using this ability in this situation, or gently remind the player that this ability cannot be used, if it is not at all applicable to the current situation."""
 
+
+    def reset_latest_criticism(self, box: ghostbox.Ghostbox) -> None:
+        self.latest_criticism = ""
+        box.set_vars({"latest_criticism" : ""})
+
+
+    def set_latest_criticism(self, new_criticism: str, box: ghostbox.Ghostbox) -> None:
+        self.latest_criticism = new_criticism
+        box.set_vars({"latest_criticism": new_criticism})
+
+    def prompt_narrative_mode(self) -> str:
+        if self.last_narrative_mode is None:
+            return ""
+        return f"""The current narrative mode is:
+```
+{self.last_narrative_mode} - {self.last_narrative_mode.description()}
+```        
+"""
+
     def prompt_consequences(
-            self, choice: Choice, history: List[ghostbox.ChatMessage], endpoint = "http://localhost:8080"
+            self, choice: Choice, story_box: ghostbox.Ghostbox, endpoint = "http://localhost:8080"
     ) -> str:
         player_status_str = "Current player status: {{pc_health}} health, {{pc_stress}} stress, {{fate}} fate.\n"
         
@@ -283,21 +388,30 @@ Please narrate the outcome of using this ability in this situation, or gently re
                 print(f"Consulting literary critic...")
                 advice = critic.text(prompt)
             
-                self.latest_criticism = f"\n\nBelow is some helpful criticism of the story so far. Implement it as best you can:\n```{advice}\n```"
+                self.set_latest_criticism(f"\n\nBelow is some helpful criticism of the story so far. Implement it as best you can:\n```{advice}\n```", story_box)
             
             if True or self.debug:
                 print("Critic's advice: \n" + advice + "\n## end advice\n")
         else:
-            self.latest_criticism = ""
+            self.reset_latest_criticism(story_box)
         
-        prompt = (
-            "The player has chosen the following: \n"
-            + choice.show()
-            + "\nPlease narrate the consequences of the players choice. Drive the story forward and lead into a new dramatic situation.\n"
-        )
 
-        return player_status_str + prompt 
 
+
+
+        return f"""Here is the current player status:
+```
+{player_status_str}
+```        
+
+The player has chosen the following:
+```
+{choice.show()}
+```
+{self.prompt_narrative_mode()}        
+Please narrate the consequences of the players choice. Drive the story forward and lead into a new dramatic situation. If appropriate, transition into a new narrative mode by writing appropriate   scenes and changing the current narrative mode.
+"""
+        
     def prompt_consequences_stress_breakdown(self) -> str:
         return f"{{game.player.name}} has incurred too much stress and sufffers a momentary mental breakdown! Please narrate the consequences of {{game.player.name}} breaking down, losing consciousness, having a panic attack, or temporarily losing their sanity."
 
@@ -461,8 +575,7 @@ def advancement_dialog(game, box):
     
     new_abilities = box.new(
         NewSpecialAbilities,
-        "Generate a handful of new special abilities the player may choose from for their advancement. Make sure to take their character, the adventure, and the story so far into account. Give a variety of choices. Focus on things the player cannot do yet. Do not generate abilities the player already has."
-        + hint,
+        game.prompt_generate_special_abilities(hint)
     ).special_ability_choices
     
     choice = choose_dialog(
@@ -701,7 +814,6 @@ def run(game, args):
                 "pc_health": str(game.health),
                 "pc_stress": str(game.stress),
                 "story_str": game.story_get_str(),
-                "latest_criticism": game.latest_criticism,
             }
         )
         box.clear_history()
@@ -713,7 +825,7 @@ def run(game, args):
             box.tts_say(intro, interrupt=False)
             game.intro_done = True
             
-        situation = box.new(Situation, game.prompt_main_choices(box.get_history()))
+        situation = box.new(Situation, game.prompt_main_choices(box))
         print("\n" + situation.show() + "\n")
         box.tts_say(situation.brief_description, interrupt=False)
         
@@ -761,6 +873,7 @@ def run(game, args):
                         text=player_text,
                         is_dangerous=False,
                         is_part_of_player_motivation=False,
+                        initiates_combat = False,
                         tags = []
                     )
                 else:
@@ -798,7 +911,7 @@ def run(game, args):
                 fate_msg = game.gain_fate(choice.fate())
                 print(fate_msg + "\n" if fate_msg else "" + "Please wait...")
                 narration = box.new(
-                    Consequences, game.prompt_consequences(choice, box.get_history(), endpoint=args.endpoint)
+                    Consequences, game.prompt_consequences(choice, box, endpoint=args.endpoint)
                 )
                 break
                 

@@ -12,6 +12,53 @@ MAX_STRESS = 20
 
 
 
+class CombatAbility(BaseModel):
+    name: str = Field(description="A short, evocative name for the special ability.")
+    description: str = Field(description="Visual and mechanical description. Does it burn, stun, or just emotionally damage the target?")
+    ap_cost: int = Field(ge=4, le=10, description="Cost to use.")
+
+
+    def show(self) -> str:
+        return f"self.name ({self.ap_cost}) - {self.description}"
+    
+class CombatComponent(BaseModel):
+    # Anchor the LLM's vibe right at the top
+    combat_style: str = Field(
+        description="One sentence summarizing their combat approach (e.g., 'A cowardly opportunist who strikes from the shadows' or 'A relentless brute')."
+    )
+    
+    # Bounded AP stats so the AI doesn't completely lose its mind
+    max_ap: int = Field(default=10, ge=5, le=15, description="Maximum Action Points. Usually 10, up to 15 for bosses.")
+    ap_regen: int = Field(default=3, ge=1, le=6, description="AP regained per turn. 3 is standard, 6 is terrifying.")
+    
+    # Only the special, flavor-heavy moves go here
+    abilities: List[CombatAbility] = Field(
+        default_factory=list, 
+        max_length=5, 
+        description="Character-specific special moves. DO NOT include basic attacks or defending."
+    )
+
+    def gain_ap(self, amount: int) -> str:
+    """Modifies AP and returns a string for the terminal UI because we love reading text."""
+    if amount == 0:
+        return f"AP unchanged. Stagnation is the default state of the universe. ({self.current_ap}/{self.max_ap})"
+        
+    old_ap = self.current_ap
+    # The absolute lowest your AP can go before the game physically stops you.
+    # Assuming max 4 actions at 3 AP each, minus your starting 3 AP.
+    min_ap = -9 
+    
+    self.current_ap = max(min_ap, min(self.max_ap, self.current_ap + amount))
+    actual_change = self.current_ap - old_ap
+    
+    if actual_change > 0:
+        return f"Regained {actual_change} AP. (Current: {self.current_ap}/{self.max_ap})"
+    elif actual_change < 0:
+        return f"Burned {abs(actual_change)} AP. (Current: {self.current_ap}/{self.max_ap})"
+    else:
+        return f"AP is literally capped out or at rock bottom. Nothing matters. (Current: {self.current_ap}/{self.max_ap})"    
+
+    
 class SpecialAbility(BaseModel):
     """A special ability that is usable by a player character during play. Its fate cost should reflect its power to influence the story, with higher impact abilities costing more fate. The description should not refer to game mechanics, as it will be interpreted and applied by an LLM."""
 
@@ -86,6 +133,7 @@ class ScoreEntry(BaseModel):
     star_uses: int = 0
     tarot_chosen: int = 0
     unique_tags_collected: int = 0
+    narrative_transitions: int = 0
     win_ending: bool = False
     date: str = Field(default_factory=lambda: datetime.now().strftime("%Y-%m-%d %H:%M"))
 
@@ -97,6 +145,7 @@ class ScoreEntry(BaseModel):
         total += 100 * self.level_ups
         total += self.score_bonus
         # random crap
+        total += 25 * self.narrative_transitions
         total -= 10 * self.star_uses
         total += 5 * self.tarot_chosen
         total += 3 * self.unique_tags_collected
@@ -177,6 +226,7 @@ class Choice(BaseModel):
     text: str
     is_dangerous: bool
     is_part_of_player_motivation: bool
+    initiates_combat: bool
     tags: List[str]  
 
     def has_tag(self, tag: str) -> bool:
@@ -199,14 +249,47 @@ class Choice(BaseModel):
 
     def show(self) -> str:
         w = ""
+        if self.initiates_combat:
+            w += "[Combat] "
         w += self.text
         return w
 
 FailureState = Enum("FailureState", "NoFailure Breakdown GameOver")
 
-class Consequences(BaseModel):
-    """Narration of the consequences to a choice or ability use. May include stress gain or health loss if applicable."""
+class Mode(StrEnum):
+    action = "action"
+    exploration = "exploration"
+    investigation = "investigation"
+    montage = "montage"
+    dialog = "dialog"
+    reflection = "reflection"
+    downtime = "downtime"
+    
+    def description(self) -> str:
+        match self:
+            case Mode.action:
+                return "High-stakes, fast-paced situations requiring immediate physical reaction, evasion, or survival against active threats or environmental hazards."
+            case Mode.exploration:
+                return "Moving through and observing the environment, establishing geography, atmosphere, and discovering broad points of interest."
+            case Mode.investigation:
+                return "Focused, detailed examination of a specific area, object, or puzzle to uncover hidden information, clues, or hidden mechanics."
+            case Mode.montage:
+                return "A time-compressed narrative sequence summarizing travel, routine tasks, or training, rapidly advancing the timeline."
+            case Mode.dialog:
+                return "Character-driven interaction focused heavily on conversation, negotiation, interrogation, or relationship-building."
+            case Mode.reflection:
+                return "Introspective moments focusing on the player character's internal thoughts, emotional state, or processing of recent narrative events."
+            case Mode.downtime:
+                return "A period of rest and preparation in a safe environment, allowing for recovery, inventory management, and planning."
+            case _ as unreachable:
+                assert_never(unreachable)
 
+
+                
+class Consequences(BaseModel):
+    """Narration of the consequences to a choice or ability use."""
+
+    current_narrative_mode: Mode
     text: str
     stress_gained: int
     stress_lost: int
@@ -233,4 +316,5 @@ class Situation(BaseModel):
 
 class Message(BaseModel):
     text: str
-    
+
+
