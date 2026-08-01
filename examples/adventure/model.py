@@ -15,7 +15,7 @@ MAX_STRESS = 20
 class CombatAbility(BaseModel):
     name: str = Field(description="A short, evocative name for the special ability.")
     description: str = Field(description="Visual and mechanical description. Does it burn, stun, or just emotionally damage the target?")
-    ap_cost: int = Field(ge=4, le=10, description="Cost to use. medium impact abilities have 4 point cost, high impact is 6, 10 is reserved for legendary abilities.")
+    ap_cost: int = Field(ge=1, le=3, description="Cost to use. normal impact abilities have 1 point cost, high impact is 2, 3 is reserved for legendary abilities.")
 
 
     def show(self) -> str:
@@ -31,7 +31,7 @@ class CombatComponent(BaseModel):
     )
     # Bounded AP stats so the AI doesn't completely lose its mind
     max_ap: int = Field(default=10, ge=5, le=15, description="Maximum Action Points. Usually 10, up to 15 for bosses.")
-    ap_regen: int = Field(default=3, ge=1, le=6, description="AP regained per turn. 3 is standard, 6 is terrifying.")
+    ap_regen: int = Field(default=1, ge=1, le=3, description="AP regained per turn. 1 is standard, 2 is terrifying.")
     current_ap: int = Field(default=3, description="Current Action Points.")
     
     # Only the special, flavor-heavy moves go here
@@ -112,6 +112,7 @@ class PlayerCharacter(BaseModel):
     level: int = 1
     combat_component: CombatComponent
 
+    
     def health_mod(self, amount: int) -> None:
         """Modify health while erspecting min and max hp."""
         self.health = min(self.max_health, max(0, self.health + amount))
@@ -381,4 +382,188 @@ class Situation(BaseModel):
 class Message(BaseModel):
     text: str
 
+# Combat subsystem
+# --- The Sum Types for the AI (and Player Queue) ---
 
+class AttackChoice(BaseModel):
+    action_type: Literal["attack"] = "attack"
+    target_id: str = Field(description="ID of the entity to attack (e.g., 'e1', 'p2').")
+
+class DefaultChoice(BaseModel):
+    action_type: Literal["default"] = "default"
+
+class BraveChoice(BaseModel):
+    action_type: Literal["brave"] = "brave"
+
+class AbilityChoice(BaseModel):
+    action_type: Literal["ability"] = "ability"
+    ability_id: str = Field(description="The exact ID of the ability to use (e.g., 'a1').")
+    target_id: str = Field(description="ID of the entity to target (e.g., 'e1', 'p1').")
+
+class FleeChoice(BaseModel):
+    action_type: Literal["flee"] = "flee"
+
+# The master union type. The LLM is forced to pick exactly one of these schemas.
+AnyCombatChoice = Union[AttackChoice, DefaultChoice, BraveChoice, AbilityChoice, FleeChoice]
+
+class AICombatTurn(BaseModel):
+    descriptive_text: str = Field(description = "A short, descriptive paragraph that establishes and telegraphs the enemy moves for this turn. Keep it flavorful and vague, include snarky one liners and villainous monologues if appropriate.")
+    combat_actions: Dict[str, List[AnyCombatChoice]] = Field(description = "Maps enemy player character IDs to a list of combat moves they want to execute this turn. Max 4 actions per turn.")
+    
+
+
+# --- The Combat State ---
+
+class CombatState(BaseModel):
+    """The miserable sandbox where your characters go to die."""
+    
+    # The actual entity data, tracked by their temporary combat IDs
+    combatants: Dict[str, 'PlayerCharacter'] = Field(default_factory=dict)
+    
+    # Tracking which ID belongs to which team because iterating a dict is mid
+    player_ids: List[str] = Field(default_factory=list)
+    enemy_ids: List[str] = Field(default_factory=list)
+    
+    round_number: int = 1
+    
+    # We dump all the combat math in here as strings.
+    # At the end of the fight, we feed this exact list to the LLM to write the summary.
+    combat_log: List[str] = Field(default_factory=list)
+    
+    # Maps combatant ID to their queued choices for the current round
+    action_queues: Dict[str, List[AnyCombatChoice]] = Field(default_factory=dict)
+
+    
+    
+    @staticmethod
+    def setup(player_side: List['PlayerCharacter'], enemy_side: List['PlayerCharacter']) -> 'CombatState':
+        """Sets up the combat state and assigns temporary IDs because proper game dev is too hard for us."""
+        state = CombatState()
+        
+        # Populate players
+        for i, pc in enumerate(player_side, 1):
+            pid = f"p{i}"
+            state.combatants[pid] = pc
+            state.player_ids.append(pid)
+            state.action_queues[pid] = []
+            
+        # Populate enemies
+        for i, npc in enumerate(enemy_side, 1):
+            eid = f"e{i}"
+            state.combatants[eid] = npc
+            state.enemy_ids.append(eid)
+            state.action_queues[eid] = []
+            
+        return state
+
+
+def maybe_winner(self) -> Optional[Literal["players", "enemies"]]:
+        """Checks if we can finally end this pointless digital suffering."""
+        players_alive = any(self.combatants[pid].health > 0 for pid in self.player_ids)
+        enemies_alive = any(self.combatants[eid].health > 0 for eid in self.enemy_ids)
+
+        # If everyone is dead, enemies win by default because the universe hates you.
+        if not players_alive:
+            return "enemies"
+        if not enemies_alive:
+            return "players"
+            
+        return None
+
+    def queue_action(self, entity_id: str, action: AnyCombatChoice) -> Tuple[bool, str]:
+        """Queues an action, assuming you haven't already bungled the queue length."""
+        if entity_id not in self.combatants:
+            return False, f"Entity {entity_id} doesn't even exist. Massive L."
+            
+        queue = self.action_queues.get(entity_id, [])
+        
+        # Hardcapping at 4 because of the Brave system.
+        if len(queue) >= 4:
+            return False, f"Queue is full. {self.combatants[entity_id].name} cannot act more than 4 times."
+            
+        self.action_queues[entity_id].append(action)
+        return True, f"Successfully queued {action.action_type} for {self.combatants[entity_id].name}."
+
+    def abilities_for(self, entity_id: str) -> Dict[str, 'CombatAbility']:
+        """
+        Maps 'a1', 'a2' etc. to the actual CombatAbility objects so the LLM 
+        doesn't completely hallucinate random moves.
+        """
+        if entity_id not in self.combatants:
+            return {}
+            
+        entity = self.combatants[entity_id]
+        
+        # If this entity doesn't have a combat component or it's empty, return zip.
+        if not hasattr(entity, 'combat_component') or not entity.combat_component:
+            return {}
+            
+        # Dynamically generate the a1, a2 mapping based on their current loadout
+        return {
+            f"a{i+1}": ability 
+            for i, ability in enumerate(entity.combat_component.combat_abilities)
+        }
+
+    def is_active(self, entity_id: str) -> bool:
+        """
+        Checks if an entity actually exists, has a pulse, and isn't paralyzed by debt.
+        Because checking this anywhere else was apparently a crime against architecture.
+        """
+        if entity_id not in self.combatants:
+            return False
+            
+        entity = self.combatants[entity_id]
+        
+        if entity.health <= 0:
+            return False
+        if not getattr(entity, 'combat_component', None):
+            return False
+            
+        # The ultimate vibe check. Are they in the negatives?
+        return entity.combat_component.current_ap >= 0    
+
+    def sanitize(self, ai_turn: 'AICombatTurn') -> 'AICombatTurn':
+        """Brutally prunes AI hallucinations and mocks them for being overconfident."""
+        
+        modified = False
+        pruned_actions = {}
+        
+        for eid, actions in ai_turn.combat_actions.items():
+            # Using the new state method so the code is *aesthetic*
+            if eid not in self.enemy_ids or not self.is_active(eid):
+                modified = True
+                continue
+            
+            enemy = self.combatants[eid]
+            current_ap = enemy.combat_component.current_ap
+            valid_actions = []
+            
+            for action in actions:
+                # Max 4 actions rule. 
+                if len(valid_actions) >= 4:
+                    modified = True
+                    break
+                
+                # Defaulting is free. 
+                cost = 0 if getattr(action, 'action_type', '') == "default" else getattr(action, 'ap_cost', 1)
+                
+                if current_ap - cost < -3:
+                    modified = True
+                    break # Stop processing actions, they are broke.
+                    
+                current_ap -= cost
+                valid_actions.append(action)
+                
+            if valid_actions:
+                pruned_actions[eid] = valid_actions
+                
+        # Overwrite the hallucinated garbage 
+        ai_turn.combat_actions = pruned_actions
+        
+        # If we had to fix their math, drag them.
+        if modified:
+            snark = " (However, the villains were completely delulu and vastly overestimated their own stamina, stumbling mid-attack and dropping their combos like absolute clowns.)"
+            ai_turn.descriptive_text += snark
+            
+        return ai_turn    
+    
