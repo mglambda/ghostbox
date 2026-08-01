@@ -7,7 +7,7 @@ from datetime import datetime
 import ghostbox, json, argparse, random, os
 import traceback
 
-MAX_HP = 40
+MAX_HP = 20
 MAX_STRESS = 20
 
 
@@ -15,48 +15,77 @@ MAX_STRESS = 20
 class CombatAbility(BaseModel):
     name: str = Field(description="A short, evocative name for the special ability.")
     description: str = Field(description="Visual and mechanical description. Does it burn, stun, or just emotionally damage the target?")
-    ap_cost: int = Field(ge=4, le=10, description="Cost to use.")
+    ap_cost: int = Field(ge=4, le=10, description="Cost to use. medium impact abilities have 4 point cost, high impact is 6, 10 is reserved for legendary abilities.")
 
 
     def show(self) -> str:
-        return f"self.name ({self.ap_cost}) - {self.description}"
+        return f"{self.name} ({self.ap_cost}) - {self.description}"
     
 class CombatComponent(BaseModel):
     # Anchor the LLM's vibe right at the top
     combat_style: str = Field(
         description="One sentence summarizing their combat approach (e.g., 'A cowardly opportunist who strikes from the shadows' or 'A relentless brute')."
     )
-    
+    primary_weapon: str = Field(
+        description = "Weapon used if this character gets into a combat situation."
+    )
     # Bounded AP stats so the AI doesn't completely lose its mind
     max_ap: int = Field(default=10, ge=5, le=15, description="Maximum Action Points. Usually 10, up to 15 for bosses.")
     ap_regen: int = Field(default=3, ge=1, le=6, description="AP regained per turn. 3 is standard, 6 is terrifying.")
+    current_ap: int = Field(default=3, description="Current Action Points.")
     
     # Only the special, flavor-heavy moves go here
-    abilities: List[CombatAbility] = Field(
+    combat_abilities: List[CombatAbility] = Field(
         default_factory=list, 
         max_length=5, 
         description="Character-specific special moves. DO NOT include basic attacks or defending."
     )
 
-    def gain_ap(self, amount: int) -> str:
-    """Modifies AP and returns a string for the terminal UI because we love reading text."""
-    if amount == 0:
-        return f"AP unchanged. Stagnation is the default state of the universe. ({self.current_ap}/{self.max_ap})"
+
+
+
+    def show_short(self) -> str:
+        """One-liner for the initiative tracker. Minimal brainpower required."""
+        return f"AP: {self.current_ap}/{self.max_ap} | Style: {self.combat_style}"
+
+    def show(self) -> str:
+        """Full character sheet dump for combat."""
+        lines = [
+            f"AP: {self.current_ap}/{self.max_ap} (Regen: {self.ap_regen})",
+            f"Combat Style: {self.combat_style}",
+            f"Primary Weapon: {self.primary_weapon}",
+            "Techniques:"
+        ]
         
-    old_ap = self.current_ap
-    # The absolute lowest your AP can go before the game physically stops you.
-    # Assuming max 4 actions at 3 AP each, minus your starting 3 AP.
-    min_ap = -9 
+        if not self.combat_abilities:
+            lines.append("  - None. Literally useless.")
+        else:
+            for ability in self.combat_abilities:
+                # Assuming you fixed the broken f-string in CombatAbility.show()
+                # to return f"{self.name} ({self.ap_cost} AP) - {self.description}"
+                lines.append(f"  - {ability.show()}")
+                
+        return "\n".join(lines)
     
-    self.current_ap = max(min_ap, min(self.max_ap, self.current_ap + amount))
-    actual_change = self.current_ap - old_ap
-    
-    if actual_change > 0:
-        return f"Regained {actual_change} AP. (Current: {self.current_ap}/{self.max_ap})"
-    elif actual_change < 0:
-        return f"Burned {abs(actual_change)} AP. (Current: {self.current_ap}/{self.max_ap})"
-    else:
-        return f"AP is literally capped out or at rock bottom. Nothing matters. (Current: {self.current_ap}/{self.max_ap})"    
+    def gain_ap(self, amount: int) -> str:
+        """Modifies AP and returns a string for the terminal UI because we love reading text."""
+        if amount == 0:
+            return f"AP unchanged. Stagnation is the default state of the universe. ({self.current_ap}/{self.max_ap})"
+
+        old_ap = self.current_ap
+        # The absolute lowest your AP can go before the game physically stops you.
+        # Assuming max 4 actions at 3 AP each, minus your starting 3 AP.
+        min_ap = -9 
+
+        self.current_ap = max(min_ap, min(self.max_ap, self.current_ap + amount))
+        actual_change = self.current_ap - old_ap
+
+        if actual_change > 0:
+            return f"Regained {actual_change} AP. (Current: {self.current_ap}/{self.max_ap})"
+        elif actual_change < 0:
+            return f"Burned {abs(actual_change)} AP. (Current: {self.current_ap}/{self.max_ap})"
+        else:
+            return f"AP is literally capped out or at rock bottom. Nothing matters. (Current: {self.current_ap}/{self.max_ap})"    
 
     
 class SpecialAbility(BaseModel):
@@ -66,6 +95,9 @@ class SpecialAbility(BaseModel):
     description: str
     fate_cost: int = Field(ge=1, le=6)
 
+    def show(self) -> str:
+        return f"{self.name} ({self.fate_cost} fate) - {self.description}"
+    
 class PlayerCharacter(BaseModel):
     name: str
     gender: str
@@ -74,29 +106,61 @@ class PlayerCharacter(BaseModel):
     motivation: str
     special_abilities: List[SpecialAbility]
     max_health: int = Field(ge=1, le=MAX_HP)
+    health: int = 1
     max_stress: int = Field(ge=1, le=MAX_STRESS)
+    stress: int = 0
     level: int = 1
+    combat_component: CombatComponent
 
-    def show(pc, indent: str = "", include_special_abilities: bool =True) -> str:
-        w = ""
-        w += pc.name + "\n"
-        w += indent + pc.description.replace("\n", "\n" + indent) + "\n"
-        w += indent + "Class: " + pc.character_class + "\n"
-        w += indent + f"Max Health: {pc.max_health}; Max Stress: {pc.max_stress}\n"
-        w += indent + "Motivation: " + pc.motivation + "\n"
+    def health_mod(self, amount: int) -> None:
+        """Modify health while erspecting min and max hp."""
+        self.health = min(self.max_health, max(0, self.health + amount))
+
+    def stress_mod(self, amount: int) -> None:
+        """Modify stress while respecting min and max stress."""
+        self.stress = min(self.max_stress, max(0, self.stress + amount))
+
+    def show_short(self) -> str:
+        """One-liner for the party status screen. Keeping it brief because our attention spans are literally fried."""
+        base = f"Lv.{self.level} {self.character_class} '{self.name}' | HP: {self.health}/{self.max_health} | Stress: {self.stress}/{self.max_stress}"
+        
+        if self.combat_component:
+            # Slaps the combat component's short string right on the end
+            return f"{base} | {self.combat_component.show_short()}"
+        return f"{base} | Combat: None (Literally useless)"    
+    
+    def show(self, indent: str = "", include_special_abilities: bool = True, include_combat_abilities: bool = False) -> str:
+        """Dumps the player sheet. Prepare to be disappointed by their stats."""
+        # We use a list to collect lines because string concatenation in a loop is literal garbage.
+        lines = []
+        
+        lines.append(f"{self.name} ({self.gender})")
+        
+        # Handle multi-line descriptions without breaking the indent like a total noob
+        desc = self.description.replace("\n", f"\n{indent}")
+        lines.append(f"{indent}{desc}")
+        
+        lines.append(f"{indent}Class: {self.character_class}")
+        lines.append(f"{indent}Health: {self.health} / {self.max_health}; tress: {self.stress} / {self.max_stress}")
+        lines.append(f"{indent}Motivation: {self.motivation}")
+        
         if include_special_abilities:
-            w += indent + "Special Abilities" + "\n"
-            for special in pc.special_abilities:
-                w += (
-                    2 * indent
-                    + " - "
-                    + special.name
-                    + ". "
-                    + special.description
-                    + f"({special.fate_cost} fate)"
-                    + "\n"
-                )
-        return w + "\n"
+            lines.append(f"{indent}Special Abilities:")
+            if not self.special_abilities:
+                lines.append(f"{indent * 2}- None. Because being special is a myth.")
+            else:
+                for special in self.special_abilities:
+                    # Using the recursive show method you explicitly asked for
+                    lines.append(f"{indent * 2}- {special.show()}")
+                    
+        if include_combat_abilities and self.combat_component:
+            lines.append(f"{indent}Combat Profile:")
+            # Grab the combat dump, then indent every single line of it so it aligns
+            combat_dump = self.combat_component.show()
+            indented_combat = combat_dump.replace("\n", f"\n{indent * 2}")
+            lines.append(f"{indent * 2}{indented_combat}")
+            
+        return "\n".join(lines) + "\n"
 
 class ScenarioDraft(BaseModel):
     """A draft for an adventure scenario."""

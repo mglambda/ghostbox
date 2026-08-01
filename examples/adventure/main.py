@@ -36,8 +36,6 @@ class GameState(BaseModel):
     party: List[PlayerCharacter]
     adventure_scenario: ScenarioFile
     fate: int = 1
-    health: int
-    stress: int = 0
     intro_done: bool = False
     tags: Counter = Field(default_factory = Counter)
     score_entry: ScoreEntry = Field(default_factory = ScoreEntry)
@@ -152,9 +150,9 @@ The abilities should be based on the following tags: {tags}
         return ""
 
     def gain_health(self, hp: int) -> str:
-        old_hp = self.health
-        self.health = min(self.health + hp, self.player.max_health)
-        new_hp = self.health
+        old_hp = self.player.health
+        self.player.health = min(self.player.health + hp, self.player.max_health)
+        new_hp = self.player.health
         if new_hp > old_hp:
             return f"You gained {new_hp - old_hp} health."
         if new_hp < old_hp:
@@ -162,9 +160,9 @@ The abilities should be based on the following tags: {tags}
         return ""
 
     def gain_stress(self, stress) -> str:
-        old_stress = self.stress
-        self.stress = max(self.stress + stress, 0)
-        new_stress = self.stress
+        old_stress = self.player.stress
+        self.player.stress = max(self.player.stress + stress, 0)
+        new_stress = self.player.stress
         if new_stress > old_stress:
             return f"You gained {new_stress - old_stress} stress."
         if new_stress < old_stress:
@@ -189,7 +187,7 @@ The abilities should be based on the following tags: {tags}
             
         if random.randint(1, 20) == 20:
             fate_str = self.gain_fate(1)
-                        print(f"Fortune smiles upon you. {fate_str}")
+            print(f"Fortune smiles upon you. {fate_str}")
 
     def status(self) -> str:
         """Returns a string showing fate and usable abilities."""
@@ -208,8 +206,8 @@ The abilities should be based on the following tags: {tags}
             advancement = ""
         
         lvl_str = f"lvl: {self.player.level}"
-        health_str = f"Health: {self.health}/{self.player.max_health}"
-        stress_str = f"Stress: {self.stress}/{self.player.max_stress}"
+        health_str = f"Health: {self.player.health}/{self.player.max_health}"
+        stress_str = f"Stress: {self.player.stress}/{self.player.max_stress}"
         score_str = f"Score: {self.score_entry.total_score()}"
 
         return (
@@ -281,14 +279,14 @@ The abilities should be based on the following tags: {tags}
         
         failure = FailureState.NoFailure
 
-        if self.stress > self.player.max_stress:
-            stress_value = self.stress // 4
-            if self.health >= stress_value:
-                self.health -= stress_value
+        if self.player.stress > self.player.max_stress:
+            stress_value = self.player.stress // 4
+            if self.player.health >= stress_value:
+                self.player.health_mod((-1)*stress_value)
                 ws.append(
                     f"You break down from stress! Your mental breakdown takes a toll on your body, and you lose {stress_value} health."
                 )
-                self.stress = 0
+                self.player.stress = 0
                 ws.append("You have narrowly averted permanent insanity.")
                 failure = FailureState.Breakdown
             else:
@@ -297,7 +295,7 @@ The abilities should be based on the following tags: {tags}
                 )
                 failure = FailureState.GameOver
             
-        if self.health <= 0:
+        if self.player.health <= 0:
             ws.append(f"{self.player.name} dies from their wounds.")
             failure = FailureState.GameOver
         
@@ -347,6 +345,9 @@ Generate {n} dramatic choices for the main character, along with a brief summary
         
 Please narrate the outcome of using this ability in this situation, or gently remind the player that this ability cannot be used, if it is not at all applicable to the current situation."""
 
+    def prompt_consequences_post_combat(self, choice: Choice, combat_successful: bool, combat_summary: str) -> str:
+        # stub
+        return ""
 
     def reset_latest_criticism(self, box: ghostbox.Ghostbox) -> None:
         self.latest_criticism = ""
@@ -509,12 +510,14 @@ def player_creation_dialog(scenario, endpoint="http://localhost:8080", party=Tru
 
         class PlayerCharacters(BaseModel):
             player_characters: List[PlayerCharacter]
-        
+            
         pcs = box.new(
             PlayerCharacters,
-            "Here is an adventure scenario: "
-            + scenario.show()
-            + "\n\nCreate a handful of player characters that would fit this scenario.",
+            "Here is an adventure scenario: " + scenario.show() + "\n\n"
+            "Create 4 unique player characters that fit this scenario. You must strictly adhere to the data schema:\n"
+            "Give them either 1 ability in the `special_abilities` list and 2 combat abilities in the `combat_component.combat_abilities` list, OR 2 abilities in the `special_abilities` list and 1 combat ability in the `combat_component.combat_abilities` list.\n"
+            "Narrative abilities cost Fate. Starting combat abilities should all cost exactly 4 AP.\n"
+            "Do not forget to assign a `primary_weapon` in the combat component."
         ).player_characters
         
         def set_hint(w):
@@ -526,7 +529,7 @@ def player_creation_dialog(scenario, endpoint="http://localhost:8080", party=Tru
         
         try:
             chosen_player = choose_dialog(
-                [DialogChoice(text=pc.show(), value=pc) for pc in pcs],
+                [DialogChoice(text=pc.show(include_combat_abilities=True), value=pc) for pc in pcs],
                 before="Choose a player character!",
                 prompt=" or enter a suggestion to regenerate characters.: ",
                 on_error=set_hint,
@@ -554,11 +557,11 @@ def advancement_dialog(game, box):
     print(game.gain_fate(-1 * game.advancement_fate_required()))
     game.player.level += 1
     
-    if random.randint(1, MAX_HP) > game.player.max_health:
+    if random.randint(1, 100) > game.player.max_health:
         game.player.max_health += 1
         game.health += 1
         print("Your maximum health has increased by 1.")
-    if random.randint(1, MAX_STRESS) > game.player.max_stress:
+    if random.randint(1, 100) > game.player.max_stress:
         game.player.max_stress += 1
         print("Your maximum stress has increased by 1.")
         
@@ -683,6 +686,16 @@ def question_dialog(game, box) -> str:
         + w,
     ).text
 
+
+def combat_dialog(game: GameState, choice: Choice, box: ghostbox.Ghostbox, endpoint: str) -> Tuple[bool, str]:
+    """Initiates the combat subsystem based on a choice that led to combat. Returns a bool indicating whether combat was won by the player or not, along with a narrative summary of the combat."""
+    # these are for readability
+    player_won = True
+    player_lost = False
+    # ...
+    return player_won, ""
+
+    
 def print_scoreboard(scenario_file: ScenarioFile):
     if not scenario_file.high_scores:
         print("\n--- NO PREVIOUS RECORDED DEATHS IN THIS SCENARIO ---")
@@ -811,8 +824,8 @@ def run(game, args):
                 "party": "\n".join([npc.show(include_special_abilities=False) for npc in game.party]),
                 "pc": game.player.show(include_special_abilities=False),
                 "fate": str(game.fate),
-                "pc_health": str(game.health),
-                "pc_stress": str(game.stress),
+                "pc_health": str(game.player.health),
+                "pc_stress": str(game.player.stress),
                 "story_str": game.story_get_str(),
             }
         )
@@ -845,11 +858,12 @@ def run(game, args):
                 + [
                     DialogChoice(selection_string="*", value="*"),
                     DialogChoice(selection_string="?", value="?"),
+                    DialogChoice(selection_string="_", value="_"),                    
                     DialogChoice(selection_string="advance", value="advance"),
                     DialogChoice(selection_string="q", value="q"),
                 ],
                 after=game.status(),
-                prompt=f" or use an ability (type name or initial letter). Typing `*` spends 3 fate to write your own choice. Ask the GM a question with `?`. Type `q` to save and quit.\n{game.player.name} > ",
+                prompt=f" or use an ability (type name or initial letter). Typing `*` spends 3 fate to write your own choice. Ask the GM a question with `?`. Type `_` for status, `q` to save and quit.\n{game.player.name} > ",
                 show_extra_selection_strings=False,
                 exit_on_newline=True
             )
@@ -886,14 +900,22 @@ def run(game, args):
                     print(msg)
                     box.tts_say(msg, interrupt=False)
                 continue
-                
+
+            if choice == "_":
+                print(game.player.show())
+                tags_str = ", ".join([f"{n}x {tag}" for tag, n in game.tags.items()])
+                print(f"Tags: {tags_str}")
+                print(f"## Party\n" + "\n".join([c.show_short() for c in game.party]))
+                continue
+            
             if choice == "advance" and game.fate >= game.advancement_fate_required():
                 print("You have advanced your abilities!")
                 advancement_dialog(game, box)
                 print("Done with advancement. Let's return to the story.")
                 continue
                 
-            if type(choice) == SpecialAbility:
+            if isinstance(choice, SpecialAbility):
+                print(f"## Special Ability")
                 special, msg = game.try_use_special_ability(choice.name)
                 if special is None:
                     print(msg)
@@ -901,6 +923,18 @@ def run(game, args):
                 print(msg)
                 narration = box.new(
                     Consequences, game.prompt_consequences_special_ability(special)
+                )
+                break
+            elif isinstance(choice, Choice) and choice.initiates_combat:
+                combat_succesful, combat_summary = combat_dialog(game, choice, box, endpoint=args.endpoint)
+                if combat_succesful:
+                    print(f"You won!")
+                else:
+                    print(f"You lost!")
+
+                game.story_append_beat(combat_summary)
+                narration = box.new(
+                    Consequences, game.prompt_consequences_post_combat(choice, combat_successful, combat_summary)
                 )
                 break
             else:
