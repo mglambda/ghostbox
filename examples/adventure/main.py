@@ -113,11 +113,10 @@ class GameState(BaseModel):
         self.score_entry.cause_of_death = cause_of_death
         return self.score_entry
 
-
     def prompt_combat_action_resolution(self, combat_state: 'CombatState', actor_id: str, action: 'AnyCombatChoice') -> str:
         """
-        Feeds the LLM the exact context of a single action so it can generate 
-        the flavor text and the mechanical Lego blocks.
+        Feeds the LLM the exact context of a single action. 
+        Now with 100% more pattern matching because we're feeling trendy.
         """
         actor = combat_state.combatants.get(actor_id)
         action_type = getattr(action, 'action_type', 'unknown')
@@ -125,22 +124,31 @@ class GameState(BaseModel):
         # Build the context string
         context_parts = [f"Actor: {actor.name} ({actor_id})", f"Action: {action_type.upper()}"]
         
-        # Figure out who is getting targeted and what the ability actually is
-        if hasattr(action, 'target_id'):
-            target = combat_state.combatants.get(action.target_id)
-            target_name = target.name if target else "a ghost"
-            context_parts.append(f"Target: {target_name} ({action.target_id})")
-            
-        if action_type == 'ability':
-            # Dig out the actual text description of the ability so the LLM isn't flying blind
-            abs_dict = combat_state.abilities_for(actor_id)
-            ability = abs_dict.get(action.ability_id)
-            if ability:
-                context_parts.append(f"Ability Details: {ability.name} - {ability.description}")
+        match action:
+            case AttackChoice(target_id=tid):
+                target = combat_state.combatants.get(tid)
+                target_name = target.name if target else "a ghost"
+                context_parts.append(f"Target: {target_name} ({tid})")
                 
-        if action_type == 'default':
-            context_parts.append("Details: The actor is taking a defensive stance to bank AP. This should ideally restore 1 HP or relieve some stress, because existing is exhausting.")
-            
+            case AbilityChoice(target_id=tid, ability_id=aid):
+                target = combat_state.combatants.get(tid)
+                target_name = target.name if target else "a ghost"
+                context_parts.append(f"Target: {target_name} ({tid})")
+                
+                abs_dict = combat_state.abilities_for(actor_id)
+                ability = abs_dict.get(aid)
+                if ability:
+                    context_parts.append(f"Ability Details: {ability.name} - {ability.description}")
+                    
+            case DefaultChoice():
+                context_parts.append("Details: The actor is taking a defensive stance to bank AP. This should ideally restore 1 HP or relieve some stress, because existing is exhausting.")
+                
+            case FleeChoice():
+                context_parts.append("Details: The actor is attempting to run away from their problems. Honestly, very relatable.")
+                
+            case _ as unreachable:
+                assert_never(unreachable)
+                
         context_str = "\n".join(context_parts)
         
         return f"""You are resolving a single turn in a grim, turn-based RPG. 
@@ -154,6 +162,7 @@ Your task:
 4. ONLY target IDs that are explicitly involved in the action description above. Do not hallucinate random targets.
 
 """
+    
     
     def prompt_combat_ai_turn(self, combat_state: 'CombatState') -> str:
         """Tells the AI it's time to move, filtering out the flops."""
@@ -648,8 +657,8 @@ def scenario_creation_dialog(endpoint = "http://localhost:8080", initial_prompt=
             if getattr(e, 'flag', False):
                 continue
             raise e
-        
-        print("You selected `" + chosen_scenario.name + "`. Fleshing out scenario...")
+        if chosen_scenario is not None:
+            print("You selected `" + chosen_scenario.name + "`. Fleshing out scenario...")
 
     return box.new(
         Scenario,
@@ -718,7 +727,7 @@ def advancement_dialog(game, box):
     
     if random.randint(1, 100) > game.player.max_health:
         game.player.max_health += 1
-        game.health += 1
+        game.player.health += 1
         print("Your maximum health has increased by 1.")
     if random.randint(1, 100) > game.player.max_stress:
         game.player.max_stress += 1
@@ -1045,7 +1054,7 @@ def combat_configure_turn(combat_state: 'CombatState') -> 'CombatState':
                 DialogChoice(text="End Turn", selection_string="e", value=try_end_turn),
             ]
             
-            result = choose_dialog(
+            result = choose_dialog( # type: ignore
                 choices=choices,
                 before=before_text,
                 prompt="\nYour move, tactician: ",
@@ -1060,7 +1069,7 @@ def combat_configure_turn(combat_state: 'CombatState') -> 'CombatState':
                 
         return combat_state
     
-def combat_dialog(game: GameState, choice: Choice, box: ghostbox.Ghostbox, endpoint: str) -> Tuple[Literal["player"] | Literal["enemies"], str]:
+def combat_dialog(game: GameState, choice: Choice, box: ghostbox.Ghostbox, endpoint: str) -> Tuple[Literal["players"] | Literal["enemies"], str]:
     """Initiates the combat subsystem based on a choice that led to combat. Returns a bool indicating whether combat was won by the player or not, along with a narrative summary of the combat."""
     # these are for readability
     player_won = True
@@ -1079,7 +1088,7 @@ def combat_dialog(game: GameState, choice: Choice, box: ghostbox.Ghostbox, endpo
         game.prompt_combat_enemy_roster()
     )
     
-    combat_state = CombatState.setup(player_roster, enemy_roster)
+    combat_state = CombatState.setup(player_roster, enemy_roster.enemies)
     # we need an intro and setup that transitions the story into the fast paced combat
     # this doesn't need to be part of the story, as we will summaritze the entire combat later
     # but it does need to be part of the combat log
@@ -1115,7 +1124,7 @@ def combat_dialog(game: GameState, choice: Choice, box: ghostbox.Ghostbox, endpo
         # lfg!
         print(f"## Fight")
         # ... stuff happens here
-        combat_execute(new_combat_state, combat_box, previous_combat_state=combat_state)
+        combat_execute(game, new_combat_state, combat_box, previous_combat_state=combat_state)
         # check for winners
         if (winner := new_combat_state.maybe_winner()) is not None:
             break
@@ -1129,7 +1138,7 @@ def combat_dialog(game: GameState, choice: Choice, box: ghostbox.Ghostbox, endpo
     # we have winner != None
     return winner, combat_box.text(f"The combat is over. The winners are: {winner}. Please generate a couple of paragraphs that summarize the battle in a purely prosaic style (no stats or damage numbers, just an action scene).")
 
-def combat_execute(game: 'GameState', combat_state: 'CombatState', combat_box: ghostbox.Ghostbox, *, previous_combat_state: 'CombatState' = None) -> None:
+def combat_execute(game: 'GameState', combat_state: 'CombatState', combat_box: ghostbox.Ghostbox, *, previous_combat_state: Optional[CombatState] = None) -> None:
     """
     Consumes the action queue action-by-action. 
     Prints flavor text for the screen reader to chew on while the void consumes us all.
@@ -1196,9 +1205,15 @@ def print_scoreboard(scenario_file: ScenarioFile):
     print("-" * 65)
     
     for rank, entry in enumerate(sorted_scores[:10], 1):
+        if entry is None:
+            continue
+
+        if (cause_of_death := entry.cause_of_death) is None:
+            cause_of_death = "Unknown."
+            
         print(
             f"{rank:<5} {entry.player_name[:14]:<15} {entry.total_score():<8} "
-            f"{entry.turns_survived:<6} {entry.cause_of_death[:25]}"
+            f"{entry.turns_survived:<6} {cause_of_death[:25]}"
         )
     print("========================================================\n")
     
@@ -1413,8 +1428,10 @@ def run(game, args):
             elif isinstance(choice, Choice) and choice.initiates_combat:
                 combat_winner, combat_summary = combat_dialog(game, choice, box, endpoint=args.endpoint)
                 if combat_winner == "players":
+                    combat_succesful = True
                     print(f"You won!")
                 else:
+                    combat_succesful = False
                     print(f"You lost!")
 
                 game.story_append_beat(combat_summary)

@@ -214,9 +214,9 @@ class ScoreEntry(BaseModel):
         # we modify score based on floor and ceiling of turns
         # this is to avoid degenerate 3 turn strategies
         if self.turns_survived <= 3:
-            total *= 0.2
+            total = int(total * 0.2)
         elif self.turns_survived <= 5:
-            total *= 0.3
+            total = int(total * 0.3)
         else:
             total += min(self.turns_survived * 5, 250)
         
@@ -483,7 +483,7 @@ class CombatState(BaseModel):
         return state
 
 
-def maybe_winner(self) -> Optional[Literal["players", "enemies"]]:
+    def maybe_winner(self) -> Optional[Literal["players", "enemies"]]:
         """Checks if we can finally end this pointless digital suffering."""
         players_alive = any(self.combatants[pid].health > 0 for pid in self.player_ids)
         enemies_alive = any(self.combatants[eid].health > 0 for eid in self.enemy_ids)
@@ -562,7 +562,7 @@ def maybe_winner(self) -> Optional[Literal["players", "enemies"]]:
             
             enemy = self.combatants[eid]
             current_ap = enemy.combat_component.current_ap
-            valid_actions = []
+            valid_actions: List[AnyCombatChoice] = []
             
             for action in actions:
                 # Max 4 actions rule. 
@@ -597,7 +597,7 @@ def maybe_winner(self) -> Optional[Literal["players", "enemies"]]:
         """Advance the round and increase AP etc. Do housekeeping."""
         self.round_number += 1
         for _, c in self.combatants.items():
-            c.gain_ap(c.ap_regen)
+            c.combat_component.gain_ap(c.combat_component.ap_regen)
 
     def apply_turn(self, ai_turn: 'AICombatTurn') -> None:
         """
