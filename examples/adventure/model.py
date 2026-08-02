@@ -4,7 +4,7 @@ import sys
 from typing import *
 from collections import Counter
 from datetime import datetime
-import ghostbox, json, argparse, random, os
+import  json, argparse, random, os
 import traceback
 
 MAX_HP = 20
@@ -73,11 +73,7 @@ class CombatComponent(BaseModel):
             return f"AP unchanged. Stagnation is the default state of the universe. ({self.current_ap}/{self.max_ap})"
 
         old_ap = self.current_ap
-        # The absolute lowest your AP can go before the game physically stops you.
-        # Assuming max 4 actions at 3 AP each, minus your starting 3 AP.
-        min_ap = -9 
-
-        self.current_ap = max(min_ap, min(self.max_ap, self.current_ap + amount))
+        self.current_ap = max(CombatState.lower_ap_bound, min(self.max_ap, self.current_ap + amount))
         actual_change = self.current_ap - old_ap
 
         if actual_change > 0:
@@ -392,8 +388,6 @@ class AttackChoice(BaseModel):
 class DefaultChoice(BaseModel):
     action_type: Literal["default"] = "default"
 
-class BraveChoice(BaseModel):
-    action_type: Literal["brave"] = "brave"
 
 class AbilityChoice(BaseModel):
     action_type: Literal["ability"] = "ability"
@@ -404,7 +398,7 @@ class FleeChoice(BaseModel):
     action_type: Literal["flee"] = "flee"
 
 # The master union type. The LLM is forced to pick exactly one of these schemas.
-AnyCombatChoice = Union[AttackChoice, DefaultChoice, BraveChoice, AbilityChoice, FleeChoice]
+AnyCombatChoice = Union[AttackChoice, DefaultChoice, AbilityChoice, FleeChoice]
 
 class AICombatTurn(BaseModel):
     descriptive_text: str = Field(description = "A short, descriptive paragraph that establishes and telegraphs the enemy moves for this turn. Keep it flavorful and vague, include snarky one liners and villainous monologues if appropriate.")
@@ -414,6 +408,36 @@ class AICombatTurn(BaseModel):
 
 # --- The Combat State ---
 
+
+# --- The Atomic Lego Blocks for Resolving Actions ---
+
+class DamageEffect(BaseModel):
+    effect_type: Literal["damage"] = "damage"
+    target_id: str = Field(description="ID of the poor soul taking damage (e.g., 'e1', 'p2').")
+    amount: int = Field(default=1, ge=0, description="Amount of HP to violently remove.")
+
+class HealEffect(BaseModel):
+    effect_type: Literal["heal"] = "heal"
+    target_id: str = Field(description="ID of the entity getting a temporary reprieve from death.")
+    amount: int = Field(default=1, ge=0, description="Amount of HP to restore.")
+
+class StressEffect(BaseModel):
+    effect_type: Literal["stress"] = "stress"
+    target_id: str = Field(description="ID of the entity having a mental breakdown.")
+    amount: int = Field(description="Amount of stress to add (positive number). Can be negative to relieve stress.")
+
+# The master union type for effects.
+AnyCombatEffect = Union[DamageEffect, HealEffect, StressEffect]
+
+class CombatResolution(BaseModel):
+    """The LLM generates this for EVERY single action popped from the queue."""
+    flavor_text: str = Field(
+        description="A punchy, dramatic paragraph narrating the action. Make it sound devastating."
+    )
+    effects: List[AnyCombatEffect] = Field(
+        description="The strictly mechanical puzzle pieces to apply to the game state."
+    )
+    
 class CombatState(BaseModel):
     """The miserable sandbox where your characters go to die."""
     
@@ -433,7 +457,9 @@ class CombatState(BaseModel):
     # Maps combatant ID to their queued choices for the current round
     action_queues: Dict[str, List[AnyCombatChoice]] = Field(default_factory=dict)
 
-    
+    lower_ap_bound: ClassVar[int] = -3
+    upper_ap_bound: ClassVar[int] = 3
+    action_queue_limit: ClassVar[int] = 4
     
     @staticmethod
     def setup(player_side: List['PlayerCharacter'], enemy_side: List['PlayerCharacter']) -> 'CombatState':
@@ -567,3 +593,38 @@ def maybe_winner(self) -> Optional[Literal["players", "enemies"]]:
             
         return ai_turn    
     
+    def next_round(self) -> None:
+        """Advance the round and increase AP etc. Do housekeeping."""
+        self.round_number += 1
+        for _, c in self.combatants.items():
+            c.gain_ap(c.ap_regen)
+
+    def apply_turn(self, ai_turn: 'AICombatTurn') -> None:
+        """
+        Takes the freshly sanitized hallucinations of the AI and actually 
+        puts them into the queue. Wow. Groundbreaking.
+        """
+        for eid, actions in ai_turn.combat_actions.items():
+            if self.is_active(eid):
+                # Overwrite or extend? Let's just overwrite for safety, 
+                # assuming the AI plans its whole turn at once.
+                self.action_queues[eid] = actions            
+
+    def pop_action(self) -> Optional[Tuple[str, AnyCombatChoice]]:
+        """
+        Pops the next action from the queues. Defaults get priority because 
+        turtling up to delay the inevitable is the only valid response to existence.
+        """
+        # Pass 1: Look for cowards (Defaults) at the front of ANY queue
+        for eid, queue in self.action_queues.items():
+            if queue and getattr(queue[0], 'action_type', '') == 'default':
+                return eid, queue.pop(0)
+                
+        # Pass 2: Literally whatever else is left in the order we iterate
+        for eid, queue in self.action_queues.items():
+            if queue:
+                return eid, queue.pop(0)
+                
+        # The queues are empty. We are free.
+        return None                
+

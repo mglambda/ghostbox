@@ -113,6 +113,48 @@ class GameState(BaseModel):
         self.score_entry.cause_of_death = cause_of_death
         return self.score_entry
 
+
+    def prompt_combat_action_resolution(self, combat_state: 'CombatState', actor_id: str, action: 'AnyCombatChoice') -> str:
+        """
+        Feeds the LLM the exact context of a single action so it can generate 
+        the flavor text and the mechanical Lego blocks.
+        """
+        actor = combat_state.combatants.get(actor_id)
+        action_type = getattr(action, 'action_type', 'unknown')
+        
+        # Build the context string
+        context_parts = [f"Actor: {actor.name} ({actor_id})", f"Action: {action_type.upper()}"]
+        
+        # Figure out who is getting targeted and what the ability actually is
+        if hasattr(action, 'target_id'):
+            target = combat_state.combatants.get(action.target_id)
+            target_name = target.name if target else "a ghost"
+            context_parts.append(f"Target: {target_name} ({action.target_id})")
+            
+        if action_type == 'ability':
+            # Dig out the actual text description of the ability so the LLM isn't flying blind
+            abs_dict = combat_state.abilities_for(actor_id)
+            ability = abs_dict.get(action.ability_id)
+            if ability:
+                context_parts.append(f"Ability Details: {ability.name} - {ability.description}")
+                
+        if action_type == 'default':
+            context_parts.append("Details: The actor is taking a defensive stance to bank AP. This should ideally restore 1 HP or relieve some stress, because existing is exhausting.")
+            
+        context_str = "\n".join(context_parts)
+        
+        return f"""You are resolving a single turn in a grim, turn-based RPG. 
+        
+{context_str}
+
+Your task:
+1. Write a short, punchy paragraph of `flavor_text` narrating the outcome of this action. Make it visceral, dramatic, and slightly cynical.
+2. Generate the strictly mechanical `effects` (DamageEffect, HealEffect, or StressEffect) that result from this action.
+3. Keep standard attacks around 1 to 4 damage. Special abilities can do more.
+4. ONLY target IDs that are explicitly involved in the action description above. Do not hallucinate random targets.
+
+"""
+    
     def prompt_combat_ai_turn(self, combat_state: 'CombatState') -> str:
         """Tells the AI it's time to move, filtering out the flops."""
         
@@ -1018,7 +1060,7 @@ def combat_configure_turn(combat_state: 'CombatState') -> 'CombatState':
                 
         return combat_state
     
-def combat_dialog(game: GameState, choice: Choice, box: ghostbox.Ghostbox, endpoint: str) -> Tuple[bool, str]:
+def combat_dialog(game: GameState, choice: Choice, box: ghostbox.Ghostbox, endpoint: str) -> Tuple[Literal["player"] | Literal["enemies"], str]:
     """Initiates the combat subsystem based on a choice that led to combat. Returns a bool indicating whether combat was won by the player or not, along with a narrative summary of the combat."""
     # these are for readability
     player_won = True
@@ -1053,6 +1095,7 @@ def combat_dialog(game: GameState, choice: Choice, box: ghostbox.Ghostbox, endpo
         combat_box.set_vars({
             "combat_ai_system": game.prompt_combat_ai_system(combat_state)
         })
+        print(f"## Round {combat_state.round_number}")
         # get the AI turn
         unsafe_ai_turn = combat_box.new(
             AICombatTurn,
@@ -1063,12 +1106,79 @@ def combat_dialog(game: GameState, choice: Choice, box: ghostbox.Ghostbox, endpo
         # laugh maniacly at the player
         combat_state.combat_log.append(ai_turn.descriptive_text)
         print(ai_turn.descriptive_text)
+        # add the actions to queue without revealing them to player
+        combat_state.apply_turn(ai_turn)
         
         # let the player set up all their stuff
         new_combat_state = combat_configure_turn(combat_state)
+
+        # lfg!
+        print(f"## Fight")
+        # ... stuff happens here
+        combat_execute(new_combat_state, combat_box, previous_combat_state=combat_state)
+        # check for winners
+        if (winner := new_combat_state.maybe_winner()) is not None:
+            break
+
+        # otherwise continue fighting
+        # move to next turn
+        new_combat_state.next_round()
+        combat_state = new_combat_state
+
+    # wrap up
+    # we have winner != None
+    return winner, combat_box.text(f"The combat is over. The winners are: {winner}. Please generate a couple of paragraphs that summarize the battle in a purely prosaic style (no stats or damage numbers, just an action scene).")
+
+def combat_execute(game: 'GameState', combat_state: 'CombatState', combat_box: ghostbox.Ghostbox, *, previous_combat_state: 'CombatState' = None) -> None:
+    """
+    Consumes the action queue action-by-action. 
+    Prints flavor text for the screen reader to chew on while the void consumes us all.
+    """
+    while True:
+        # If someone is already dead and the battle is over, stop dragging it out.
+        if combat_state.maybe_winner() is not None:
+            break
+            
+        popped = combat_state.pop_action()
+        if popped is None:
+            break
+            
+        actor_id, action = popped
         
-    
-    return player_won, ""
+        # Did they literally die before their turn? Skip them. RIP bozo.
+        if not combat_state.is_active(actor_id):
+            continue
+            
+        # Get the prompt for this specific microscopic interaction
+        prompt_text = game.prompt_combat_action_resolution(combat_state, actor_id, action)
+        
+        # Ping the LLM for the narrative and the Lego blocks
+        resolution = combat_box.new(CombatResolution, prompt_text)
+        
+        # Print the flavor text so TalkBack can read it to you right now
+        print(f"\n{resolution.flavor_text}")
+        
+        # Keep the receipts in the combat log for the final summary
+        combat_state.combat_log.append(resolution.flavor_text)
+        
+        # Mechanically process the puzzle pieces
+        for effect in resolution.effects:
+            target = combat_state.combatants.get(effect.target_id)
+            if not target:
+                continue # The LLM hallucinated a target that doesn't exist. Ignore it.
+                
+            if effect.effect_type == "damage":
+                target.health_mod(-effect.amount)
+            elif effect.effect_type == "heal":
+                target.health_mod(effect.amount)
+            elif effect.effect_type == "stress":
+                target.stress_mod(effect.amount)
+                
+            # Log the dry math so the final summary prompt knows who got wrecked
+            mech_log = f"[{effect.effect_type.upper()}] -> {effect.target_id} ({effect.amount})"
+            combat_state.combat_log.append(mech_log)
+
+
 
     
 def print_scoreboard(scenario_file: ScenarioFile):
@@ -1301,8 +1411,8 @@ def run(game, args):
                 )
                 break
             elif isinstance(choice, Choice) and choice.initiates_combat:
-                combat_succesful, combat_summary = combat_dialog(game, choice, box, endpoint=args.endpoint)
-                if combat_succesful:
+                combat_winner, combat_summary = combat_dialog(game, choice, box, endpoint=args.endpoint)
+                if combat_winner == "players":
                     print(f"You won!")
                 else:
                     print(f"You lost!")
