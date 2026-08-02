@@ -685,6 +685,7 @@ def player_creation_dialog(scenario, endpoint="http://localhost:8080", party=Tru
             "Create 4 unique player characters that fit this scenario. You must strictly adhere to the data schema:\n"
             "Give them either 1 ability in the `special_abilities` list and 2 combat abilities in the `combat_component.combat_abilities` list, OR 2 abilities in the `special_abilities` list and 1 combat ability in the `combat_component.combat_abilities` list.\n"
             "Narrative abilities cost Fate. Starting combat abilities should all cost exactly 4 AP.\n"
+            "All characters start with health equal to their max health, and 0 stress. They start with APequal to their max AP."
             "Do not forget to assign a `primary_weapon` in the combat component."
         ).player_characters
         

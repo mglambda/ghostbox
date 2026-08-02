@@ -19,7 +19,7 @@ class CombatAbility(BaseModel):
 
 
     def show(self) -> str:
-        return f"{self.name} ({self.ap_cost}) - {self.description}"
+        return f"{self.name} ({self.ap_cost} AP) - {self.description}"
     
 class CombatComponent(BaseModel):
     # Anchor the LLM's vibe right at the top
@@ -30,7 +30,7 @@ class CombatComponent(BaseModel):
         description = "Weapon used if this character gets into a combat situation."
     )
     # Bounded AP stats so the AI doesn't completely lose its mind
-    max_ap: int = Field(default=10, ge=5, le=15, description="Maximum Action Points. Usually 10, up to 15 for bosses.")
+    max_ap: int = Field(default=3, ge=3, le=3, description="3 for everyone")
     ap_regen: int = Field(default=1, ge=1, le=3, description="AP regained per turn. 1 is standard, 2 is terrifying.")
     current_ap: int = Field(default=3, description="Current Action Points.")
     
@@ -51,7 +51,8 @@ class CombatComponent(BaseModel):
     def show(self) -> str:
         """Full character sheet dump for combat."""
         lines = [
-            f"AP: {self.current_ap}/{self.max_ap} (Regen: {self.ap_regen})",
+            # AP display removed from long display for now - we just don't want it to show up in char creation because it's confusing
+            #f"AP: {self.current_ap}/{self.max_ap} (Regen: {self.ap_regen})",
             f"Combat Style: {self.combat_style}",
             f"Primary Weapon: {self.primary_weapon}",
             "Techniques:"
@@ -460,10 +461,11 @@ class CombatState(BaseModel):
     lower_ap_bound: ClassVar[int] = -3
     upper_ap_bound: ClassVar[int] = 3
     action_queue_limit: ClassVar[int] = 4
-    
-    @staticmethod
+
+
+@staticmethod
     def setup(player_side: List['PlayerCharacter'], enemy_side: List['PlayerCharacter']) -> 'CombatState':
-        """Sets up the combat state and assigns temporary IDs because proper game dev is too hard for us."""
+        """Sets up the combat state and aggressively scrubs the LLM's hallucinated AP garbage."""
         state = CombatState()
         
         # Populate players
@@ -473,6 +475,10 @@ class CombatState(BaseModel):
             state.player_ids.append(pid)
             state.action_queues[pid] = []
             
+            # Brutally reset AP to 0 so they stop starting fights with god-tier action economy
+            if getattr(pc, 'combat_component', None):
+                pc.combat_component.current_ap = 0
+                
         # Populate enemies
         for i, npc in enumerate(enemy_side, 1):
             eid = f"e{i}"
@@ -480,8 +486,12 @@ class CombatState(BaseModel):
             state.enemy_ids.append(eid)
             state.action_queues[eid] = []
             
+            # Scrub their AP too, because NPCs don't get special treatment in this miserable universe
+            if getattr(npc, 'combat_component', None):
+                npc.combat_component.current_ap = 0
+                
         return state
-
+    
 
     def maybe_winner(self) -> Optional[Literal["players", "enemies"]]:
         """Checks if we can finally end this pointless digital suffering."""
