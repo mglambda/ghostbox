@@ -1,4 +1,4 @@
-from pydantic import BaseModel, ValidationError, Field
+from pydantic import BaseModel, ValidationError, Field, model_validator
 from enum import Enum, StrEnum
 import sys
 from typing import *
@@ -94,6 +94,12 @@ class SpecialAbility(BaseModel):
 
     def show(self) -> str:
         return f"{self.name} ({self.fate_cost} fate) - {self.description}"
+
+
+from pydantic import BaseModel, Field, model_validator
+from typing import Optional
+
+
     
 class PlayerCharacter(BaseModel):
     name: str
@@ -109,14 +115,37 @@ class PlayerCharacter(BaseModel):
     level: int = 1
     combat_component: CombatComponent
 
-    
-    def health_mod(self, amount: int) -> None:
-        """Modify health while erspecting min and max hp."""
-        self.health = min(self.max_health, max(0, self.health + amount))
 
-    def stress_mod(self, amount: int) -> None:
-        """Modify stress while respecting min and max stress."""
-        self.stress = min(self.max_stress, max(0, self.stress + amount))
+    @model_validator(mode='after')
+    def sync_health_default(self) -> 'PlayerCharacter':
+        """If health wasn't explicitly passed, sync it to max_health."""
+        if self.health < self.max_health:
+            self.health = self.max_health
+        return self
+
+    
+    def mod_health(self, amount: int) -> str:
+        old_health = self.health
+        self.health = max(0, min(self.max_health, self.health + amount))
+        actual_change = self.health - old_health
+        
+        if actual_change == 0:
+            return f"{self.name}'s health remains unchanged, much like their tragic existence."
+            
+        verb = "gains" if actual_change > 0 else "loses"
+        return f"{self.name} {verb} {abs(actual_change)} health."
+
+    def mod_stress(self, amount: int) -> str:
+        old_stress = self.stress
+        self.stress = max(0, min(self.max_stress, self.stress + amount))
+        actual_change = self.stress - old_stress
+        
+        if actual_change == 0:
+            return f"{self.name}'s stress is unfazed."
+            
+        verb = "gains" if actual_change > 0 else "loses"
+        return f"{self.name} {verb} {abs(actual_change)} stress."
+    
 
     def show_short(self) -> str:
         """One-liner for the party status screen. Keeping it brief because our attention spans are literally fried."""
@@ -412,6 +441,7 @@ class AICombatTurn(BaseModel):
 
 # --- The Atomic Lego Blocks for Resolving Actions ---
 
+    
 class DamageEffect(BaseModel):
     effect_type: Literal["damage"] = "damage"
     target_id: str = Field(description="ID of the poor soul taking damage (e.g., 'e1', 'p2').")
@@ -675,3 +705,80 @@ class CombatState(BaseModel):
                 lines.append(player.show_short())
                 
         return "\n".join(lines)    
+                
+# --- The Event Stack Types ---
+
+class CombatChoiceEvent(BaseModel):
+    """The catalyst. The calm before the LLM hallucination."""
+    event_type: Literal["choice"] = "choice"
+    source_id: str = Field(description="Who is making the terrible decision.")
+    choice: 'AnyCombatChoice' # Forward reference
+
+    def procure(self, combat_state: 'CombatState') -> Tuple[str, List['AnyCombatEvent']]:
+        """
+        Handles any non-LLM choice mechanics. 
+        Returns (flavor_text, triggered_events).
+        """
+        source = combat_state.combatants.get(self.source_id)
+        name = source.name if source else "The Void"
+        
+        match getattr(self.choice, 'action_type', ''):
+            case "default":
+                return f"\n 🛡️ {name} cowers in fear and does absolutely nothing (Default).", []
+            case _:
+                return "", [] # The LLM will handle the real moves
+
+class CombatEffectEvent(BaseModel):
+    """The actual math. Ruins someone's day, and maybe their life."""
+    event_type: Literal["effect"] = "effect"
+    source_id: str = Field(description="Who caused this suffering (or 'The Void').")
+    effect: 'AnyCombatEffect' # Forward reference
+
+    def procure(self, combat_state: 'CombatState') -> Tuple[str, List['AnyCombatEvent']]:
+        """
+        Applies the math. If it kills them, casually spawns a Death Event.
+        """
+        prefix = " 💀 "
+        source = combat_state.combatants.get(self.source_id)
+        source_name = source.name if source else "The Void"
+        
+        target = combat_state.combatants.get(self.effect.target_id)
+        if not target:
+            return f"{prefix} {source_name} targets a ghost. Complete flop.", []
+            
+        was_alive = target.health > 0
+        msg = ""
+        
+        match self.effect.effect_type:
+            case "damage":
+                target.mod_health(-self.effect.amount)
+                msg = f"{prefix} {source_name} deals {self.effect.amount} damage to {target.name}. Now at {target.health}/{target.max_health} HP."
+            case "heal":
+                target.mod_health(self.effect.amount)
+                msg = f"{prefix} {source_name} heals {target.name} for {self.effect.amount}. Now at {target.health}/{target.max_health} HP."
+            case "stress":
+                target.mod_stress(self.effect.amount)
+                msg = f"{prefix} {source_name} inflicts {self.effect.amount} stress on {target.name}. Now at {target.stress}/{target.max_stress} Stress."
+            case _:
+                msg = f"{prefix} Unknown effect. The simulation is actively breaking down."
+                
+        triggered_events = []
+        if was_alive and target.health <= 0:
+            triggered_events.append(CombatDeathEvent(target_id=self.effect.target_id))
+            
+        return msg, triggered_events
+
+class CombatDeathEvent(BaseModel):
+    """The inevitable end. Truly a mood."""
+    event_type: Literal["death"] = "death"
+    target_id: str = Field(description="Who finally gets to log off from existence.")
+
+    def procure(self, combat_state: 'CombatState') -> Tuple[str, List['AnyCombatEvent']]:
+        """Announces their failure to the universe."""
+        target = combat_state.combatants.get(self.target_id)
+        if not target:
+            return "", []
+        return f"\n 🪦 {target.name} has expired. Their existence is now completely irrelevant.", []
+
+# The master union type. Must be at the bottom so it can see the classes.
+AnyCombatEvent = Union[CombatChoiceEvent, CombatEffectEvent, CombatDeathEvent]

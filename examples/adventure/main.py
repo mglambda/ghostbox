@@ -217,12 +217,13 @@ Create between 1 to 3 enemy characters that make logical sense for the current n
 You MUST use the exact data schema provided to represent them.
 
 ### ENEMY GENERATION RULES:
-1. **Stats:** Scale their `level`, `max_health` and `max_stress` around level {target_level} so it's a fair but brutal fight. Their `health` should be equal to `max_health` and `stress` should be 0.
+1. **Stats:** Scale their `level`, `max_health` and `max_stress` around level {target_level} so it's a fair but brutal fight. Their `stress` should be 0.
 2. **Abilities:** Give each enemy 1 or 2 unique combat abilities in their `combat_component`. 
 3. **The AP Economy:** Standard attacks cost 1 AP. Powerful, devastating abilities should cost 2 or 3 AP. 
 4. **Flavor:** Give them menacing names, edgy classes, and hostile motivations. 
 
-Do not generate friendly NPCs. These are hostile combatants intent on ending the player's meaningless existence. Make them terrifying."""
+Do not generate friendly NPCs. These are hostile combatants intent on ending the player's meaningless existence. Make them terrifying.
+        Keep it brief with few abilities. These are only NPCs, don't overdo it, esepcially for lower ranking characters."""
 
     def prompt_combat_ai_system(self, combat_state: 'CombatState') -> str:
         """Generates the system prompt for the AI that runs combat. Now with 100% less bloated string formatting."""
@@ -317,7 +318,7 @@ The abilities should be based on the following tags: {tags}
             return f"You gained {new_stress - old_stress} stress."
         if new_stress < old_stress:
             return f"You lost {old_stress - new_stress} stress."
-        return ""
+        return "Your stress is unchanged."
 
     def advancement_fate_required(self) -> int:
         """Returns the number of fate points required to level up and advance."""
@@ -432,7 +433,7 @@ The abilities should be based on the following tags: {tags}
         if self.player.stress > self.player.max_stress:
             stress_value = self.player.stress // 4
             if self.player.health >= stress_value:
-                self.player.health_mod((-1)*stress_value)
+                self.player.mod_health((-1)*stress_value)
                 ws.append(
                     f"You break down from stress! Your mental breakdown takes a toll on your body, and you lose {stress_value} health."
                 )
@@ -961,12 +962,30 @@ def combat_configure_turn(combat_state: 'CombatState') -> 'CombatState':
                 f"Projected AP after queue: {projected_ap}\n"
                 f"Queued Actions ({len(queue)}/{config.current_queue_limit}): {', '.join([getattr(a, 'action_type', 'Unknown') for a in queue]) if queue else 'Empty'}"
             )
-            
-            def do_attack() -> bool:
+            def do_attack(*, auto_target: bool = False) -> bool:
                 if not can_queue_action(cost=1): return False
-                t = pick_target("Who are you attacking?")
-                if t: combat_state.queue_action(fid, AttackChoice(target_id=t))
+                
+                if auto_target:
+                    active_enemies = [
+                        (eid, combat_state.combatants[eid]) 
+                        for eid in combat_state.enemy_ids 
+                        if combat_state.is_active(eid)
+                    ]
+                    if not active_enemies:
+                        print("\nThere is literally nobody to attack. Stop swinging at the air.")
+                        return False
+                        
+                    # Find the enemy with the absolute lowest HP
+                    t = min(active_enemies, key=lambda x: x[1].health)[0]
+                    target_name = combat_state.combatants[t].name
+                    print(f"\nAuto-targeting {target_name} because they are literally one hit away from the void.")
+                else:
+                    t = pick_target("Who are you attacking?")
+                    
+                if t: 
+                    combat_state.queue_action(fid, AttackChoice(target_id=t))
                 return False
+            
 
             def do_default() -> bool:
                 if not can_queue_action(cost=0): return False
@@ -1054,7 +1073,8 @@ def combat_configure_turn(combat_state: 'CombatState') -> 'CombatState':
             dynamic_prompt = f"\n{shorten_name(player.name)} [{queue_str}] > "
 
             choices = [
-                DialogChoice(text="Attack (1 AP)", selection_string="a", value=do_attack),
+                DialogChoice(text="attack with auto target (1 AP)", selection_string="a", value=lambda: do_attack(auto_target=True)),                                
+                DialogChoice(text="Attack (1 AP)", selection_string="t", value=do_attack),
                 DialogChoice(text="Default (0 AP, Banks 1)", selection_string="d", value=do_default),
                 DialogChoice(text="Brave (Unlock Slot)", selection_string="b", value=do_brave),
                 DialogChoice(text="Combat Ability", selection_string="c", value=do_ability),
@@ -1133,7 +1153,7 @@ def combat_dialog(game: GameState, choice: Choice, box: ghostbox.Ghostbox, endpo
         # add the actions to queue without revealing them to player
         combat_state.apply_turn(ai_turn)
         # give overview
-        print(combat_state.show_status(debug=True))
+        print(combat_state.show_status(debug=False))
         # let the player set up all their stuff
         new_combat_state = combat_configure_turn(combat_state)
 
@@ -1154,57 +1174,91 @@ def combat_dialog(game: GameState, choice: Choice, box: ghostbox.Ghostbox, endpo
     # we have winner != None
     return winner, combat_box.text(f"The combat is over. The winners are: {winner}. Please generate a couple of paragraphs that summarize the battle in a purely prosaic style (no stats or damage numbers, just an action scene).")
 
-def combat_execute(game: 'GameState', combat_state: 'CombatState', combat_box: ghostbox.Ghostbox, *, previous_combat_state: Optional[CombatState] = None) -> None:
+def combat_execute(game: 'GameState', combat_state: 'CombatState', combat_box: 'ghostbox.Ghostbox', *, previous_combat_state: 'CombatState' = None) -> None:
     """
-    Consumes the action queue action-by-action. 
-    Prints flavor text for the screen reader to chew on while the void consumes us all.
+    The event queue loop. Now 100% more polymorphic because we hate writing code twice.
     """
+    import time
+    
+    event_queue: list['AnyCombatEvent'] = []
+    
+    # 1. Drain the old-school queues and wrap them in fancy Choice events
     while True:
-        # If someone is already dead and the battle is over, stop dragging it out.
-        if combat_state.maybe_winner() is not None:
-            break
-            
         popped = combat_state.pop_action()
-        if popped is None:
+        if not popped:
             break
-            
-        actor_id, action = popped
+        source_id, action = popped
+        event_queue.append(CombatChoiceEvent(source_id=source_id, choice=action))
         
-        # Did they literally die before their turn? Skip them. RIP bozo.
-        if not combat_state.is_active(actor_id):
-            continue
-            
-        # Get the prompt for this specific microscopic interaction
-        prompt_text = game.prompt_combat_action_resolution(combat_state, actor_id, action)
+    if not event_queue:
+        print("\nAll action queues are empty. The suffering pauses.")
+        return
         
-        # Ping the LLM for the narrative and the Lego blocks
-        resolution = combat_box.new(CombatResolution, prompt_text)
-        
-        # Print the flavor text so TalkBack can read it to you right now
-        print(f"\n{resolution.flavor_text}")
-        
-        # Keep the receipts in the combat log for the final summary
-        combat_state.combat_log.append(resolution.flavor_text)
-        
-        # Mechanically process the puzzle pieces
-        for effect in resolution.effects:
-            target = combat_state.combatants.get(effect.target_id)
-            if not target:
-                continue # The LLM hallucinated a target that doesn't exist. Ignore it.
+    # 2. Welcome to the Void (The Execution Loop)
+    while event_queue:
+        # LIFO stack behavior for triggered effects, FIFO for base choices
+        event = event_queue.pop(0)
+
+        match event:
+            case CombatChoiceEvent(source_id=sid, choice=choice_data):
+                source = combat_state.combatants.get(sid)
                 
-            if effect.effect_type == "damage":
-                target.health_mod(-effect.amount)
-            elif effect.effect_type == "heal":
-                target.health_mod(effect.amount)
-            elif effect.effect_type == "stress":
-                target.stress_mod(effect.amount)
+                # Dead characters don't get rights.
+                if not source or source.health <= 0:
+                    continue
+                    
+                # See if the event can resolve itself (e.g., Defaulting)
+                msg, new_events = event.procure(combat_state)
+                if msg:
+                    print(msg)
+                    combat_state.combat_log.append(msg)
+                    
+                    # Push any triggered events (even defaults could hypothetically trigger stuff now)
+                    for new_ev in reversed(new_events):
+                        event_queue.insert(0, new_ev)
+                    continue
+
+                # If it's a real attack/ability, beg the LLM for a hallucination
+                try:
+                    resolution = combat_box.new(
+                        CombatResolution,
+                        game.prompt_combat_action_resolution(combat_state, sid, choice_data)
+                    )
+                except Exception as e:
+                    print(f"\nError: The AI completely dropped the ball. ({e}). Skipping this flop of a turn.")
+                    continue
+                    
+                print(f"\n{resolution.flavor_text}")
+                combat_state.combat_log.append(resolution.flavor_text)
                 
-            # Log the dry math so the final summary prompt knows who got wrecked
-            mech_log = f"[{effect.effect_type.upper()}] -> {effect.target_id} ({effect.amount})"
-            combat_state.combat_log.append(mech_log)
+                # Convert the hallucinated math into Effect Events and shove them to the front
+                for effect in reversed(resolution.effects):
+                    event_queue.insert(0, CombatEffectEvent(source_id=sid, effect=effect))
 
+            # The generic handler for Effects, Deaths, and whatever else you invent later
+            case _:
+                msg, new_events = event.procure(combat_state)
+                
+                if msg:
+                    print(msg)
+                    combat_state.combat_log.append(msg)
+                    
+                # Shove the cascading triggers onto the front of the stack
+                for new_ev in reversed(new_events):
+                    event_queue.insert(0, new_ev)
 
-
+        # Check for game over state so we can stop pretending any of this matters
+        winner = combat_state.maybe_winner()
+        if winner:
+            if winner == "enemies":
+                print("\nYour entire team is dead. Sucks to suck. Game Over.")
+            else:
+                print("\nAll enemies have been liquidated. You survived. Barely.")
+            return
+            
+        # Tiny pause so TalkBack doesn't have a total meltdown reading 40 lines of text at once
+        time.sleep(1.5)
+        
     
 def print_scoreboard(scenario_file: ScenarioFile):
     if not scenario_file.high_scores:
