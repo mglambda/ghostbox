@@ -103,7 +103,7 @@ class PlayerCharacter(BaseModel):
     motivation: str
     special_abilities: List[SpecialAbility]
     max_health: int = Field(ge=1, le=MAX_HP)
-    health: int = 1
+    health: int = Field(default = 1, description = "Current health of the character. Should be equal to max_health on generation.")
     max_stress: int = Field(ge=1, le=MAX_STRESS)
     stress: int = 0
     level: int = 1
@@ -463,7 +463,7 @@ class CombatState(BaseModel):
     action_queue_limit: ClassVar[int] = 4
 
 
-@staticmethod
+    @staticmethod
     def setup(player_side: List['PlayerCharacter'], enemy_side: List['PlayerCharacter']) -> 'CombatState':
         """Sets up the combat state and aggressively scrubs the LLM's hallucinated AP garbage."""
         state = CombatState()
@@ -476,8 +476,9 @@ class CombatState(BaseModel):
             state.action_queues[pid] = []
             
             # Brutally reset AP to 0 so they stop starting fights with god-tier action economy
+            # new: actually we start with 1 otherwise nobody can do anything. AP regen triggers at end of loop. this is adesign choice I swear
             if getattr(pc, 'combat_component', None):
-                pc.combat_component.current_ap = 0
+                pc.combat_component.current_ap = 1
                 
         # Populate enemies
         for i, npc in enumerate(enemy_side, 1):
@@ -486,13 +487,16 @@ class CombatState(BaseModel):
             state.enemy_ids.append(eid)
             state.action_queues[eid] = []
             
-            # Scrub their AP too, because NPCs don't get special treatment in this miserable universe
             if getattr(npc, 'combat_component', None):
-                npc.combat_component.current_ap = 0
+                npc.combat_component.current_ap = 1
+
+            # FIXME: hotfix because the LLM generates NPCs with 1 HP for some reason
+            if npc.health < npc.max_health:
+                print(f"debug: fixing {npc.name} health from {npc.health} to max.")
+                npc.health = npc.max_health
                 
         return state
     
-
     def maybe_winner(self) -> Optional[Literal["players", "enemies"]]:
         """Checks if we can finally end this pointless digital suffering."""
         players_alive = any(self.combatants[pid].health > 0 for pid in self.player_ids)
@@ -638,3 +642,36 @@ class CombatState(BaseModel):
         # The queues are empty. We are free.
         return None                
 
+    def show_status(self, debug: bool = False) -> str:
+        """
+        Dumps a quick summary of the battlefield so you can watch your impending doom in real-time,
+        or literally spits out the entire raw JSON if you want to stare into the matrix.
+        """
+        if debug:
+            return self.model_dump_json(indent=4)
+            
+        lines = ["--- ENEMIES ---"]
+        for eid in self.enemy_ids:
+            enemy = self.combatants.get(eid)
+            # Skip the dead ones, they don't matter anymore.
+            if not enemy or enemy.health <= 0:
+                continue
+                
+            weapon = getattr(enemy.combat_component, 'primary_weapon', 'literal garbage')
+            bloodied = " (Bloodied)" if enemy.health < (enemy.max_health / 2) else ""
+            lines.append(f"{enemy.name} wielding {weapon}{bloodied}")
+            
+        lines.append("")
+        lines.append("--- PLAYERS ---")
+        
+        for pid in self.player_ids:
+            player = self.combatants.get(pid)
+            if not player:
+                continue
+                
+            if player.health <= 0:
+                lines.append(f"{player.name} is literally dead. RIP bozo.")
+            else:
+                lines.append(player.show_short())
+                
+        return "\n".join(lines)    

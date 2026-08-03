@@ -217,7 +217,7 @@ Create between 1 to 3 enemy characters that make logical sense for the current n
 You MUST use the exact data schema provided to represent them.
 
 ### ENEMY GENERATION RULES:
-1. **Stats:** Scale their `level`, `max_health`, and `health` around level {target_level} so it's a fair but brutal fight. Give them a `max_stress` and `stress` of 0 (enemies don't care about mental health).
+1. **Stats:** Scale their `level`, `max_health` and `max_stress` around level {target_level} so it's a fair but brutal fight. Their `health` should be equal to `max_health` and `stress` should be 0.
 2. **Abilities:** Give each enemy 1 or 2 unique combat abilities in their `combat_component`. 
 3. **The AP Economy:** Standard attacks cost 1 AP. Powerful, devastating abilities should cost 2 or 3 AP. 
 4. **Flavor:** Give them menacing names, edgy classes, and hostile motivations. 
@@ -858,8 +858,8 @@ def question_dialog(game, box) -> str:
 
 def combat_configure_turn(combat_state: 'CombatState') -> 'CombatState':
         """
-        The configuration loop. Now with 100% more psychological manipulation
-        and strict AP budget enforcement.
+        The configuration loop. Now with 100% more psychological manipulation,
+        strict AP budget enforcement, and a dynamic prompt so you don't get lost.
         """
         
         class PlayerCombatTurnConfig:
@@ -977,8 +977,6 @@ def combat_configure_turn(combat_state: 'CombatState') -> 'CombatState':
                 if config.current_queue_limit >= CombatState.action_queue_limit:
                     print(f"\nError: You literally cannot Brave anymore. {CombatState.action_queue_limit} actions is the hard cap. Don't be greedy.")
                     return False
-                
-                # We just increment their allowed slots. Pure smoke and mirrors.
                 config.brave_counts[fid] += 1
                 print(f"\n*** BRAVE! *** {player.name} pushes past their limits! An extra action slot has been unlocked! (Max {CombatState.action_queue_limit})")
                 return False
@@ -988,10 +986,8 @@ def combat_configure_turn(combat_state: 'CombatState') -> 'CombatState':
                 if not abs_dict:
                     print(f"\n{player.name} has no abilities. Stay mad.")
                     return False
-                
                 ab_choices = [DialogChoice(text=ab.show(), value=ab_id) for ab_id, ab in abs_dict.items()]
                 ab_choices.append(DialogChoice(text="Nvm", selection_string="x", value=""))
-                
                 chosen_ab = choose_dialog(ab_choices, prompt="Pick an ability: ")
                 if chosen_ab:
                     ability = abs_dict[chosen_ab]
@@ -1021,26 +1017,41 @@ def combat_configure_turn(combat_state: 'CombatState') -> 'CombatState':
                 
             def do_clear() -> bool:
                 combat_state.action_queues[fid] = []
-                config.brave_counts[fid] = 0  # Reset the smoke and mirrors too
+                config.brave_counts[fid] = 0
                 print(f"\nCleared {player.name}'s queue and revoked their Brave status. Back to square one.")
                 return False
 
+            def do_help() -> bool:
+                print("\n--- HELP MENU (Because you are struggling) ---")
+                print("a = Attack (1 AP)")
+                print("d = Default (0 AP, Banks 1 AP)")
+                print("b = Brave (Unlock an extra action slot for this turn)")
+                print("c = Combat Ability (Cost varies)")
+                print("f = Flee (Run away from your pathetic reality)")
+                print("_ = View Full Sheet")
+                print("? = Battle Overview")
+                print("n = Next Character (Cycle focus to the next ally)")
+                print("x = Clear Queue")
+                print("e = End Turn (Lock in your terrible decisions)")
+                print("h = Help (You are here)")
+                return False
+
             def try_end_turn() -> bool:
-                # Only warning if someone hasn't queued ANYTHING. 
-                # If they queued 1 thing and didn't Brave, that's a valid turn.
                 slackers = []
                 for pid in config.active_player_ids:
                     if len(combat_state.action_queues.get(pid, [])) == 0:
                         slackers.append(combat_state.combatants[pid].name)
-                
                 if slackers:
                     ans = input(f"\nHold up. {', '.join(slackers)} haven't queued a single action. Are you seriously ending the turn? (y/n): ")
                     if ans.strip().lower() != 'y':
                         print("\nThought so. Put them to work.")
                         return False
-                
                 print("\nTurn configuration locked in. Let's see how badly this goes.")
                 return True
+
+            # The dynamic prompt so your screenreader actually tells you what's happening
+            queue_str = ", ".join([getattr(a, 'action_type', 'Unknown').capitalize() for a in queue])
+            dynamic_prompt = f"\n{shorten_name(player.name)} [{queue_str}] > "
 
             choices = [
                 DialogChoice(text="Attack (1 AP)", selection_string="a", value=do_attack),
@@ -1053,12 +1064,14 @@ def combat_configure_turn(combat_state: 'CombatState') -> 'CombatState':
                 DialogChoice(text="Next Character", selection_string="n", value=do_next),
                 DialogChoice(text="Clear Queue", selection_string="x", value=do_clear),
                 DialogChoice(text="End Turn", selection_string="e", value=try_end_turn),
+                DialogChoice(text="Help", selection_string="h", value=do_help),
             ]
             
-            result = choose_dialog( # type: ignore
+            result = choose_dialog(
                 choices=choices,
                 before=before_text,
-                prompt="\nYour move, tactician: ",
+                prompt=dynamic_prompt,
+                show_numbered_selection_string = False,
                 exit_on_newline=True
             )
             
@@ -1069,6 +1082,7 @@ def combat_configure_turn(combat_state: 'CombatState') -> 'CombatState':
                 break
                 
         return combat_state
+    
     
 def combat_dialog(game: GameState, choice: Choice, box: ghostbox.Ghostbox, endpoint: str) -> Tuple[Literal["players"] | Literal["enemies"], str]:
     """Initiates the combat subsystem based on a choice that led to combat. Returns a bool indicating whether combat was won by the player or not, along with a narrative summary of the combat."""
@@ -1118,7 +1132,8 @@ def combat_dialog(game: GameState, choice: Choice, box: ghostbox.Ghostbox, endpo
         print(ai_turn.descriptive_text)
         # add the actions to queue without revealing them to player
         combat_state.apply_turn(ai_turn)
-        
+        # give overview
+        print(combat_state.show_status(debug=True))
         # let the player set up all their stuff
         new_combat_state = combat_configure_turn(combat_state)
 
@@ -1364,7 +1379,7 @@ def run(game, args):
                     DialogChoice(selection_string="q", value="q"),
                 ],
                 after=game.status(),
-                prompt=f" or use an ability (type name or initial letter). Typing `*` spends 3 fate to write your own choice. Ask the GM a question with `?`. Type `_` for status, `q` to save and quit.\n{game.player.name} > ",
+                prompt=f" or use an ability (type name or initial letter). Typing `*` spends 3 fate to write your own choice. Ask the GM a question with `?`. Type `_` for status, `q` to save and quit.\n{shorten_name(game.player.name)} > ",
                 show_extra_selection_strings=False,
                 exit_on_newline=True
             )
@@ -1427,12 +1442,13 @@ def run(game, args):
                 )
                 break
             elif isinstance(choice, Choice) and choice.initiates_combat:
+                print(f"Roll for initiative (please wait)!")
                 combat_winner, combat_summary = combat_dialog(game, choice, box, endpoint=args.endpoint)
                 if combat_winner == "players":
-                    combat_succesful = True
+                    combat_successful = True
                     print(f"You won!")
                 else:
-                    combat_succesful = False
+                    combat_successful = False
                     print(f"You lost!")
 
                 game.story_append_beat(combat_summary)

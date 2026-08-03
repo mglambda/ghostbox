@@ -154,3 +154,8 @@ def choose_dialog(
             if on_error is not None:
                 # on_error doesn't return anything, but may raise here, so user can exit the loop
                 on_error(w)
+
+def shorten_name(name: str) -> str:
+    """Shortens a name in a sensible manner. Removes nicknames and lastnames."""
+    ws = name.split(" ")
+    return ws[0]
