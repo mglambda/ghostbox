@@ -274,7 +274,7 @@ class Scenario(BaseModel):
     important_factions: List[ImportantFaction]
     important_characters: List[ImportantCharacter]
     
-    def show(self):
+    def show(self) -> str:
         w = ""
         for k, v in self.model_dump().items():
             k_str = k.capitalize().replace("_", " ")
@@ -473,7 +473,7 @@ class CombatState(BaseModel):
     """The miserable sandbox where your characters go to die."""
     
     # The actual entity data, tracked by their temporary combat IDs
-    combatants: Dict[str, 'PlayerCharacter'] = Field(default_factory=dict)
+    combatants: Dict[str, PlayerCharacter] = Field(default_factory=dict)
     
     # Tracking which ID belongs to which team because iterating a dict is mid
     player_ids: List[str] = Field(default_factory=list)
@@ -721,12 +721,13 @@ class CombatChoiceEvent(BaseModel):
         """
         source = combat_state.combatants.get(self.source_id)
         name = source.name if source else "The Void"
-        
-        match getattr(self.choice, 'action_type', ''):
-            case "default":
-                return f"\n 🛡️ {name} cowers in fear and does absolutely nothing (Default).", []
+        # note that all these choices will be handled by an LLM that hallucinates appropriate effects and flavor
+        # this  is just a place to hook in guaranteed mechanical effects.
+        match self.choice:
+            case FleeChoice() as flee_choice:  
+                return f"🪶 {name} cowers in fear and flees.", []
             case _:
-                return "", [] # The LLM will handle the real moves
+                return "", []
 
 class CombatEffectEvent(BaseModel):
     """The actual math. Ruins someone's day, and maybe their life."""
@@ -738,13 +739,12 @@ class CombatEffectEvent(BaseModel):
         """
         Applies the math. If it kills them, casually spawns a Death Event.
         """
-        prefix = " 💀 "
         source = combat_state.combatants.get(self.source_id)
         source_name = source.name if source else "The Void"
         
         target = combat_state.combatants.get(self.effect.target_id)
         if not target:
-            return f"{prefix} {source_name} targets a ghost. Complete flop.", []
+            return f"👻 {source_name} targets a ghost. Complete flop.", []
             
         was_alive = target.health > 0
         msg = ""
@@ -752,17 +752,18 @@ class CombatEffectEvent(BaseModel):
         match self.effect.effect_type:
             case "damage":
                 target.mod_health(-self.effect.amount)
-                msg = f"{prefix} {source_name} deals {self.effect.amount} damage to {target.name}. Now at {target.health}/{target.max_health} HP."
+                msg = f"👊 {source_name} deals {self.effect.amount} damage to {target.name}. Now at {target.health}/{target.max_health} HP."
             case "heal":
                 target.mod_health(self.effect.amount)
-                msg = f"{prefix} {source_name} heals {target.name} for {self.effect.amount}. Now at {target.health}/{target.max_health} HP."
+                msg = f"☤ {source_name} heals {target.name} for {self.effect.amount}. Now at {target.health}/{target.max_health} HP."
             case "stress":
                 target.mod_stress(self.effect.amount)
-                msg = f"{prefix} {source_name} inflicts {self.effect.amount} stress on {target.name}. Now at {target.stress}/{target.max_stress} Stress."
-            case _:
-                msg = f"{prefix} Unknown effect. The simulation is actively breaking down."
+                msg = f"⚠ {source_name} inflicts {self.effect.amount} stress on {target.name}. Now at {target.stress}/{target.max_stress} Stress."
+            case _ as unreachable:
+                assert_never(unreachable)
+                msg = f"🐦 Unknown effect. The simulation is actively breaking down."
                 
-        triggered_events = []
+        triggered_events: List[AnyCombatEvent] = []
         if was_alive and target.health <= 0:
             triggered_events.append(CombatDeathEvent(target_id=self.effect.target_id))
             
@@ -778,7 +779,7 @@ class CombatDeathEvent(BaseModel):
         target = combat_state.combatants.get(self.target_id)
         if not target:
             return "", []
-        return f"\n 🪦 {target.name} has expired. Their existence is now completely irrelevant.", []
+        return f"💀 {target.name} has expired. Their existence is now completely irrelevant.", []
 
 # The master union type. Must be at the bottom so it can see the classes.
 AnyCombatEvent = Union[CombatChoiceEvent, CombatEffectEvent, CombatDeathEvent]

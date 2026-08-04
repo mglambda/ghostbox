@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-
+import time
 from pydantic import BaseModel, ValidationError, Field
 from enum import Enum, StrEnum
 import sys
@@ -37,7 +37,7 @@ class GameState(BaseModel):
     adventure_scenario: ScenarioFile
     fate: int = 1
     intro_done: bool = False
-    tags: Counter = Field(default_factory = Counter)
+    tags: Counter[str] = Field(default_factory = Counter)
     score_entry: ScoreEntry = Field(default_factory = ScoreEntry)
     story: List[str] = Field(default_factory = list)
     latest_criticism: str = ""
@@ -94,7 +94,7 @@ class GameState(BaseModel):
     def story_get_str(self, limit: Optional[int] = None) -> str:
         return "\n\n".join(self.story_get(limit))
 
-    def get_final_score_entry(self, box, final_reason: str) -> ScoreEntry:
+    def get_final_score_entry(self, box: ghostbox.Ghostbox, final_reason: str) -> ScoreEntry:
         """
         Populates metadata and generates a concise cause of death string 
         using Ghostbox and game history.
@@ -113,12 +113,14 @@ class GameState(BaseModel):
         self.score_entry.cause_of_death = cause_of_death
         return self.score_entry
 
-    def prompt_combat_action_resolution(self, combat_state: 'CombatState', actor_id: str, action: 'AnyCombatChoice') -> str:
+    def prompt_combat_action_resolution(self, combat_state: CombatState, actor_id: str, action: 'AnyCombatChoice') -> Optional[str]:
         """
         Feeds the LLM the exact context of a single action. 
         Now with 100% more pattern matching because we're feeling trendy.
         """
-        actor = combat_state.combatants.get(actor_id)
+
+        if (        actor := combat_state.combatants.get(actor_id)) is None:
+            return None
         action_type = getattr(action, 'action_type', 'unknown')
         
         # Build the context string
@@ -188,7 +190,9 @@ Generate the AICombatTurn:
 
 Constraints to remember:
 - Maximum 4 actions per enemy.
-- An enemy's AP cannot drop below -3. Plan their AP spending accordingly."""
+- An enemy's AP cannot drop below -3. Plan their AP spending accordingly.
+- Keep it brief and don't generate too much.
+        """
     
     def prompt_combat_intro(self, combat_state: 'CombatState') -> str:
         """Forces the LLM to write a dramatic intro to the fight before the math ruins the vibe."""
@@ -310,7 +314,7 @@ The abilities should be based on the following tags: {tags}
             return f"You lost {old_hp - new_hp} health."
         return ""
 
-    def gain_stress(self, stress) -> str:
+    def gain_stress(self, stress: int) -> str:
         old_stress = self.player.stress
         self.player.stress = max(self.player.stress + stress, 0)
         new_stress = self.player.stress
@@ -537,7 +541,7 @@ Write the narrative aftermath of this encounter. Translate the mechanical summar
 """
 
     def prompt_consequences(
-            self, choice: Choice, story_box: ghostbox.Ghostbox, endpoint = "http://localhost:8080"
+            self, choice: Choice, story_box: ghostbox.Ghostbox, endpoint: str = "http://localhost:8080"
     ) -> str:
         player_status_str = "Current player status: {{pc_health}} health, {{pc_stress}} stress, {{fate}} fate.\n"
         
@@ -585,7 +589,7 @@ Please narrate the consequences of the players choice. Drive the story forward a
     def prompt_consequences_stress_breakdown(self) -> str:
         return f"{{game.player.name}} has incurred too much stress and sufffers a momentary mental breakdown! Please narrate the consequences of {{game.player.name}} breaking down, losing consciousness, having a panic attack, or temporarily losing their sanity."
 
-    def prompt_game_over(self, msg) -> str:
+    def prompt_game_over(self, msg: str) -> str:
         return f"""The game is over for the player. Reason: "```{msg}```
         Please write a suitable goodbye narration to send them off."""
 
@@ -619,7 +623,7 @@ class SaveFile(BaseModel):
         except Exception as e:
             print(f"Failed to save your meaningless progress: {e}")
 
-def scenario_creation_dialog(endpoint = "http://localhost:8080", initial_prompt="") -> Scenario:
+def scenario_creation_dialog(endpoint: str = "http://localhost:8080", initial_prompt: str = "") -> Scenario:
     box = ghostbox.from_generic(endpoint=endpoint, character_folder="scenario_creator", **default_options)
     hint = initial_prompt
     chosen_scenario = None
@@ -635,11 +639,10 @@ def scenario_creation_dialog(endpoint = "http://localhost:8080", initial_prompt=
             draft_prompt
         ).drafts
         
-        def set_hint(w):
+        def set_hint(w: str) -> None:
             nonlocal hint
             hint = w
             e = Exception()
-            e.flag = True
             raise e
         
         try:
@@ -669,7 +672,7 @@ def scenario_creation_dialog(endpoint = "http://localhost:8080", initial_prompt=
         + chosen_scenario.description,
     )
 
-def player_creation_dialog(scenario, endpoint="http://localhost:8080", party=True):
+def player_creation_dialog(scenario: Scenario, endpoint: str ="http://localhost:8080", party: bool = True) -> Tuple[PlayerCharacter, List[PlayerCharacter]]:
     box = ghostbox.from_generic(endpoint=endpoint, character_folder="player_creator", **default_options)
     hint = ""
     chosen_player = None
@@ -690,11 +693,10 @@ def player_creation_dialog(scenario, endpoint="http://localhost:8080", party=Tru
             "Do not forget to assign a `primary_weapon` in the combat component."
         ).player_characters
         
-        def set_hint(w):
+        def set_hint(w: str) -> None:
             nonlocal hint
             hint = w
             e = Exception()
-            e.flag = True
             raise e
         
         try:
@@ -722,7 +724,7 @@ def player_creation_dialog(scenario, endpoint="http://localhost:8080", party=Tru
 
     return chosen_player, (others if party else [])
 
-def advancement_dialog(game, box):
+def advancement_dialog(game: GameState, box: ghostbox.Ghostbox) -> None:
     """Happens when player chooses to level up. Forces a drop if abilities exceed 5."""
     print(game.gain_fate(-1 * game.advancement_fate_required()))
     game.player.level += 1
@@ -751,7 +753,7 @@ def advancement_dialog(game, box):
         game.prompt_generate_special_abilities(hint)
     ).special_ability_choices
     
-    choice = choose_dialog(
+    choice: SpecialAbility = choose_dialog(
         [
             DialogChoice(text=f"{special.name}: {special.description}", value=special)
             for special in new_abilities
@@ -766,7 +768,7 @@ def advancement_dialog(game, box):
         print("\nYour brain is full (Max 5 abilities). Life is about loss. Pick one to trash.")
         
         while len(game.player.special_abilities) > 5:
-            drop_i = choose_dialog(
+            drop_i: int = choose_dialog(
                 [
                     DialogChoice(
                         text=f"{game.player.special_abilities[i].name}: {game.player.special_abilities[i].description}",
@@ -784,7 +786,7 @@ def advancement_dialog(game, box):
                 print(f"You lose {trashed_name}. It was completely useless anyway.")
                 del game.player.special_abilities[drop_i]
 
-def metamorphosis_dialog(game, box):
+def metamorphosis_dialog(game: GameState, box: ghostbox.Ghostbox) -> None:
     print("\n*** METAMORPHOSIS EVENT ***")
     print("The crushing weight of stress shatters your mind, altering your core perspective on existence...")
     
@@ -825,7 +827,7 @@ def metamorphosis_dialog(game, box):
             )
         )
         
-    selected = choose_dialog(
+    selected: str = choose_dialog(
         choices,
         before="\nChoose a new core motivation to emerge from this breakdown:",
         prompt=" or hit Enter to keep your current motivation: ",
@@ -846,7 +848,7 @@ def metamorphosis_dialog(game, box):
         game.player.motivation = selected
         print(f"\nYour spirit transforms. New Motivation: '{game.player.motivation}'")
         
-def question_dialog(game, box) -> str:
+def question_dialog(game: GameState, box: ghostbox.Ghostbox) -> str:
     w = input("Question to the GM (information, clarification, visual description, etc): ")
     if not (w):
         return ""
@@ -879,14 +881,14 @@ def combat_configure_turn(combat_state: 'CombatState') -> 'CombatState':
             @property
             def focused_player(self) -> 'PlayerCharacter':
                 fid = self.focused_id
-                return self.state.combatants[fid] if fid else None
+                return self.state.combatants[fid] if fid else self.state.combatants["p1"]
                 
             @property
             def current_queue_limit(self) -> int:
                 # Base 1 action + whatever extra slots they unlocked by being dramatic
                 return 1 + self.brave_counts.get(self.focused_id, 0)
 
-            def next_focus(self):
+            def next_focus(self) -> None:
                 if self.active_player_ids:
                     self.focus_idx = (self.focus_idx + 1) % len(self.active_player_ids)
                     print(f"\nSwitched focus to {self.focused_player.name}. Let's see if they can fix this mess.")
@@ -905,7 +907,7 @@ def combat_configure_turn(combat_state: 'CombatState') -> 'CombatState':
             targets.append(DialogChoice(text="Nevermind", selection_string="x", value=""))
             return choose_dialog(targets, prompt=f"{prompt_text} ", fuzzy=True)
 
-        def print_overview():
+        def print_overview() -> None:
             print("\n--- BATTLE OVERVIEW ---")
             for tid in combat_state.player_ids + combat_state.enemy_ids:
                 if not combat_state.is_active(tid):
@@ -1007,7 +1009,7 @@ def combat_configure_turn(combat_state: 'CombatState') -> 'CombatState':
                     return False
                 ab_choices = [DialogChoice(text=ab.show(), value=ab_id) for ab_id, ab in abs_dict.items()]
                 ab_choices.append(DialogChoice(text="Nvm", selection_string="x", value=""))
-                chosen_ab = choose_dialog(ab_choices, prompt="Pick an ability: ")
+                chosen_ab: str = choose_dialog(ab_choices, prompt="Pick an ability: ")
                 if chosen_ab:
                     ability = abs_dict[chosen_ab]
                     if not can_queue_action(cost=ability.ap_cost): return False
@@ -1087,7 +1089,7 @@ def combat_configure_turn(combat_state: 'CombatState') -> 'CombatState':
                 DialogChoice(text="Help", selection_string="h", value=do_help),
             ]
             
-            result = choose_dialog(
+            result: Any = choose_dialog(
                 choices=choices,
                 before=before_text,
                 prompt=dynamic_prompt,
@@ -1160,7 +1162,7 @@ def combat_dialog(game: GameState, choice: Choice, box: ghostbox.Ghostbox, endpo
         # lfg!
         print(f"## Fight")
         # ... stuff happens here
-        combat_execute(game, new_combat_state, combat_box, previous_combat_state=combat_state)
+        combat_execute(game, new_combat_state, combat_box)
         # check for winners
         if (winner := new_combat_state.maybe_winner()) is not None:
             break
@@ -1174,13 +1176,19 @@ def combat_dialog(game: GameState, choice: Choice, box: ghostbox.Ghostbox, endpo
     # we have winner != None
     return winner, combat_box.text(f"The combat is over. The winners are: {winner}. Please generate a couple of paragraphs that summarize the battle in a purely prosaic style (no stats or damage numbers, just an action scene).")
 
-def combat_execute(game: 'GameState', combat_state: 'CombatState', combat_box: 'ghostbox.Ghostbox', *, previous_combat_state: 'CombatState' = None) -> None:
+def combat_execute(game: GameState, combat_state: CombatState, combat_box: ghostbox.Ghostbox) -> None:
     """
     The event queue loop. Now 100% more polymorphic because we hate writing code twice.
+    Also features a spam-filtered shame-announcer for useless party members.
     """
     import time
     
     event_queue: list['AnyCombatEvent'] = []
+    # this will be prepended to event msgs
+    prefix = " "
+    
+    # Track who we already shamed so we don't spam the log
+    inactive_announced = set()
     
     # 1. Drain the old-school queues and wrap them in fancy Choice events
     while True:
@@ -1203,14 +1211,30 @@ def combat_execute(game: 'GameState', combat_state: 'CombatState', combat_box: '
             case CombatChoiceEvent(source_id=sid, choice=choice_data):
                 source = combat_state.combatants.get(sid)
                 
-                # Dead characters don't get rights.
-                if not source or source.health <= 0:
+                # If they don't exist, just ghost them silently.
+                if not source:
+                    continue
+                
+                # Check if they are actually capable of doing anything.
+                if not combat_state.is_active(sid):
+                    if sid not in inactive_announced:                    
+                        inactive_announced.add(sid)
+                        # Figure out exactly why they are a flop and announce it
+                        if source.health <= 0:
+                            msg = f"{prefix}🪦 {source.name} is literally dead and skips their turn. RIP bozo."
+                        elif source.combat_component.current_ap < 0:
+                            msg = f"{prefix}📉 {source.name} is bankrupt on AP and physically cannot act. Embarrassing."
+                        else:
+                            msg = f"{prefix}🛑 {source.name} is incapacitated and misses their turn."
+                            
+                        print(msg)
+                        combat_state.combat_log.append(msg)
                     continue
                     
                 # See if the event can resolve itself (e.g., Defaulting)
                 msg, new_events = event.procure(combat_state)
                 if msg:
-                    print(msg)
+                    print(f"{prefix}{msg}")
                     combat_state.combat_log.append(msg)
                     
                     # Push any triggered events (even defaults could hypothetically trigger stuff now)
@@ -1220,9 +1244,13 @@ def combat_execute(game: 'GameState', combat_state: 'CombatState', combat_box: '
 
                 # If it's a real attack/ability, beg the LLM for a hallucination
                 try:
+                    if (resolution_prompt := game.prompt_combat_action_resolution(combat_state, sid, choice_data)) is None:
+                        print(f"warning: ID {sid} not found in combat state.")
+                        continue
+                    
                     resolution = combat_box.new(
                         CombatResolution,
-                        game.prompt_combat_action_resolution(combat_state, sid, choice_data)
+                        resolution_prompt
                     )
                 except Exception as e:
                     print(f"\nError: The AI completely dropped the ball. ({e}). Skipping this flop of a turn.")
@@ -1240,7 +1268,7 @@ def combat_execute(game: 'GameState', combat_state: 'CombatState', combat_box: '
                 msg, new_events = event.procure(combat_state)
                 
                 if msg:
-                    print(msg)
+                    print(f"{prefix}{msg}")
                     combat_state.combat_log.append(msg)
                     
                 # Shove the cascading triggers onto the front of the stack
@@ -1260,7 +1288,7 @@ def combat_execute(game: 'GameState', combat_state: 'CombatState', combat_box: '
         time.sleep(1.5)
         
     
-def print_scoreboard(scenario_file: ScenarioFile):
+def print_scoreboard(scenario_file: ScenarioFile) -> None:
     if not scenario_file.high_scores:
         print("\n--- NO PREVIOUS RECORDED DEATHS IN THIS SCENARIO ---")
         return
@@ -1287,7 +1315,7 @@ def print_scoreboard(scenario_file: ScenarioFile):
         )
     print("========================================================\n")
     
-def main():
+def main() -> None:
     p = argparse.ArgumentParser(description="An LLM adventure game example.")
     p.add_argument(
         "-p",
@@ -1373,15 +1401,13 @@ def main():
             party=others,
             adventure_scenario=scenario_file,
             fate=1,
-            health=pc.max_health,
             debug=args.debug,
         )
 
     run(game, args)
 
-def run(game, args):
+def run(game: GameState, args: Any) -> None:
     box = ghostbox.from_generic(endpoint=args.endpoint, character_folder="game_master", **default_options)
-    narration = ""
     game.intro_done = False
     
     while True:
@@ -1415,8 +1441,9 @@ def run(game, args):
         while True:
             if args.debug:
                 print(json.dumps([msg.model_dump() for msg in box.get_history()], indent=4))
-                
-            choice = choose_dialog(
+
+                # choice type bit of a mess but this dialog is heavily WIP
+            choice: None | str | SpecialAbility | Choice = choose_dialog(
                 [
                     DialogChoice(text=choice.show(), value=choice)
                     for choice in situation.choices
@@ -1510,7 +1537,7 @@ def run(game, args):
                     Consequences, game.prompt_consequences_post_combat(choice, combat_successful, combat_summary)
                 )
                 break
-            else:
+            elif isinstance(choice, Choice):
                 print(f"\n## Turn {game.score_entry.turns_survived}\n")
                 game.tags_add(choice.tags)
                 game.story_append_choice(choice.show())
@@ -1521,6 +1548,10 @@ def run(game, args):
                     Consequences, game.prompt_consequences(choice, box, endpoint=args.endpoint)
                 )
                 break
+            else:
+                # this shouldn't happen
+                print(f"Invalid choice")
+                continue
                 
         game.story_append_beat(narration.text)
         box.tts_say(narration.text)
