@@ -191,6 +191,7 @@ Generate the AICombatTurn:
 Constraints to remember:
 - Maximum 4 actions per enemy.
 - An enemy's AP cannot drop below -3. Plan their AP spending accordingly.
+- If you default, you cannot do anything else. Defaultings sacrifices your turn to be defensive and bank AP.
 - Keep it brief and don't generate too much.
         """
     
@@ -1107,7 +1108,7 @@ def combat_configure_turn(combat_state: 'CombatState') -> 'CombatState':
         return combat_state
     
     
-def combat_dialog(game: GameState, choice: Choice, box: ghostbox.Ghostbox, endpoint: str) -> Tuple[Literal["players"] | Literal["enemies"], str]:
+def combat_dialog(game: GameState, choice: Choice, box: ghostbox.Ghostbox, endpoint: str) -> Tuple[CombatEndResult, str]:
     """Initiates the combat subsystem based on a choice that led to combat. Returns a bool indicating whether combat was won by the player or not, along with a narrative summary of the combat."""
     # these are for readability
     player_won = True
@@ -1209,6 +1210,7 @@ def combat_execute(game: GameState, combat_state: CombatState, combat_box: ghost
         event = event_queue.pop(0)
 
         match event:
+            # the combatchoiceevent case will include LLM hallucinations
             case CombatChoiceEvent(source_id=sid, choice=choice_data):
                 source = combat_state.combatants.get(sid)
                 
@@ -1231,19 +1233,11 @@ def combat_execute(game: GameState, combat_state: CombatState, combat_box: ghost
                         print(msg)
                         combat_state.combat_log.append(msg)
                     continue
-                    
-                # See if the event can resolve itself (e.g., Defaulting)
-                msg, new_events = event.procure(combat_state)
-                if msg:
-                    print(f"{prefix}{msg}")
-                    combat_state.combat_log.append(msg)
-                    
-                    # Push any triggered events (even defaults could hypothetically trigger stuff now)
-                    for new_ev in reversed(new_events):
-                        event_queue.insert(0, new_ev)
-                    continue
 
-                # If it's a real attack/ability, beg the LLM for a hallucination
+                # prcure covers the mechanical side -> messages and new events including effects
+                msg, new_events = event.procure(combat_state)
+                    
+                    # hallucinate a flavor description
                 try:
                     if (resolution_prompt := game.prompt_combat_action_resolution(combat_state, sid, choice_data)) is None:
                         print(f"warning: ID {sid} not found in combat state.")
@@ -1255,26 +1249,30 @@ def combat_execute(game: GameState, combat_state: CombatState, combat_box: ghost
                     )
                 except Exception as e:
                     print(f"\nError: The AI completely dropped the ball. ({e}). Skipping this flop of a turn.")
+                    # note that continue here means new_events won't be added! this is intentional
                     continue
-                    
-                print(f"\n{resolution.flavor_text}")
-                combat_state.combat_log.append(resolution.flavor_text)
-                
+
+
+                # prepare for printing
+                final_msg = f"{resolution.flavor_text}\n{prefix}{msg}"
                 # Convert the hallucinated math into Effect Events and shove them to the front
-                for effect in reversed(resolution.effects):
-                    event_queue.insert(0, CombatEffectEvent(source_id=sid, effect=effect))
+                new_events += [CombatEffectEvent(source_id=sid, effect=effect) for effect in resolution.effects]
 
             # The generic handler for Effects, Deaths, and whatever else you invent later
+            # these cases will produce no hallucination!
             case _:
                 msg, new_events = event.procure(combat_state)
                 
-                if msg:
-                    print(f"{prefix}{msg}")
-                    combat_state.combat_log.append(msg)
-                    
-                # Shove the cascading triggers onto the front of the stack
-                for new_ev in reversed(new_events):
-                    event_queue.insert(0, new_ev)
+                final_msg = f"{prefix}{msg}"
+
+
+        # end match case
+        # shove events to the front
+        for new_ev in reversed(new_events):
+            event_queue.insert(0, new_ev)
+        # print and logging
+        print(final_msg)
+        combat_state.combat_log.append(final_msg)
 
         # Check for game over state so we can stop pretending any of this matters
         winner = combat_state.maybe_winner()
@@ -1527,7 +1525,7 @@ def run(game: GameState, args: Any) -> None:
             elif isinstance(choice, Choice) and choice.initiates_combat:
                 print(f"Roll for initiative (please wait)!")
                 combat_winner, combat_summary = combat_dialog(game, choice, box, endpoint=args.endpoint)
-                if combat_winner == "players":
+                if combat_winner == CombatEndResult.players_win:
                     combat_successful = True
                     print(f"You won!")
                 else:

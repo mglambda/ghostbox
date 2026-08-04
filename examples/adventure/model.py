@@ -457,8 +457,12 @@ class StressEffect(BaseModel):
     target_id: str = Field(description="ID of the entity having a mental breakdown.")
     amount: int = Field(description="Amount of stress to add (positive number). Can be negative to relieve stress.")
 
+class FleeEffect(BaseModel):
+    effect_type: Literal["flee"] = "flee"
+    target_id: str = Field(description="ID of the entity fleeing combat.")
+
 # The master union type for effects.
-AnyCombatEffect = Union[DamageEffect, HealEffect, StressEffect]
+AnyCombatEffect = Union[DamageEffect, HealEffect, StressEffect, FleeEffect]
 
 class CombatResolution(BaseModel):
     """The LLM generates this for EVERY single action popped from the queue."""
@@ -468,6 +472,13 @@ class CombatResolution(BaseModel):
     effects: List[AnyCombatEffect] = Field(
         description="The strictly mechanical puzzle pieces to apply to the game state."
     )
+
+
+class CombatEndResult(StrEnum):
+    players_win = "player_win"
+    enemies_win = "enemies_win"
+    players_fled = "players_fled"
+    enemies_fled = "enemies_fled"
     
 class CombatState(BaseModel):
     """The miserable sandbox where your characters go to die."""
@@ -488,6 +499,9 @@ class CombatState(BaseModel):
     # Maps combatant ID to their queued choices for the current round
     action_queues: Dict[str, List[AnyCombatChoice]] = Field(default_factory=dict)
 
+    # tracks enemies that have flown the scene
+    fleeing_combatants: Set[str] = Field(default_factory = set)
+    
     lower_ap_bound: ClassVar[int] = -3
     upper_ap_bound: ClassVar[int] = 3
     action_queue_limit: ClassVar[int] = 4
@@ -526,19 +540,25 @@ class CombatState(BaseModel):
                 npc.health = npc.max_health
                 
         return state
-    
-    def maybe_winner(self) -> Optional[Literal["players", "enemies"]]:
-        """Checks if we can finally end this pointless digital suffering."""
-        players_alive = any(self.combatants[pid].health > 0 for pid in self.player_ids)
-        enemies_alive = any(self.combatants[eid].health > 0 for eid in self.enemy_ids)
 
-        # If everyone is dead, enemies win by default because the universe hates you.
-        if not players_alive:
-            return "enemies"
-        if not enemies_alive:
-            return "players"
+    def maybe_winner(self) -> Optional[CombatEndResult]:
+        """Checks if we can finally end this pointless digital suffering."""
+        
+        # You're only active if you have HP AND haven't run away
+        players_active = any(self.combatants[pid].health > 0 and pid not in self.fleeing_combatants for pid in self.player_ids)
+        enemies_active = any(self.combatants[eid].health > 0 and eid not in self.fleeing_combatants for eid in self.enemy_ids)
+
+        if not players_active:
+            # If no players are active, check if it's because they ran away like cowards
+            if any(pid in self.fleeing_combatants for pid in self.player_ids):
+                return CombatEndResult.players_fled
+            return CombatEndResult.enemies_win
+            
+        if not enemies_active:
+            return CombatEndResult.players_win
             
         return None
+    
 
     def queue_action(self, entity_id: str, action: AnyCombatChoice) -> Tuple[bool, str]:
         """Queues an action, assuming you haven't already bungled the queue length."""
@@ -586,36 +606,46 @@ class CombatState(BaseModel):
         
         if entity.health <= 0:
             return False
-        if not getattr(entity, 'combat_component', None):
+
+        # have they flown?
+        if entity_id in self.fleeing_combatants:
             return False
-            
+        
         # The ultimate vibe check. Are they in the negatives?
         return entity.combat_component.current_ap >= 0    
-
-    def sanitize(self, ai_turn: 'AICombatTurn') -> 'AICombatTurn':
+    def sanitize(self, ai_turn: AICombatTurn) -> AICombatTurn:
         """Brutally prunes AI hallucinations and mocks them for being overconfident."""
         
         modified = False
         pruned_actions = {}
         
         for eid, actions in ai_turn.combat_actions.items():
-            # Using the new state method so the code is *aesthetic*
             if eid not in self.enemy_ids or not self.is_active(eid):
                 modified = True
                 continue
-            
+                
             enemy = self.combatants[eid]
             current_ap = enemy.combat_component.current_ap
             valid_actions: List[AnyCombatChoice] = []
+            has_defaulted = False # Track if they already cowered this turn
             
             for action in actions:
+                action_type = getattr(action, 'action_type', '')
+
+                # Stop them from spamming the free heal glitch
+                if action_type == "default":
+                    if has_defaulted:
+                        modified = True
+                        continue # Skip this redundant cowardice
+                    has_defaulted = True
+
                 # Max 4 actions rule. 
                 if len(valid_actions) >= 4:
                     modified = True
                     break
-                
+                    
                 # Defaulting is free. 
-                cost = 0 if getattr(action, 'action_type', '') == "default" else getattr(action, 'ap_cost', 1)
+                cost = 0 if action_type == "default" else getattr(action, 'ap_cost', 1)
                 
                 if current_ap - cost < -3:
                     modified = True
@@ -630,18 +660,19 @@ class CombatState(BaseModel):
         # Overwrite the hallucinated garbage 
         ai_turn.combat_actions = pruned_actions
         
-        # If we had to fix their math, drag them.
+        # If we had to fix their math or stop their cheese strat, drag them.
         if modified:
-            snark = " (However, the villains were completely delulu and vastly overestimated their own stamina, stumbling mid-attack and dropping their combos like absolute clowns.)"
+            snark = " (However, the villains were completely delulu and vastly overestimated their own stamina, stumbling mid-attack and dropping their combos like absolute clowns. The universe corrected their math.)"
             ai_turn.descriptive_text += snark
             
-        return ai_turn    
+        return ai_turn
     
     def next_round(self) -> None:
         """Advance the round and increase AP etc. Do housekeeping."""
         self.round_number += 1
-        for _, c in self.combatants.items():
-            c.combat_component.gain_ap(c.combat_component.ap_regen)
+        for cid, c in self.combatants.items():
+            if self.is_active(cid):
+                c.combat_component.gain_ap(c.combat_component.ap_regen)
 
     def apply_turn(self, ai_turn: 'AICombatTurn') -> None:
         """
@@ -724,8 +755,8 @@ class CombatChoiceEvent(BaseModel):
         # note that all these choices will be handled by an LLM that hallucinates appropriate effects and flavor
         # this  is just a place to hook in guaranteed mechanical effects.
         match self.choice:
-            case FleeChoice() as flee_choice:  
-                return f"🪶 {name} cowers in fear and flees.", []
+            #case FleeChoice() as flee_choice:  
+                #return f"🪶 {name} cowers in fear and flees.", []
             case _:
                 return "", []
 
@@ -749,16 +780,22 @@ class CombatEffectEvent(BaseModel):
         was_alive = target.health > 0
         msg = ""
         
-        match self.effect.effect_type:
-            case "damage":
+        match self.effect:
+            case DamageEffect() as combat_damage_effect:
                 target.mod_health(-self.effect.amount)
                 msg = f"👊 {source_name} deals {self.effect.amount} damage to {target.name}. Now at {target.health}/{target.max_health} HP."
-            case "heal":
+            case HealEffect() as combat_heal_effect:
                 target.mod_health(self.effect.amount)
                 msg = f"☤ {source_name} heals {target.name} for {self.effect.amount}. Now at {target.health}/{target.max_health} HP."
-            case "stress":
+            case StressEffect() as combat_stress_effect:
                 target.mod_stress(self.effect.amount)
                 msg = f"⚠ {source_name} inflicts {self.effect.amount} stress on {target.name}. Now at {target.stress}/{target.max_stress} Stress."
+            case FleeEffect() as combat_flee_effect:
+                combat_state.fleeing_combatants.add(self.effect.target_id)
+                if source:
+                    msg = f"🪶 {source_name} causes {target.name} to flee."
+                else:
+                    msg = f"🪶 {target.name} flees the scene."
             case _ as unreachable:
                 assert_never(unreachable)
                 msg = f"🐦 Unknown effect. The simulation is actively breaking down."
