@@ -778,7 +778,6 @@ def advancement_dialog(game: GameState, box: ghostbox.Ghostbox) -> None:
                 ],
                 before="You MUST choose to drop one of your special abilities.",
                 show_extra_selection_strings=False,
-                exit_on_newline=False,
             )
             
             if drop_i is not None:
@@ -826,15 +825,16 @@ def metamorphosis_dialog(game: GameState, box: ghostbox.Ghostbox) -> None:
                 value="custom"
             )
         )
-        
-    selected: str = choose_dialog(
-        choices,
-        before="\nChoose a new core motivation to emerge from this breakdown:",
-        prompt=" or hit Enter to keep your current motivation: ",
-        exit_on_newline=True,
-    )
+
+    try:
+        selected: str = choose_dialog(
+            choices,
+            before="\nChoose a new core motivation to emerge from this breakdown:",
+            prompt=" or hit Enter to keep your current motivation: ",
+            exception_on_newline=True,
+        )
     
-    if selected is None:
+    except DialogCancelledException as e:
         print(f"{game.player.name} clings to their original motivation: '{game.player.motivation}'.")
         return
         
@@ -1074,7 +1074,7 @@ def combat_configure_turn(combat_state: 'CombatState') -> 'CombatState':
             queue_str = ", ".join([getattr(a, 'action_type', 'Unknown').capitalize() for a in queue])
             dynamic_prompt = f"\n{shorten_name(player.name)} [{queue_str}] > "
 
-            choices = [
+            choices: List[DialogChoice[bool]] = [
                 DialogChoice(text="attack with auto target (1 AP)", selection_string="a", value=lambda: do_attack(auto_target=True)),                                
                 DialogChoice(text="Attack (1 AP)", selection_string="t", value=do_attack),
                 DialogChoice(text="Default (0 AP, Banks 1)", selection_string="d", value=do_default),
@@ -1088,16 +1088,17 @@ def combat_configure_turn(combat_state: 'CombatState') -> 'CombatState':
                 DialogChoice(text="End Turn", selection_string="e", value=try_end_turn),
                 DialogChoice(text="Help", selection_string="h", value=do_help),
             ]
+
+            try:
+                result: Any = choose_dialog(
+                    choices=choices,
+                    before=before_text,
+                    prompt=dynamic_prompt,
+                    show_numbered_selection_string = False,
+                    exception_on_newline=True
+                )
             
-            result: Any = choose_dialog(
-                choices=choices,
-                before=before_text,
-                prompt=dynamic_prompt,
-                show_numbered_selection_string = False,
-                exit_on_newline=True
-            )
-            
-            if result is None:
+            except DialogCancelledException as e:
                 continue
                 
             if result is True:
@@ -1442,31 +1443,32 @@ def run(game: GameState, args: Any) -> None:
             if args.debug:
                 print(json.dumps([msg.model_dump() for msg in box.get_history()], indent=4))
 
-                # choice type bit of a mess but this dialog is heavily WIP
-            choice: None | str | SpecialAbility | Choice = choose_dialog(
-                [
-                    DialogChoice(text=choice.show(), value=choice)
-                    for choice in situation.choices
-                ]
-                + [
-                    DialogChoice(selection_string=special.name, value=special)
-                    for special in game.player.special_abilities
-                ]
-                + [
-                    DialogChoice(selection_string="*", value="*"),
-                    DialogChoice(selection_string="?", value="?"),
-                    DialogChoice(selection_string="_", value="_"),                    
-                    DialogChoice(selection_string="advance", value="advance"),
-                    DialogChoice(selection_string="q", value="q"),
-                ],
-                after=game.status(),
-                prompt=f" or use an ability (type name or initial letter). Typing `*` spends 3 fate to write your own choice. Ask the GM a question with `?`. Type `_` for status, `q` to save and quit.\n{shorten_name(game.player.name)} > ",
-                show_extra_selection_strings=False,
-                exit_on_newline=True
-            )
-            box.tts_stop()
+            # choice type bit of a mess but this dialog is heavily WIP
+            try:
+                choice:  str | SpecialAbility | Choice = choose_dialog(
+                    [
+                        DialogChoice(text=choice.show(), value=choice)
+                        for choice in situation.choices
+                    ]
+                    + [
+                        DialogChoice(selection_string=special.name, value=special)
+                        for special in game.player.special_abilities
+                    ]
+                    + [
+                        DialogChoice(selection_string="*", value="*"),
+                        DialogChoice(selection_string="?", value="?"),
+                        DialogChoice(selection_string="_", value="_"),                    
+                        DialogChoice(selection_string="advance", value="advance"),
+                        DialogChoice(selection_string="q", value="q"),
+                    ],
+                    after=game.status(),
+                    prompt=f" or use an ability (type name or initial letter). Typing `*` spends 3 fate to write your own choice. Ask the GM a question with `?`. Type `_` for status, `q` to save and quit.\n{shorten_name(game.player.name)} > ",
+                    show_extra_selection_strings=False,
+                    exception_on_newline=True
+                )
+                box.tts_stop()
             
-            if choice is None:
+            except DialogCancelledException as e:
                 continue
                 
             if choice == "q":

@@ -1,4 +1,4 @@
-from typing import  *
+from typing import *
 from pydantic import BaseModel, Field
 import random
 
@@ -40,10 +40,10 @@ def draw_tarot_cards(n: int = 1) -> Tuple[str, ...]:
     """
     if n <= 0:
         return ()
-
+    
     deck_size = len(TAROT_DECK)
     drawn_cards = []
-
+    
     while n > 0:
         # Determine how many cards to draw from the current fresh deck cycle
         draw_count = min(n, deck_size)
@@ -52,52 +52,60 @@ def draw_tarot_cards(n: int = 1) -> Tuple[str, ...]:
         drawn_cards.extend(random.sample(TAROT_DECK, draw_count))
         
         n -= draw_count
-
+        
     return tuple(drawn_cards)
 
 
+
+
+class DialogCancelledException(Exception):
+    """Thrown when the user realizes everything is pointless and just hits enter."""
+    pass
+
 A = TypeVar("A")
-class DialogChoice(BaseModel):
+
+class DialogChoice(BaseModel, Generic[A]):
     text: str = ""
     selection_string: Optional[str] = None
-    value: A | Callable[[], A]
+    value: Union[A, Callable[[], A]]
 
 def choose_dialog(
-    choices: List[DialogChoice],
+    choices: List[DialogChoice[A]],
     before: str = "",
     after: str = "",
     prompt: Optional[str] = None,
     indent: int = 4,
     fuzzy: bool = True,
     reprint_on_newline: bool = True,
-    exit_on_newline: bool = False,
+    exception_on_newline: bool = False,
     show_numbered_selection_string: bool = True,
     show_extra_selection_strings: bool = True,
     on_error: Optional[Callable[[str], None]] = None,
     print_function: Callable[[str], None] = print,
     input_function: Callable[[str], str] = input,
 ) -> A:
-    from functools import reduce
-
+    
     # some setup
     print, input = print_function, input_function
-    numbered_choices, extra_choices_list = reduce(
-        lambda pair, c: (
-            (pair[0] + [c], pair[1])
-            if c.selection_string is None
-            else (pair[0], pair[1] + [c])
-        ),
-        choices,
-        ([], []),
-    )
+    
+    numbered_choices: List[DialogChoice[A]] = []
+    extra_choices_list: List[DialogChoice[A]] = []
+    
+    for c in choices:
+        if c.selection_string is None:
+            numbered_choices.append(c)
+        else:
+            extra_choices_list.append(c)
+
     extra_choices = {
         (
-            extra.selection_string.strip().lower() if fuzzy else extra.selection_string
+            extra.selection_string.strip().lower() if fuzzy and extra.selection_string else str(extra.selection_string)
         ): extra
         for extra in extra_choices_list
+        if extra.selection_string is not None
     }
 
-    def value_or_call(x: A | Callable[[], A]) -> A:
+    def value_or_call(x: Union[A, Callable[[], A]]) -> A:
         if callable(x):
             return x()
         return x
@@ -105,33 +113,41 @@ def choose_dialog(
     while True:
         if before:
             print(before)
+            
         for i in range(len(numbered_choices)):
             choice = choices[i]
             text = choice.text if choice.text else str(choice.value)
             print((indent * " ") + f"({i+1}) {text}")
+            
         if after:
             print(after)
+            
         choice_str = (
             f"Enter a number (1 - {len(numbered_choices)})"
             if show_numbered_selection_string
             else ""
         )
+        
         extra_str = (
             " or type " + ", ".join([extra_key for extra_key in extra_choices.keys()])
-            if show_extra_selection_strings and (extra_choices)
+            if show_extra_selection_strings and extra_choices
             else ""
         )
+        
         prompt_str = prompt if prompt is not None else ":"
+        
         while True:
             w = input(choice_str + extra_str + prompt_str)
+            
             if fuzzy:
                 w = w.strip().lower()
-
+                
             if w == "":
-                if exit_on_newline:
-                    return None
+                if exception_on_newline:
+                    raise DialogCancelledException("User bailed on the dialog.")
                 elif reprint_on_newline:
                     break
+                    
             # numbered choices override extra choices
             if w.isdigit():
                 try:
@@ -139,7 +155,8 @@ def choose_dialog(
                 except:
                     continue
                 return value_or_call(choice.value)
-            if not (fuzzy):
+                
+            if not fuzzy:
                 # exact matching, the easy case
                 if w in extra_choices.keys():
                     return value_or_call(extra_choices[w].value)
@@ -148,14 +165,16 @@ def choose_dialog(
                 for key in extra_choices.keys():
                     if key.startswith(w):
                         return value_or_call(extra_choices[key].value)
-            
+                        
             # at this point it was neither an extra key or a digit
             # we consider this an error
             if on_error is not None:
                 # on_error doesn't return anything, but may raise here, so user can exit the loop
                 on_error(w)
+                
 
 def shorten_name(name: str) -> str:
     """Shortens a name in a sensible manner. Removes nicknames and lastnames."""
     ws = name.split(" ")
     return ws[0]
+
