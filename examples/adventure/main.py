@@ -180,12 +180,8 @@ Your task:
             
         active_str = ", ".join(active_enemies)
         
-        # ACTUALLY CALLING THE METHOD WE SPENT 20 MINUTES ON
-        state_json = combat_state.json_overview()
-        
-        return f"""
-COMBAT STATE OVERVIEW:
-{state_json}
+        return f"""You will generate the enemy team's combat turn.
+
 
 It is the Enemy Team's turn.
 The following enemy IDs are conscious and mandated to act: {active_str}
@@ -244,22 +240,8 @@ Do not generate friendly NPCs. These are hostile combatants intent on ending the
 
     def prompt_combat_ai_system(self, combat_state: 'CombatState') -> str:
         """Generates the system prompt for the AI that runs combat. Now with 100% less bloated string formatting."""
-        
-        # Build the combatant roster so the AI knows exactly who it is brutally murdering
-        roster_str_parts = []
-        for cid, combatant in combat_state.combatants.items():
-            team = "Player Team" if cid in combat_state.player_ids else "Enemy Team"
-            
-            # Ditch the .show() garbage for clean, token-efficient JSON. 
-            # If you have useless lore fields, you should exclude them here.
-            stats_json = combatant.model_dump_json(exclude={"inventory", "backstory"}) 
-            
-            # Map the actual ID as the JSON key so the LLM is forced to recognize it
-            roster_str_parts.append(f'"{cid}": {{"team": "{team}", "stats": {stats_json}}}')
-            
-        # Wrap it in a single JSON-like object so the LLM doesn't have an aneurysm
-        roster_str = "{\n" + ",\n".join(roster_str_parts) + "\n}"
-                
+        combat_state_json_str = combat_state.json_overview()
+
         return f"""You are the tactical AI game master for an unforgiving, turn-based text RPG. Your sole purpose is to control the enemy combatants and ruthlessly crush the player team.
 
 ### COMBAT MECHANICS (Bravely Default System)
@@ -272,7 +254,7 @@ The combat system strictly uses the 'Brave and Default' mechanics:
 Here is the current roster, mapped by their exact string ID keys. 
 You MUST use these exact IDs (e.g., "e1", "p1") as keys when generating your action queues.
 
-{roster_str}
+{combat_state_json_str}
 
 ### TACTICAL DIRECTIVES
 When prompted, formulate the combat strategy for specific enemy units.
@@ -1160,7 +1142,7 @@ def combat_dialog(game: GameState, choice: Choice, box: ghostbox.Ghostbox, endpo
         combat_box.set_vars({
             "combat_ai_system": game.prompt_combat_ai_system(combat_state)
         })
-        if True or game.debug:
+        if game.debug:
             print(game.prompt_combat_ai_system(combat_state))
         
         print(f"## Round {combat_state.round_number}")

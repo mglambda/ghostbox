@@ -9,6 +9,7 @@ import  json, argparse, random, os
 import traceback
 from utility import shorten_name
 
+T = TypeVar('T', bound='BaseCondition')            
 MAX_HP = 20
 MAX_STRESS = 20
 
@@ -512,13 +513,49 @@ class CombatEndResult(StrEnum):
     players_fled = "players_fled"
     enemies_fled = "enemies_fled"
 
+from pydantic import BaseModel, Field
+from typing import Literal, Union
+
+
+class BaseCondition(BaseModel):
+    """The base class for all suffering."""
+    # How many rounds this misery lasts before the universe grants sweet release
+    duration: int = Field(default=1, ge=0)
+
+class DodgeCondition(BaseCondition):
+    """Under this condition, characters have a chance to evade attacks."""
+    condition_type: Literal["dodging"] = "dodging"
+    dodge_chance: float = 0.5 
+
+class FearCondition(BaseCondition):
+    """Under this condition, characters have a chance to spontaneously flee."""
+    condition_type: Literal["fear"] = "fear"
+    # 50% chance they just pack it up and leave
+    flee_chance: float = 0.5
+
+class InvisibleCondition(BaseCondition):
+    """Characters with this condition cannot be seen."""
+    condition_type: Literal["invisible"] = "invisible"
+    # 100% narrative. The LLM gets to hallucinate what this means. God help us.
+    
+
+AnyCondition = Annotated[
+    Union[
+        DodgeCondition, 
+        FearCondition, 
+        InvisibleCondition, 
+    ], 
+    Field(discriminator="condition_type")
+]
+
 class CombatantStatus(StrEnum):
     """Whether a combat is active, dead, has fled etc."""
     active = "active"
     dead = "dead"
     fled = "fled"
 
-    
+
+
 class CombatState(BaseModel):
     """The miserable sandbox where your characters go to die."""
     
@@ -540,28 +577,14 @@ class CombatState(BaseModel):
 
     # tracks enemies that have flown the scene
     fleeing_combatants: Set[str] = Field(default_factory = set)
+
+    conditions: Dict[str, List[AnyCondition]] = Field(default_factory = dict, description = "Cotnains conditions for entities. Keys are character IDs.")
     
     lower_ap_bound: ClassVar[int] = -3
     upper_ap_bound: ClassVar[int] = 3
     action_queue_limit: ClassVar[int] = 4
 
-    def get_combatant_status(self, entity_id: str) -> CombatantStatus:
-        """Returns the active, dead, or fled status of a combatant."""
-        # so if we can't find it it's dead to us
-        if (entity := self.combatants.get(entity_id)) is None:
-            return CombatantStatus.dead
 
-        if entity.health <= 0:
-            return CombatantStatus.dead
-
-        if entity_id in self.fleeing_combatants:
-            return CombatantStatus.fled
-
-        # in the future, we can check for more status effects here (like paralysis)
-
-        return CombatantStatus.active
-    
-        
     @staticmethod
     def setup(player_side: List['PlayerCharacter'], enemy_side: List['PlayerCharacter']) -> 'CombatState':
         """Sets up the combat state and aggressively scrubs the LLM's hallucinated AP garbage."""
@@ -595,6 +618,44 @@ class CombatState(BaseModel):
                 npc.health = npc.max_health
                 
         return state
+
+    
+    def get_combatant_status(self, entity_id: str) -> CombatantStatus:
+        """Returns the active, dead, or fled status of a combatant."""
+        # so if we can't find it it's dead to us
+        if (entity := self.combatants.get(entity_id)) is None:
+            return CombatantStatus.dead
+
+        if entity.health <= 0:
+            return CombatantStatus.dead
+
+        if entity_id in self.fleeing_combatants:
+            return CombatantStatus.fled
+
+        # in the future, we can check for more status effects here (like paralysis)
+
+        return CombatantStatus.active
+
+    def conditions_for(self, entity_id: str) -> List['AnyCondition']:
+        """
+        Dumps every single condition afflicting this entity.
+        Mypy understands this perfectly because it's dead simple.
+        """
+        return self.conditions.get(entity_id, [])
+
+    def specific_conditions_for(self, entity_id: str, condition_type: Type[T]) -> List[T]:
+        """
+        Fetches ONLY the specific condition you ask for.
+        No Optional, no None. You MUST pass a type like DodgeCondition.
+        """
+        return [
+            cond for cond in self.conditions.get(entity_id, []) 
+            if isinstance(cond, condition_type)
+        ]
+    
+
+    def has_condition(self, entity_id: str, condition_type: Type[T]) -> bool:
+        return bool(self.specific_conditions_for(entity_id, condition_type))
 
     def maybe_winner(self) -> Optional[CombatEndResult]:
         """Checks if we can finally end this pointless digital suffering."""
