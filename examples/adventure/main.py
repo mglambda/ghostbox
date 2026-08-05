@@ -113,7 +113,7 @@ class GameState(BaseModel):
         self.score_entry.cause_of_death = cause_of_death
         return self.score_entry
 
-    def prompt_combat_action_resolution(self, combat_state: CombatState, actor_id: str, action: 'AnyCombatChoice') -> Optional[str]:
+    def prompt_combat_action_resolution(self, combat_state: CombatState, actor_id: str, action: 'AnyCombatChoice', proc_msg: str) -> Optional[str]:
         """
         Feeds the LLM the exact context of a single action. 
         Now with 100% more pattern matching because we're feeling trendy.
@@ -143,7 +143,7 @@ class GameState(BaseModel):
                     context_parts.append(f"Ability Details: {ability.name} - {ability.description}")
                     
             case DefaultChoice():
-                context_parts.append("Details: The actor is taking a defensive stance to bank AP. This should ideally restore 1 HP or relieve some stress, because existing is exhausting.")
+                context_parts.append("Details: The actor is taking a defensive stance or is actively evading attacks. You don't need to generate any effects for this.")
                 
             case FleeChoice():
                 context_parts.append("Details: The actor is attempting to run away from their problems. Honestly, very relatable.")
@@ -153,10 +153,15 @@ class GameState(BaseModel):
                 
         context_str = "\n".join(context_parts)
         
-        return f"""You are resolving a single turn in a grim, turn-based RPG. 
+        r = f"""You are resolving a single turn in a grim, turn-based RPG. 
         
 {context_str}
 
+The game system has determined the following:
+        ```
+{proc_msg}
+        ```
+        
 Your task:
 1. Write a short, punchy paragraph of `flavor_text` narrating the outcome of this action. Make it visceral, dramatic, and slightly cynical.
 2. Generate the strictly mechanical `effects` (DamageEffect, HealEffect, or StressEffect) that result from this action.
@@ -164,7 +169,9 @@ Your task:
 4. ONLY target IDs that are explicitly involved in the action description above. Do not hallucinate random targets.
 
 """
-    
+
+        #print(f"debug resolution: {r}")
+        return r
 
     def prompt_combat_ai_turn(self, combat_state: 'CombatState') -> str:
         """Tells the AI to scheme, assuming it can even read."""
@@ -1239,7 +1246,7 @@ def combat_execute(game: GameState, combat_state: CombatState, combat_box: ghost
 
                         # hallucinate a flavor description
                     try:
-                        if (resolution_prompt := game.prompt_combat_action_resolution(combat_state, combat_choice_event.source_id, combat_choice_event.choice)) is None:
+                        if (resolution_prompt := game.prompt_combat_action_resolution(combat_state, combat_choice_event.source_id, combat_choice_event.choice, msg)) is None:
                             print(f"warning: ID {combat_choice_event.source_id} not found in combat state.")
                             continue
 

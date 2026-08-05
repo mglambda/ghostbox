@@ -548,6 +548,10 @@ AnyCondition = Annotated[
     Field(discriminator="condition_type")
 ]
 
+# some condition groupings
+# transient conditions fade at the end of the round
+transient_conditions: List[Type[AnyCondition]] = [DodgeCondition]
+
 class CombatantStatus(StrEnum):
     """Whether a combat is active, dead, has fled etc."""
     active = "active"
@@ -851,6 +855,9 @@ class CombatState(BaseModel):
         for cid, c in self.combatants.items():
             if self.is_active(cid):
                 c.combat_component.mod_ap(c.combat_component.ap_regen)
+                # these conditions only last 1 round
+                for transient_condition in transient_conditions:
+                    self.remove_condition(cid, transient_condition)
 
     def apply_turn(self, ai_turn: 'AICombatTurn') -> None:
         """
