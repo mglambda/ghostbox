@@ -523,7 +523,7 @@ class BaseCondition(BaseModel):
     duration: int = Field(default=1, ge=0)
 
 class DodgeCondition(BaseCondition):
-    """Under this condition, characters have a chance to evade attacks."""
+    """Under this condition, characters have a chance to evade attacks. This conditions is always removed at the end of the round. """
     condition_type: Literal["dodging"] = "dodging"
     dodge_chance: float = 0.5 
 
@@ -657,6 +657,37 @@ class CombatState(BaseModel):
     def has_condition(self, entity_id: str, condition_type: Type[T]) -> bool:
         return bool(self.specific_conditions_for(entity_id, condition_type))
 
+
+    def give_condition(self, entity_id: str, condition: AnyCondition) -> None:
+        """Bestows a condition upon a character."""
+        if entity_id not in self.conditions:
+            self.conditions[entity_id] = [condition]
+            return
+        self.conditions[entity_id].append(condition)
+
+    def remove_condition(self, entity_id: str, condition_type: Type[T]) -> bool:
+        """
+        Purges every condition of the given type because nuance is dead.
+        Returns True if we actually deleted something, False if it was a total waste of compute.
+        """
+        if entity_id not in self.conditions:
+            return False
+            
+        original_garbage = self.conditions[entity_id]
+        
+        # Keep only the conditions that DO NOT match the type you're trying to evict.
+        surviving_garbage = [
+            cond for cond in original_garbage 
+            if not isinstance(cond, condition_type)
+        ]
+        
+        # If the length changed, congratulations, you actually removed something.
+        if len(original_garbage) != len(surviving_garbage):
+            self.conditions[entity_id] = surviving_garbage
+            return True
+            
+        return False
+    
     def maybe_winner(self) -> Optional[CombatEndResult]:
         """Checks if we can finally end this pointless digital suffering."""
         
@@ -959,7 +990,17 @@ class CombatState(BaseModel):
         # Returning just the combatants dictionary directly since scene_features got nixed.
         return json.dumps({"combatants": overview}, separators=(',', ':'))
 
+# bunch of helper functions
 
+    def can_dodge(self, entity_id: str) -> bool:
+        """Returns true if a character has successfully dodged (an attack). This happens when they e.g. default with 50% chance on each attack they receive."""
+        # so there is the case of having multiple dodge effects
+        # we just sort out the highest one and stick with that
+        if (dodge_conditions := self.specific_conditions_for(entity_id, DodgeCondition)) == []:
+            return False
+        dodge_chance = max([c.dodge_chance for c in dodge_conditions])
+        return random.random() < dodge_chance
+    
 class CombatChoiceEvent(BaseModel):
     """The catalyst. The calm before the LLM hallucination."""
     event_type: Literal["choice"] = "choice"
@@ -987,7 +1028,12 @@ class CombatChoiceEvent(BaseModel):
         match self.choice:
             case DefaultChoice() as default_choice:
                 cost = default_choice.ap_cost
-                msgs.append(f"🛡 {name} defaults.")
+                # defaulting gives 50% dodge chance
+                combat_state.give_condition(
+                    self.source_id,
+                    DodgeCondition(dodge_chance=0.5)
+                )
+                msgs.append(f"🛡 {name} is dodging.")
             case FleeChoice() as flee_choice:
                 # LLM doesn't like to generate a flee effect on flee choice, so we do the mechanical thing here
                 # fortunately there is no downside to doing this twice
@@ -996,7 +1042,15 @@ class CombatChoiceEvent(BaseModel):
                 msgs.append(f"🐔 {name} cowers in fear and flees.")
             case AttackChoice() as attack_choice:
                 cost = attack_choice.ap_cost
-                msgs.append(f"⚔ {name} attacks.")
+                if (target := combat_state.combatants.get(attack_choice.target_id)) is not None:
+                    target_name = f" {shorten_name(target.name)}"
+                else:
+                    target_name = ""
+                    
+                if combat_state.can_dodge(attack_choice.target_id):
+                                    msgs.append(f"🤷 {name} misses{target_name}.")
+                else:
+                    msgs.append(f"⚔ {name} attacks{target_name}.")
             case AbilityChoice() as ability_choice:
                 ability_id = ability_choice.ability_id
                 abilities = combat_state.abilities_for(self.source_id)
@@ -1074,6 +1128,8 @@ class CombatDeathEvent(BaseModel):
         target = combat_state.combatants.get(self.target_id)
         if not target:
             return "", []
+
+        
         return f"💀 {target.name} has expired. Their existence is now completely irrelevant.", []
 
 # The master union type. Must be at the bottom so it can see the classes.
