@@ -165,35 +165,47 @@ Your task:
 
 """
     
-    
+
     def prompt_combat_ai_turn(self, combat_state: 'CombatState') -> str:
-        """Tells the AI it's time to move, filtering out the flops."""
+        """Tells the AI to scheme, assuming it can even read."""
         
-        # Calling our precious new state method
+        # Using the actual enum we literally just discussed
         active_enemies = [
             eid for eid in combat_state.enemy_ids 
-            if combat_state.is_active(eid)
+            if combat_state.get_combatant_status(eid) == CombatantStatus.active
         ]
         
         if not active_enemies:
-            return "All enemies are dead or paralyzed by AP debt. Generate a descriptive_text mocking their pathetic state, and leave combat_actions completely empty."
-
+            return "All enemies are dead, fled, or paralyzed by AP debt. Generate a descriptive_text mocking their pathetic state, and leave combat_actions completely empty."
+            
         active_str = ", ".join(active_enemies)
         
-        return f"""It is the Enemy Team's turn.
-The following enemy IDs are conscious and ready to act: {active_str}
+        # ACTUALLY CALLING THE METHOD WE SPENT 20 MINUTES ON
+        state_json = combat_state.json_overview()
+        
+        return f"""
+COMBAT STATE OVERVIEW:
+{state_json}
+
+It is the Enemy Team's turn.
+The following enemy IDs are conscious and mandated to act: {active_str}
 Do NOT generate actions for any ID not in that list.
 
-Generate the AICombatTurn:
-1. Write the `descriptive_text` to dramatically telegraph their intended moves. Make it flavorful and sinister.
-2. Map the active enemy IDs to their chosen combat actions in `combat_actions`.
+Generate the AICombatTurn according to these strict constraints:
 
-Constraints to remember:
-- Maximum 4 actions per enemy.
-- An enemy's AP cannot drop below -3. Plan their AP spending accordingly.
-- If you default, you cannot do anything else. Defaultings sacrifices your turn to be defensive and bank AP.
-- Keep it brief and don't generate too much.
-        """
+1. NARRATIVE (descriptive_text):
+   Write a brief, cinematic, and brutal telegraph of their intended moves. Keep it under 3 sentences. Teh tone should be appropriate to the existing narrative.
+
+2. ACTIONS (combat_actions):
+   Map each active enemy ID to an array of actions.
+   - ABILITIES: If they use an ability, you MUST use the exact string key from their 'abilities' dictionary as the ability_id. Do not hallucinate names.
+   - ACTION ECONOMY: Max 4 actions per enemy. Track their AP using their 'ap' status and 'ap_cost'. They can dip into negative AP (limit -3), but do not exceed this debt.
+   - COWARDICE: If an enemy chooses 'default' or 'flee', it MUST be their ONLY action for the entire turn. You cannot default and then attack.
+   - SURVIVAL: If their HP is critically low, fleeing is an option if it is appropriate to the environment. Otherwise, enemies typically do not flee.
+
+Keep the output brief.
+"""
+    
     
     def prompt_combat_intro(self, combat_state: 'CombatState') -> str:
         """Forces the LLM to write a dramatic intro to the fight before the math ruins the vibe."""
@@ -1043,6 +1055,10 @@ def combat_configure_turn(combat_state: 'CombatState') -> 'CombatState':
                 print(f"\nCleared {player.name}'s queue and revoked their Brave status. Back to square one.")
                 return False
 
+            def do_debug() -> bool:
+                print(combat_state.show_status(debug=True))
+                return False
+            
             def do_help() -> bool:
                 print("\n--- HELP MENU (Because you are struggling) ---")
                 print("a = Attack (1 AP)")
@@ -1088,6 +1104,7 @@ def combat_configure_turn(combat_state: 'CombatState') -> 'CombatState':
                 DialogChoice(text="Clear Queue", selection_string="x", value=do_clear),
                 DialogChoice(text="End Turn", selection_string="e", value=try_end_turn),
                 DialogChoice(text="Help", selection_string="h", value=do_help),
+                DialogChoice(text="Debug Combat", selection_string="debug", value=do_debug),                
             ]
 
             try:
@@ -1143,6 +1160,9 @@ def combat_dialog(game: GameState, choice: Choice, box: ghostbox.Ghostbox, endpo
         combat_box.set_vars({
             "combat_ai_system": game.prompt_combat_ai_system(combat_state)
         })
+        if True or game.debug:
+            print(game.prompt_combat_ai_system(combat_state))
+        
         print(f"## Round {combat_state.round_number}")
         # get the AI turn
         unsafe_ai_turn = combat_box.new(
@@ -1150,7 +1170,9 @@ def combat_dialog(game: GameState, choice: Choice, box: ghostbox.Ghostbox, endpo
             game.prompt_combat_ai_turn(combat_state)
         )
         # make sure we don't have garbage like 6 actions in one turn or smth
-        ai_turn = combat_state.sanitize(unsafe_ai_turn)
+        ai_turn = combat_state.sanitize(unsafe_ai_turn, debug = True)
+        if True or game.debug:
+            print(ai_turn.show_debug(combat_state))
         # laugh maniacly at the player
         combat_state.combat_log.append(ai_turn.descriptive_text)
         print(ai_turn.descriptive_text)
@@ -1183,80 +1205,78 @@ def combat_execute(game: GameState, combat_state: CombatState, combat_box: ghost
     The event queue loop. Now 100% more polymorphic because we hate writing code twice.
     Also features a spam-filtered shame-announcer for useless party members.
     """
-    import time
-    
-    event_queue: list['AnyCombatEvent'] = []
+
+    # main queue. gets populated with the combat choices that are wrapped in events
+    event_queue: list['AnyCombatEvent'] = combat_state.drain_action_queues()
     # this will be prepended to event msgs
     prefix = " "
-    
     # Track who we already shamed so we don't spam the log
     inactive_announced = set()
-    
-    # 1. Drain the old-school queues and wrap them in fancy Choice events
-    while True:
-        popped = combat_state.pop_action()
-        if not popped:
-            break
-        source_id, action = popped
-        event_queue.append(CombatChoiceEvent(source_id=source_id, choice=action))
-        
+
     if not event_queue:
         print("\nAll action queues are empty. The suffering pauses.")
         return
         
     # 2. Welcome to the Void (The Execution Loop)
     while event_queue:
+        # these will be filled in in every loop iteration
+        # final_msg is printed after every popped event
+        final_msg: str = ""
+        # an event may spawn new events, these are tracked in here and prepended to the queue
+        new_events: List[AnyCombatEvent] = []
+        
         # LIFO stack behavior for triggered effects, FIFO for base choices
         event = event_queue.pop(0)
 
         match event:
             # the combatchoiceevent case will include LLM hallucinations
-            case CombatChoiceEvent(source_id=sid, choice=choice_data):
-                source = combat_state.combatants.get(sid)
+            case CombatChoiceEvent() as combat_choice_event:
+                #(source_id=sid, choice=choice_data):
+                source = combat_state.combatants.get(combat_choice_event.source_id)
                 
                 # If they don't exist, just ghost them silently.
                 if not source:
                     continue
                 
                 # Check if they are actually capable of doing anything.
-                if not combat_state.is_active(sid):
-                    if sid not in inactive_announced:                    
-                        inactive_announced.add(sid)
+                if not combat_state.is_active(combat_choice_event.source_id):
+                    if combat_choice_event.source_id not in inactive_announced:                    
+                        inactive_announced.add(combat_choice_event.source_id)
                         # Figure out exactly why they are a flop and announce it
                         if source.health <= 0:
-                            msg = f"{prefix}🪦 {source.name} is literally dead and skips their turn. RIP bozo."
+                            final_msg = f"{prefix}🪦 {source.name} is literally dead and skips their turn. RIP bozo."
                         elif source.combat_component.current_ap < 0:
-                            msg = f"{prefix}📉 {source.name} is bankrupt on AP and physically cannot act. Embarrassing."
+                            final_msg = f"{prefix}📉 {source.name} is bankrupt on AP and physically cannot act. Embarrassing."
                         else:
-                            msg = f"{prefix}🛑 {source.name} is incapacitated and misses their turn."
-                            
-                        print(msg)
-                        combat_state.combat_log.append(msg)
-                    continue
+                            final_msg = f"{prefix}🛑 {source.name} is incapacitated and misses their turn."
+                else:
+                    # they are active
 
-                # prcure covers the mechanical side -> messages and new events including effects
-                msg, new_events = event.procure(combat_state)
-                    
-                    # hallucinate a flavor description
-                try:
-                    if (resolution_prompt := game.prompt_combat_action_resolution(combat_state, sid, choice_data)) is None:
-                        print(f"warning: ID {sid} not found in combat state.")
+                    # prcure covers the mechanical side -> messages and new events including effects
+                    msg, new_events = event.procure(combat_state)
+
+                        # hallucinate a flavor description
+                    try:
+                        if (resolution_prompt := game.prompt_combat_action_resolution(combat_state, combat_choice_event.source_id, combat_choice_event.choice)) is None:
+                            print(f"warning: ID {combat_choice_event.source_id} not found in combat state.")
+                            continue
+
+                        resolution = combat_box.new(
+                            CombatResolution,
+                            resolution_prompt
+                        )
+                    except Exception as e:
+                        print(f"\nError: The AI completely dropped the ball. ({e}). Skipping this flop of a turn.")
+                        # note that continue here means new_events won't be added! this is intentional
                         continue
-                    
-                    resolution = combat_box.new(
-                        CombatResolution,
-                        resolution_prompt
-                    )
-                except Exception as e:
-                    print(f"\nError: The AI completely dropped the ball. ({e}). Skipping this flop of a turn.")
-                    # note that continue here means new_events won't be added! this is intentional
-                    continue
 
-
-                # prepare for printing
-                final_msg = f"{resolution.flavor_text}\n{prefix}{msg}"
-                # Convert the hallucinated math into Effect Events and shove them to the front
-                new_events += [CombatEffectEvent(source_id=sid, effect=effect) for effect in resolution.effects]
+                    # prepare for printing
+                    final_msg = f"\n{resolution.flavor_text}"
+                    if msg:
+                        final_msg += f"\n{prefix}{msg}"
+                        
+                    # Convert the hallucinated math into Effect Events and shove them to the front
+                    new_events += [CombatEffectEvent(source_id=combat_choice_event.source_id, effect=effect) for effect in resolution.effects]
 
             # The generic handler for Effects, Deaths, and whatever else you invent later
             # these cases will produce no hallucination!
@@ -1277,14 +1297,12 @@ def combat_execute(game: GameState, combat_state: CombatState, combat_box: ghost
         # Check for game over state so we can stop pretending any of this matters
         winner = combat_state.maybe_winner()
         if winner:
-            if winner == "enemies":
+            if winner == CombatEndResult.enemies_win:
                 print("\nYour entire team is dead. Sucks to suck. Game Over.")
             else:
-                print("\nAll enemies have been liquidated. You survived. Barely.")
+                print("\nAll enemies have been liquidated or have fled. You survived. Barely.")
             return
             
-        # Tiny pause so TalkBack doesn't have a total meltdown reading 40 lines of text at once
-        time.sleep(1.5)
         
     
 def print_scoreboard(scenario_file: ScenarioFile) -> None:

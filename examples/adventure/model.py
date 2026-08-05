@@ -1,11 +1,13 @@
 from pydantic import BaseModel, ValidationError, Field, model_validator
 from enum import Enum, StrEnum
+import json
 import sys
 from typing import *
 from collections import Counter
 from datetime import datetime
 import  json, argparse, random, os
 import traceback
+from utility import shorten_name
 
 MAX_HP = 20
 MAX_STRESS = 20
@@ -68,7 +70,7 @@ class CombatComponent(BaseModel):
                 
         return "\n".join(lines)
     
-    def gain_ap(self, amount: int) -> str:
+    def mod_ap(self, amount: int) -> str:
         """Modifies AP and returns a string for the terminal UI because we love reading text."""
         if amount == 0:
             return f"AP unchanged. Stagnation is the default state of the universe. ({self.current_ap}/{self.max_ap})"
@@ -412,30 +414,60 @@ class Message(BaseModel):
 # --- The Sum Types for the AI (and Player Queue) ---
 
 class AttackChoice(BaseModel):
+    """Character choose to do an attack using their primary weapon."""
     action_type: Literal["attack"] = "attack"
     target_id: str = Field(description="ID of the entity to attack (e.g., 'e1', 'p2').")
 
+    ap_cost: ClassVar[int] = 1
+    
 class DefaultChoice(BaseModel):
+    """Character choose to spend their turn defensively."""
     action_type: Literal["default"] = "default"
-
+    ap_cost: ClassVar[int] = 0
 
 class AbilityChoice(BaseModel):
+    """Character choose to use an ability."""
     action_type: Literal["ability"] = "ability"
     ability_id: str = Field(description="The exact ID of the ability to use (e.g., 'a1').")
     target_id: str = Field(description="ID of the entity to target (e.g., 'e1', 'p1').")
-
+    # ap_cost has to be deduced from combat context
+    
 class FleeChoice(BaseModel):
+    """Character flees combat. Usually followed by a FleeEffect."""
     action_type: Literal["flee"] = "flee"
-
+    
+    ap_cost: ClassVar[int] = 1
+    
 # The master union type. The LLM is forced to pick exactly one of these schemas.
 AnyCombatChoice = Union[AttackChoice, DefaultChoice, AbilityChoice, FleeChoice]
 
 class AICombatTurn(BaseModel):
     descriptive_text: str = Field(description = "A short, descriptive paragraph that establishes and telegraphs the enemy moves for this turn. Keep it flavorful and vague, include snarky one liners and villainous monologues if appropriate.")
     combat_actions: Dict[str, List[AnyCombatChoice]] = Field(description = "Maps enemy player character IDs to a list of combat moves they want to execute this turn. Max 4 actions per turn.")
+    def show_debug(self, combat_state: 'CombatState') -> str:
+        """Output that makes it easy to debug weird AI turns, as if debugging matters."""
+        lines = ["--- AI TURN DEBUG (Brace for disappointment) ---"]
+        
+        if not self.combat_actions:
+            lines.append("Literally doing nothing. Peak flop era.")
+            return "\n".join(lines)
+            
+        for eid, actions in self.combat_actions.items():
+            npc = combat_state.combatants.get(eid)
+            # If the ID doesn't exist, we just name and shame the void
+            name = npc.name if npc else "Unknown Ghost"
+            
+            if not actions:
+                lines.append(f"[{eid}] {name}: Chose absolute stagnation. (0 actions)")
+                continue
+                
+            # Yanking just the action types so your screen reader doesn't choke on the raw objects
+            action_types = [getattr(a, 'action_type', 'unknown_garbage') for a in actions]
+            lines.append(f"[{eid}] {name}: {', '.join(action_types)}")
+            
+        return "\n".join(lines)
     
-
-
+        
 # --- The Combat State ---
 
 
@@ -479,6 +511,13 @@ class CombatEndResult(StrEnum):
     enemies_win = "enemies_win"
     players_fled = "players_fled"
     enemies_fled = "enemies_fled"
+
+class CombatantStatus(StrEnum):
+    """Whether a combat is active, dead, has fled etc."""
+    active = "active"
+    dead = "dead"
+    fled = "fled"
+
     
 class CombatState(BaseModel):
     """The miserable sandbox where your characters go to die."""
@@ -506,7 +545,23 @@ class CombatState(BaseModel):
     upper_ap_bound: ClassVar[int] = 3
     action_queue_limit: ClassVar[int] = 4
 
+    def get_combatant_status(self, entity_id: str) -> CombatantStatus:
+        """Returns the active, dead, or fled status of a combatant."""
+        # so if we can't find it it's dead to us
+        if (entity := self.combatants.get(entity_id)) is None:
+            return CombatantStatus.dead
 
+        if entity.health <= 0:
+            return CombatantStatus.dead
+
+        if entity_id in self.fleeing_combatants:
+            return CombatantStatus.fled
+
+        # in the future, we can check for more status effects here (like paralysis)
+
+        return CombatantStatus.active
+    
+        
     @staticmethod
     def setup(player_side: List['PlayerCharacter'], enemy_side: List['PlayerCharacter']) -> 'CombatState':
         """Sets up the combat state and aggressively scrubs the LLM's hallucinated AP garbage."""
@@ -555,8 +610,10 @@ class CombatState(BaseModel):
             return CombatEndResult.enemies_win
             
         if not enemies_active:
+            if any(eid in self.fleeing_combatants for eid in self.player_ids):
+                return CombatEndResult.enemies_fled
             return CombatEndResult.players_win
-            
+        
         return None
     
 
@@ -612,67 +669,96 @@ class CombatState(BaseModel):
             return False
         
         # The ultimate vibe check. Are they in the negatives?
-        return entity.combat_component.current_ap >= 0    
-    def sanitize(self, ai_turn: AICombatTurn) -> AICombatTurn:
+        return entity.combat_component.current_ap >= 0
+    
+    def sanitize(self, ai_turn: AICombatTurn, debug: bool = False) -> AICombatTurn:
         """Brutally prunes AI hallucinations and mocks them for being overconfident."""
-        
         modified = False
         pruned_actions = {}
         
+        if debug:
+            print("\n--- SANITIZE START: Praying the AI didn't completely ruin everything ---")
+                
         for eid, actions in ai_turn.combat_actions.items():
-            if eid not in self.enemy_ids or not self.is_active(eid):
+            if debug:
+                print(f"Checking entity ID: {eid}...")
+
+            if eid not in self.enemy_ids:
+                if debug: print(f"  ❌ Entity {eid} isn't even an enemy. AI is hallucinating ghosts. Skipped.")
                 modified = True
                 continue
                 
-            enemy = self.combatants[eid]
-            current_ap = enemy.combat_component.current_ap
-            valid_actions: List[AnyCombatChoice] = []
-            has_defaulted = False # Track if they already cowered this turn
+            if not self.is_active(eid):
+                if debug: print(f"  ❌ Entity {eid} is already dead or MIA. AI is trying to weekend-at-bernies them. Skipped.")
+                modified = True
+                continue
+                            
+            current_ap = self.combatants[eid].combat_component.current_ap
+            valid_actions = []
             
-            for action in actions:
-                action_type = getattr(action, 'action_type', '')
-
-                # Stop them from spamming the free heal glitch
-                if action_type == "default":
-                    if has_defaulted:
+            if debug:
+                print(f"  Entity {eid} starts with {current_ap} AP. Trying to queue {len(actions)} actions.")
+                        
+            for i, action in enumerate(actions):
+                action_type = action.action_type
+                if debug:
+                    print(f"    Action {i+1}: {action_type}")
+                    
+                # If they cower or flee on step 1, their turn is over. Periodt.
+                if i == 0 and action_type in ("default", "flee"):
+                    valid_actions.append(action)
+                    if len(actions) > 1:
+                        if debug: print(f"      🤡 Chose to {action_type} but queued more garbage anyway. Snipping the rest.")
                         modified = True
-                        continue # Skip this redundant cowardice
-                    has_defaulted = True
-
-                # Max 4 actions rule. 
-                if len(valid_actions) >= 4:
+                    else:
+                        if debug: print(f"      ✔️ Clean single {action_type}. Acceptable cowardice.")
+                    break
+                                
+                if isinstance(action, AbilityChoice):
+                    try:
+                        cost = self.abilities_for(eid)[action.ability_id].ap_cost
+                        if debug: print(f"      ✨ Ability {action.ability_id} found. Cost: {cost} AP.")
+                    except KeyError:
+                        # AI hallucinated a bad ID
+                        cost = 1
+                        if debug: print(f"      💀 AI hallucinated ability ID '{getattr(action, 'ability_id', 'UNKNOWN')}'. Charging 1 AP idiot tax.")
+                else:
+                    cost = action.ap_cost
+                    if debug: print(f"      Basic action cost: {cost} AP.")
+                                    
+                # The AP bank declines their card.
+                if current_ap - cost < -3:
+                    if debug: print(f"      📉 Bankrupt! {current_ap} AP minus {cost} violates the -3 debt limit. Action denied.")
                     modified = True
                     break
-                    
-                # Defaulting is free. 
-                cost = 0 if action_type == "default" else getattr(action, 'ap_cost', 1)
-                
-                if current_ap - cost < -3:
+                                    
+                # Stop the 5+ action spam.
+                if len(valid_actions) >= 4:
+                    if debug: print(f"      🛑 Action spam detected. Hitting the 4-action cap.")
                     modified = True
-                    break # Stop processing actions, they are broke.
-                    
+                    break
+                                    
                 current_ap -= cost
                 valid_actions.append(action)
-                
+                if debug: print(f"      ✔️ Action approved. AP drops to {current_ap}.")
+                            
             if valid_actions:
                 pruned_actions[eid] = valid_actions
-                
-        # Overwrite the hallucinated garbage 
+                        
         ai_turn.combat_actions = pruned_actions
         
-        # If we had to fix their math or stop their cheese strat, drag them.
-        if modified:
-            snark = " (However, the villains were completely delulu and vastly overestimated their own stamina, stumbling mid-attack and dropping their combos like absolute clowns. The universe corrected their math.)"
-            ai_turn.descriptive_text += snark
-            
+        if debug:
+            print(f"--- SANITIZE COMPLETE. Modified: {modified}. It is all still meaningless anyway. ---\n")
+                    
         return ai_turn
+    
     
     def next_round(self) -> None:
         """Advance the round and increase AP etc. Do housekeeping."""
         self.round_number += 1
         for cid, c in self.combatants.items():
             if self.is_active(cid):
-                c.combat_component.gain_ap(c.combat_component.ap_regen)
+                c.combat_component.mod_ap(c.combat_component.ap_regen)
 
     def apply_turn(self, ai_turn: 'AICombatTurn') -> None:
         """
@@ -685,24 +771,45 @@ class CombatState(BaseModel):
                 # assuming the AI plans its whole turn at once.
                 self.action_queues[eid] = actions            
 
-    def pop_action(self) -> Optional[Tuple[str, AnyCombatChoice]]:
-        """
-        Pops the next action from the queues. Defaults get priority because 
-        turtling up to delay the inevitable is the only valid response to existence.
-        """
-        # Pass 1: Look for cowards (Defaults) at the front of ANY queue
-        for eid, queue in self.action_queues.items():
-            if queue and getattr(queue[0], 'action_type', '') == 'default':
-                return eid, queue.pop(0)
-                
-        # Pass 2: Literally whatever else is left in the order we iterate
-        for eid, queue in self.action_queues.items():
-            if queue:
-                return eid, queue.pop(0)
-                
-        # The queues are empty. We are free.
-        return None                
 
+    def drain_action_queues(self) -> List['AnyCombatEvent']:
+        """
+        Drains the queues for the anime super combo initiative system.
+        Cowards go first, then we randomize character order and dump their entire combo.
+        """
+        drained_events: List['AnyCombatEvent'] = []
+        
+        # Pass 1: The Cowards. Rip all 'default' actions out of everyone's queues first.
+        for eid in self.player_ids + self.enemy_ids:
+            if not self.is_active(eid):
+                continue
+            
+            queue = self.action_queues.get(eid, [])
+            
+            # Separate the defaults from the actual actions
+            defaults = [action for action in queue if getattr(action, 'action_type', '') == 'default']
+            non_defaults = [action for action in queue if getattr(action, 'action_type', '') != 'default']
+            
+            for d in defaults:
+                drained_events.append(CombatChoiceEvent(source_id=eid, choice=d))
+                
+            # Leave only the non-defaults in the queue for the next pass
+            self.action_queues[eid] = non_defaults
+            
+        # Pass 2: The Anime Combos. Get all active IDs, shuffle them for initiative, and drain.
+        active_entities = [eid for eid in self.player_ids + self.enemy_ids if self.is_active(eid)]
+        random.shuffle(active_entities)
+        
+        for eid in active_entities:
+            queue = self.action_queues.get(eid, [])
+            for action in queue:
+                drained_events.append(CombatChoiceEvent(source_id=eid, choice=action))
+            
+            # We drained them, so clear their queue completely
+            self.action_queues[eid] = []
+            
+        return drained_events
+    
     def show_status(self, debug: bool = False) -> str:
         """
         Dumps a quick summary of the battlefield so you can watch your impending doom in real-time,
@@ -736,30 +843,120 @@ class CombatState(BaseModel):
                 lines.append(player.show_short())
                 
         return "\n".join(lines)    
+
+
+    def json_overview(self) -> str:
+        """
+        Dumps the combat state for the LLM. 
+        Zero safety checks. We die like men.
+        """
+        overview = {}
+        
+        for eid, combatant in self.combatants.items():
+            team = "Player Team" if eid in self.player_ids else "Enemy Team"
+            
+            # Using your basic little helper method
+            status = self.get_combatant_status(eid).value
+            
+            # Raw-dogging the attributes because you hate safety
+            stats: Dict[str, Any] = {
+                "name": combatant.name,
+                "character_class": combatant.character_class,
+                "description": combatant.description,
+                "motivation": combatant.motivation,
+                "health": f"{combatant.health}/{combatant.max_health}",
+                "stress": f"{combatant.stress}/{combatant.max_stress}",
+                "status": status
+            }
+            
+            if combatant.combat_component:
+                cc = combatant.combat_component
+                combat_stats = {
+                    "combat_style": cc.combat_style,
+                    "primary_weapon": cc.primary_weapon,
+                    "ap": f"{cc.current_ap}/{cc.max_ap}",
+                    "ap_regen": cc.ap_regen,
+                }
                 
-# --- The Event Stack Types ---
+                # Perfect little ID map for the AI to completely ignore later
+                abilities_dict = {}
+                for ability_id, ability in self.abilities_for(eid).items():
+                    abilities_dict[ability_id] = {
+                        "name": ability.name,
+                        "description": ability.description,
+                        "ap_cost": ability.ap_cost
+                    }
+                
+                combat_stats["abilities"] = abilities_dict
+                stats["combat_component"] = combat_stats
+                
+            overview[eid] = {
+                "team": team,
+                "stats": stats
+            }
+            
+        # Returning just the combatants dictionary directly since scene_features got nixed.
+        return json.dumps({"combatants": overview}, separators=(',', ':'))
+
 
 class CombatChoiceEvent(BaseModel):
     """The catalyst. The calm before the LLM hallucination."""
     event_type: Literal["choice"] = "choice"
     source_id: str = Field(description="Who is making the terrible decision.")
-    choice: 'AnyCombatChoice' # Forward reference
+    choice: AnyCombatChoice
 
+            
     def procure(self, combat_state: 'CombatState') -> Tuple[str, List['AnyCombatEvent']]:
         """
         Handles any non-LLM choice mechanics. 
-        Returns (flavor_text, triggered_events).
+        Returns msg, List[triggered_events]
         """
+        # mechanical messages go into msg
+        msgs: List[str] = []
+        # actual effects go in here
+        new_events: List[AnyCombatEvent] = []        
         source = combat_state.combatants.get(self.source_id)
-        name = source.name if source else "The Void"
-        # note that all these choices will be handled by an LLM that hallucinates appropriate effects and flavor
-        # this  is just a place to hook in guaranteed mechanical effects.
-        match self.choice:
-            #case FleeChoice() as flee_choice:  
-                #return f"🪶 {name} cowers in fear and flees.", []
-            case _:
-                return "", []
+        if not source:
+            return "The void does nothing.", []
+        name = shorten_name(source.name)
 
+
+        # this  is the place to hook in guaranteed mechanical effects.
+        # note that all these choices will be handled by an LLM that hallucinates appropriate effects and flavor                
+        match self.choice:
+            case DefaultChoice() as default_choice:
+                cost = default_choice.ap_cost
+                msgs.append(f"🛡 {name} defaults.")
+            case FleeChoice() as flee_choice:
+                # LLM doesn't like to generate a flee effect on flee choice, so we do the mechanical thing here
+                # fortunately there is no downside to doing this twice
+                combat_state.fleeing_combatants.add(self.source_id) 
+                cost = flee_choice.ap_cost
+                msgs.append(f"🐔 {name} cowers in fear and flees.")
+            case AttackChoice() as attack_choice:
+                cost = attack_choice.ap_cost
+                msgs.append(f"⚔ {name} attacks.")
+            case AbilityChoice() as ability_choice:
+                ability_id = ability_choice.ability_id
+                abilities = combat_state.abilities_for(self.source_id)
+                if (ability := abilities.get(ability_id)) is not None:
+                    msgs.append(f"✨ Uses their {ability.name} ability.")
+                    cost = abilities[ability_id].ap_cost                    
+                else:
+                    # weird but ok
+                    msgs.append(f"✨ Uses an unknown ability.")
+                    cost = 1
+
+        # Deduct the AP mechanically. Welcome to capitalism.
+        ap_msg = source.combat_component.mod_ap((-1) * cost)
+        # we just tack this on at the end to not spam too much
+        if msgs:
+            msgs[-1] += f" {ap_msg}"
+        else:
+            msgs.append(ap_msg)
+
+        return "\n".join(msgs), new_events
+    
 class CombatEffectEvent(BaseModel):
     """The actual math. Ruins someone's day, and maybe their life."""
     event_type: Literal["effect"] = "effect"
