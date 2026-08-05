@@ -766,7 +766,8 @@ class CombatState(BaseModel):
             return False
         
         # The ultimate vibe check. Are they in the negatives?
-        return entity.combat_component.current_ap >= 0
+        return entity.combat_component.current_ap > CombatState.lower_ap_bound
+    
     def sanitize(self, ai_turn: 'AICombatTurn', debug: bool = False) -> 'AICombatTurn':
         """Brutally prunes AI hallucinations and mocks them for being overconfident."""
         modified = False

@@ -1235,7 +1235,7 @@ def combat_execute(game: GameState, combat_state: CombatState, combat_box: ghost
                         # Figure out exactly why they are a flop and announce it
                         if source.health <= 0:
                             final_msg = f"{prefix}🪦 {source.name} is literally dead and skips their turn. RIP bozo."
-                        elif source.combat_component.current_ap < 0:
+                        elif source.combat_component.current_ap <= CombatState.lower_ap_bound:
                             final_msg = f"{prefix}📉 {source.name} is bankrupt on AP and physically cannot act. Embarrassing."
                         else:
                             final_msg = f"{prefix}🛑 {source.name} is incapacitated and misses their turn."
