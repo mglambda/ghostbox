@@ -1,3 +1,4 @@
+# model.py
 from pydantic import BaseModel, ValidationError, Field, model_validator
 from enum import Enum, StrEnum
 import json
@@ -706,7 +707,7 @@ class CombatState(BaseModel):
             return CombatEndResult.enemies_win
             
         if not enemies_active:
-            if any(eid in self.fleeing_combatants for eid in self.player_ids):
+            if any(eid in self.fleeing_combatants for eid in self.enemy_ids):
                 return CombatEndResult.enemies_fled
             return CombatEndResult.players_win
         

@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+# main.py
 import time
 from pydantic import BaseModel, ValidationError, Field
 from enum import Enum, StrEnum
@@ -566,7 +567,7 @@ Write the narrative aftermath of this encounter. Translate the mechanical summar
             
                 self.set_latest_criticism(f"\n\nBelow is some helpful criticism of the story so far. Implement it as best you can:\n```{advice}\n```", story_box)
             
-            if True or self.debug:
+            if False or self.debug:
                 print("Critic's advice: \n" + advice + "\n## end advice\n")
         else:
             self.reset_latest_criticism(story_box)
@@ -1160,8 +1161,8 @@ def combat_dialog(game: GameState, choice: Choice, box: ghostbox.Ghostbox, endpo
         )
         # make sure we don't have garbage like 6 actions in one turn or smth
         ai_turn = combat_state.sanitize(unsafe_ai_turn, debug = True)
-        if True or game.debug:
-            print(ai_turn.show_debug(combat_state))
+
+
         # laugh maniacly at the player
         combat_state.combat_log.append(ai_turn.descriptive_text)
         print(ai_turn.descriptive_text)
@@ -1532,7 +1533,7 @@ def run(game: GameState, args: Any) -> None:
             elif isinstance(choice, Choice) and choice.initiates_combat:
                 print(f"Roll for initiative (please wait)!")
                 combat_winner, combat_summary = combat_dialog(game, choice, box, endpoint=args.endpoint)
-                if combat_winner == CombatEndResult.players_win:
+                if combat_winner == CombatEndResult.players_win or combat_winner == CombatEndResult.enemies_fled:
                     combat_successful = True
                     print(f"You won!")
                 else:
