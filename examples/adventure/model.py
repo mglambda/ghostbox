@@ -767,19 +767,17 @@ class CombatState(BaseModel):
         
         # The ultimate vibe check. Are they in the negatives?
         return entity.combat_component.current_ap >= 0
-    
-    def sanitize(self, ai_turn: AICombatTurn, debug: bool = False) -> AICombatTurn:
+    def sanitize(self, ai_turn: 'AICombatTurn', debug: bool = False) -> 'AICombatTurn':
         """Brutally prunes AI hallucinations and mocks them for being overconfident."""
         modified = False
         pruned_actions = {}
         
         if debug:
             print("\n--- SANITIZE START: Praying the AI didn't completely ruin everything ---")
-                
+            
         for eid, actions in ai_turn.combat_actions.items():
             if debug:
                 print(f"Checking entity ID: {eid}...")
-
             if eid not in self.enemy_ids:
                 if debug: print(f"  ❌ Entity {eid} isn't even an enemy. AI is hallucinating ghosts. Skipped.")
                 modified = True
@@ -789,28 +787,33 @@ class CombatState(BaseModel):
                 if debug: print(f"  ❌ Entity {eid} is already dead or MIA. AI is trying to weekend-at-bernies them. Skipped.")
                 modified = True
                 continue
-                            
+                
             current_ap = self.combatants[eid].combat_component.current_ap
             valid_actions = []
             
             if debug:
                 print(f"  Entity {eid} starts with {current_ap} AP. Trying to queue {len(actions)} actions.")
-                        
+                
+            # We literally scan the entire queue for cowardice first.
+            coward_action = next((a for a in actions if a.action_type in ("default", "flee")), None)
+            
+            if coward_action:
+                valid_actions = [coward_action]
+                if len(actions) > 1:
+                    if debug: print(f"      🤡 AI tried to combo with {coward_action.action_type}. Invalidating their entire queue and forcing cowardice. Snipping the rest.")
+                    modified = True
+                else:
+                    if debug: print(f"      ✔️ Clean single {coward_action.action_type}. Acceptable cowardice.")
+                
+                pruned_actions[eid] = valid_actions
+                continue
+                
+            # If they aren't cowards, we actually do the math. 
             for i, action in enumerate(actions):
                 action_type = action.action_type
                 if debug:
                     print(f"    Action {i+1}: {action_type}")
-                    
-                # If they cower or flee on step 1, their turn is over. Periodt.
-                if i == 0 and action_type in ("default", "flee"):
-                    valid_actions.append(action)
-                    if len(actions) > 1:
-                        if debug: print(f"      🤡 Chose to {action_type} but queued more garbage anyway. Snipping the rest.")
-                        modified = True
-                    else:
-                        if debug: print(f"      ✔️ Clean single {action_type}. Acceptable cowardice.")
-                    break
-                                
+                
                 if isinstance(action, AbilityChoice):
                     try:
                         cost = self.abilities_for(eid)[action.ability_id].ap_cost
@@ -820,35 +823,33 @@ class CombatState(BaseModel):
                         cost = 1
                         if debug: print(f"      💀 AI hallucinated ability ID '{getattr(action, 'ability_id', 'UNKNOWN')}'. Charging 1 AP idiot tax.")
                 else:
-                    cost = action.ap_cost
+                    cost = getattr(action, 'ap_cost', 1)
                     if debug: print(f"      Basic action cost: {cost} AP.")
-                                    
+                    
                 # The AP bank declines their card.
                 if current_ap - cost < -3:
                     if debug: print(f"      📉 Bankrupt! {current_ap} AP minus {cost} violates the -3 debt limit. Action denied.")
                     modified = True
                     break
-                                    
+                    
                 # Stop the 5+ action spam.
                 if len(valid_actions) >= 4:
                     if debug: print(f"      🛑 Action spam detected. Hitting the 4-action cap.")
                     modified = True
                     break
-                                    
+                    
                 current_ap -= cost
                 valid_actions.append(action)
                 if debug: print(f"      ✔️ Action approved. AP drops to {current_ap}.")
-                            
+                
             if valid_actions:
                 pruned_actions[eid] = valid_actions
-                        
+                
         ai_turn.combat_actions = pruned_actions
-        
         if debug:
             print(f"--- SANITIZE COMPLETE. Modified: {modified}. It is all still meaningless anyway. ---\n")
-                    
+            
         return ai_turn
-    
     
     def next_round(self) -> None:
         """Advance the round and increase AP etc. Do housekeeping."""
