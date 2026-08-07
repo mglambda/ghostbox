@@ -1,3 +1,4 @@
+# utility.py
 from typing import *
 from pydantic import BaseModel, Field
 import random
@@ -69,6 +70,7 @@ class DialogChoice(BaseModel, Generic[A]):
     selection_string: Optional[str] = None
     value: Union[A, Callable[[], A]]
 
+    
 def choose_dialog(
     choices: List[DialogChoice[A]],
     before: str = "",
@@ -84,7 +86,6 @@ def choose_dialog(
     print_function: Callable[[str], None] = print,
     input_function: Callable[[str], str] = input,
 ) -> A:
-    
     # some setup
     print, input = print_function, input_function
     
@@ -96,7 +97,7 @@ def choose_dialog(
             numbered_choices.append(c)
         else:
             extra_choices_list.append(c)
-
+            
     extra_choices = {
         (
             extra.selection_string.strip().lower() if fuzzy and extra.selection_string else str(extra.selection_string)
@@ -104,18 +105,18 @@ def choose_dialog(
         for extra in extra_choices_list
         if extra.selection_string is not None
     }
-
+    
     def value_or_call(x: Union[A, Callable[[], A]]) -> A:
         if callable(x):
             return x()
         return x
-
+        
     while True:
         if before:
             print(before)
             
-        for i in range(len(numbered_choices)):
-            choice = choices[i]
+        # Fixed: Actually loop over numbered_choices instead of the raw choices list.
+        for i, choice in enumerate(numbered_choices):
             text = choice.text if choice.text else str(choice.value)
             print((indent * " ") + f"({i+1}) {text}")
             
@@ -124,7 +125,7 @@ def choose_dialog(
             
         choice_str = (
             f"Enter a number (1 - {len(numbered_choices)})"
-            if show_numbered_selection_string
+            if show_numbered_selection_string and numbered_choices
             else ""
         )
         
@@ -150,12 +151,14 @@ def choose_dialog(
                     
             # numbered choices override extra choices
             if w.isdigit():
-                try:
-                    choice = numbered_choices[int(w) - 1]
-                except:
+                val = int(w)
+                # Fixed: Prevent '0' from turning into index -1 and picking the last item
+                if 1 <= val <= len(numbered_choices):
+                    choice = numbered_choices[val - 1]
+                    return value_or_call(choice.value)
+                else:
                     continue
-                return value_or_call(choice.value)
-                
+                    
             if not fuzzy:
                 # exact matching, the easy case
                 if w in extra_choices.keys():

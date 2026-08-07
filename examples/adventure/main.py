@@ -11,7 +11,9 @@ import ghostbox, json, argparse, random, os
 import traceback
 
 from model import *
+from scenario import *
 from utility import *
+from scenario_wizard import *
 
 default_options = {
     "stderr": False,
@@ -120,6 +122,21 @@ class GameState(BaseModel):
         Now with 100% more pattern matching because we're feeling trendy.
         """
 
+        # we have slightly different variants for flavor.
+        flavor_task_str = f"Write a short, punchy paragraph of `flavor_text` narrating the outcome of this action."
+        n = random.randint(1, 10)
+        if n <= 3:
+            print(f"debug: default tone")
+        elif n <= 5:
+            print(f"debug: dramatic")
+            flavor_task_str += "Make it visceral, dramatic, and slightly cynical."
+        elif n <= 8:
+            print(f"debug: dialog")
+            flavor_task_str += f" Include an extra paragraph with some snappy dialog for the combatants."
+        elif n <= 10:
+            print(f"debug: descriptive")
+            flavor_task_str += "Be extra descriptive and include the environment."
+                  
         if (        actor := combat_state.combatants.get(actor_id)) is None:
             return None
         action_type = getattr(action, 'action_type', 'unknown')
@@ -164,10 +181,11 @@ The game system has determined the following:
         ```
         
 Your task:
-1. Write a short, punchy paragraph of `flavor_text` narrating the outcome of this action. Make it visceral, dramatic, and slightly cynical.
+1. {flavor_task_str}
 2. Generate the strictly mechanical `effects` (DamageEffect, HealEffect, or StressEffect) that result from this action.
 3. Keep standard attacks around 1 to 4 damage. Special abilities can do more.
 4. ONLY target IDs that are explicitly involved in the action description above. Do not hallucinate random targets.
+5. Keep it brief and do not repeat yourself. Do not generate the same effect type more than once.
 
 """
 
@@ -177,10 +195,10 @@ Your task:
     def prompt_combat_ai_turn(self, combat_state: 'CombatState') -> str:
         """Tells the AI to scheme, assuming it can even read."""
         
-        # Using the actual enum we literally just discussed
+
         active_enemies = [
             eid for eid in combat_state.enemy_ids 
-            if combat_state.get_combatant_status(eid) == CombatantStatus.active
+            if combat_state.is_active(eid)
         ]
         
         if not active_enemies:
@@ -224,7 +242,18 @@ Based on the story so far, write a short, punchy, dramatic introductory paragrap
 - Set the scene: Describe the physical environment and the immediate, terrifying threat posed by the enemies.
 - Set the tone: The stakes are high and failure is imminent.
 - Constraints: Keep it under 3 sentences. DO NOT resolve the combat or narrate any actual attacks. Just set the stage before the first blow is struck."""
-    
+
+
+    def prompt_combat_scene(self, number_combatants: int) -> str:
+        """Creates a prompt to hallucinate a combat scene based on a number of enemies. Assumes existing chat history."""
+        # number of features
+        n = random.randint(1, 3)
+        # some scenes will have something special
+        unusual_feature_str = ""
+        if random.randint(1,6) == 6:
+            unusual_feature_str += " Include 1 additional feature that would be highly unusual or notable for the environment."
+             
+        return f"""Please create a suitable environment based on the story so far and where the players currently are. Be sure that this environment is large enough to accomodate {number_combatants} combatants, and include {n} interesting features that would normally be found in the environment, and which could be interesting to use or interact with in combat.{unusual_feature_str}"""
     def prompt_combat_enemy_roster(self) -> str:
         """Summons the squad of doomed NPCs ready to ruin the player's day."""
         
@@ -901,7 +930,7 @@ def combat_configure_turn(combat_state: 'CombatState') -> 'CombatState':
         def pick_target(prompt_text: str = "Who are we targeting?") -> str:
             targets = []
             for tid in combat_state.player_ids + combat_state.enemy_ids:
-                if combat_state.is_active(tid):
+                if combat_state.is_targetable(tid):
                     ent = combat_state.combatants[tid]
                     hp_str = " (bloodied)" if ent.health < (ent.max_health / 2) else ""
                     team_str = "[Enemy]" if tid in combat_state.enemy_ids else "[Ally]"
@@ -918,11 +947,18 @@ def combat_configure_turn(combat_state: 'CombatState') -> 'CombatState':
                 ent = combat_state.combatants[tid]
                 team = "Player" if tid in combat_state.player_ids else "Enemy"
                 hp_str = " (bloodied)" if ent.health < (ent.max_health / 2) else ""
-                print(f"[{team}] {ent.name}{hp_str} (AP: {ent.combat_component.current_ap})")
+                if (status_str := f"{combat_state.get_combatant_status(tid)}") == "active":
+                    status_str = ""
+                else:
+                    status_str = f" *{status_str}* "
+                print(f"[{team}] {ent.name}{status_str}{hp_str} (AP: {ent.combat_component.current_ap})")
                 
                 if tid in combat_state.player_ids:
                     q = combat_state.action_queues.get(tid, [])
-                    q_str = ", ".join([getattr(a, 'action_type', 'Unknown') for a in q]) if q else "Doing nothing."
+                    if combat_state.has_ap(tid):
+                        q_str = ", ".join([getattr(a, 'action_type', 'Unknown') for a in q]) if q else "Doing nothing."
+                    else:
+                        queue_str = "*AP debt*"
                     print(f"   Queue: {q_str}")
             print("-----------------------\n")
 
@@ -974,7 +1010,7 @@ def combat_configure_turn(combat_state: 'CombatState') -> 'CombatState':
                     active_enemies = [
                         (eid, combat_state.combatants[eid]) 
                         for eid in combat_state.enemy_ids 
-                        if combat_state.is_active(eid)
+                        if combat_state.is_targetable(eid)
                     ]
                     if not active_enemies:
                         print("\nThere is literally nobody to attack. Stop swinging at the air.")
@@ -1134,7 +1170,11 @@ def combat_dialog(game: GameState, choice: Choice, box: ghostbox.Ghostbox, endpo
         game.prompt_combat_enemy_roster()
     )
     
-    combat_state = CombatState.setup(player_roster, enemy_roster.enemies)
+    combat_scene = box.new(
+        Scene,
+        game.prompt_combat_scene(number_combatants = len(player_roster) + len(enemy_roster.enemies))
+    )
+    combat_state = CombatState.setup(player_roster, enemy_roster.enemies, combat_scene)
     # we need an intro and setup that transitions the story into the fast paced combat
     # this doesn't need to be part of the story, as we will summaritze the entire combat later
     # but it does need to be part of the combat log
@@ -1229,14 +1269,16 @@ def combat_execute(game: GameState, combat_state: CombatState, combat_box: ghost
                     continue
                 
                 # Check if they are actually capable of doing anything.
-                if not combat_state.is_active(combat_choice_event.source_id):
+                if not combat_state.can_act(combat_choice_event.source_id):
                     if combat_choice_event.source_id not in inactive_announced:                    
                         inactive_announced.add(combat_choice_event.source_id)
                         # Figure out exactly why they are a flop and announce it
-                        if source.health <= 0:
+                        if not combat_state.is_alive(event.source_id):
                             final_msg = f"{prefix}🪦 {source.name} is literally dead and skips their turn. RIP bozo."
-                        elif source.combat_component.current_ap <= CombatState.lower_ap_bound:
+                        elif not combat_state.has_ap(event.source_id):
                             final_msg = f"{prefix}📉 {source.name} is bankrupt on AP and physically cannot act. Embarrassing."
+                        elif combat_state.has_fled(event.source_id):
+                            final_msg = f"{prefix} 🐔 {source.name} has fled and cannot act."
                         else:
                             final_msg = f"{prefix}🛑 {source.name} is incapacitated and misses their turn."
                 else:
@@ -1363,12 +1405,28 @@ def main() -> None:
         default="http://localhost:8080",
         help="Ghostbox endpoint. May be localhost, or an http address with an OpenAI compatible API."
     )
+
+
+    p.add_argument(
+        "-g",
+        "--scenario-generation",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help="Boot into the scenario wizard to micromanage the world building.",
+    )
     
     args = p.parse_args()
-    
+
+
     if args.debug:
         default_options["stderr"] = True
         default_options["debug"] = True
+
+
+    if args.scenario_generation:
+        scenario_wizard(args, default_options)
+        # above will sys.exit, this line is never reached
+        
         
     if args.scenario_file == "":
         scenario_content = scenario_creation_dialog(endpoint=args.endpoint, initial_prompt=args.scenario_prompt)
@@ -1536,6 +1594,7 @@ def run(game: GameState, args: Any) -> None:
                 if combat_winner == CombatEndResult.players_win or combat_winner == CombatEndResult.enemies_fled:
                     combat_successful = True
                     print(f"You won!")
+                    print(game.gain_fate(3))
                 else:
                     combat_successful = False
                     print(f"You lost!")
