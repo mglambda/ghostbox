@@ -994,15 +994,30 @@ class CombatChoiceEvent(BaseModel):
                 ability_id = ability_choice.ability_id
                 abilities = combat_state.abilities_for(self.source_id)
                 if (ability := abilities.get(ability_id)) is not None:
-                    msgs.append(f"✨ Uses their {ability.name} ability.")
+                    ability_name = f"their {ability.name}"
                     cost = abilities[ability_id].ap_cost                    
                 else:
                     # weird but ok
-                    msgs.append(f"✨ Uses an unknown ability.")
+                    ability_name = "an unknown"
                     cost = 1
 
-        # Deduct the AP mechanically. Welcome to capitalism.
+                # missing vs hitting
+                if (target := combat_state.combatants.get(ability_choice.target_id)) is not None:
+                    target_name = f" {shorten_name(target.name)}"
+                else:
+                    target_name = ""
+                    
+                if combat_state.can_dodge(ability_choice.target_id):
+                                    msgs.append(f"🤷 {name} uses {ability_name} but misses{target_name}.")
+                else:
+                    msgs.append(f"✨ Uses {ability_name} ability and hits {target_name}.")
+
+
+        # Deduct the AP mechanically. Welcome to capitalism.                    
         ap_msg = source.combat_component.mod_ap((-1) * cost)
+
+
+        
         # we just tack this on at the end to not spam too much
         if msgs:
             msgs[-1] += f" {ap_msg}"
