@@ -809,3 +809,28 @@ cmds_additional_docs = {
     Restarts the current character folder. Note that this will wipe the current story folder, i.e. your chat history, so you may want to /save.
     /restart is equivalent to /start CURRENT_CHAR_FOLDER.""",
 }
+
+def video(prog: 'Plumbing', argv: List[str]) -> str:
+    """[--id=VIDEO_ID] VIDEO_PATH
+    Add videos for multimodal models that can actually handle them (like Qwen). 
+    You can refer to videos by their id. If --id is omitted, id= 1 is assumed. Examples:
+    ```
+        /video ~/Videos/brainrot.mp4
+    Please summarize this [vid-1].
+    ```
+    """
+    if argv == []:
+        prog.videos = {}
+        return "Videos reset. The void returns."
+    
+    if argv[0].startswith("--id="):
+        id = maybeReadInt(argv[0].replace("--id=", ""))
+        if id is None:
+            return "error: Please specify a valid integer as id. Do better."
+        url = " ".join(argv[1:])
+    else:
+        id = 1
+        url = " ".join(argv)
+        
+    prog.loadVideo(url, id)
+    return ""

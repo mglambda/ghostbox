@@ -15,12 +15,48 @@ MAX_HP = 20
 MAX_STRESS = 20
 
 
+class AbilityType(StrEnum):
+    """Varieties of combat abilities."""
+    attack = "attack"
+    debuff = "debuff"
+    buff = "buff"
+    heal = "heal"
+    control = "control"
+    
+    def targets_allies(self) -> bool:
+        """Returns true if the ability is supposed to target allies, including oneself."""
+        return self in [AbilityType.heal, AbilityType.buff]
+
+    def targets_enemies(self) -> bool:
+        """Returns true if the ability should target enemies."""
+        return self in [AbilityType.attack, AbilityType.debuff]
+
+    @classmethod
+    def random_type(cls) -> 'AbilityType':
+        """
+        Spits out a random ability type. 
+        Now with 100% more tuple unpacking because you can't let go of the past.
+        """
+        # Your precious, highly readable pairings.
+        # (Ability, Weight)
+        distribution = [
+            (cls.attack, 50),
+            (cls.debuff, 20),
+            (cls.buff, 15),
+            (cls.heal, 10),
+            (cls.control, 5)
+        ]
+        types, weights = zip(*distribution)
+        
+        # random.choices still wants separate lists. It doesn't care about your aesthetics.
+        return random.choices(population=types, weights=weights, k=1)[0]
+
 
 class CombatAbility(BaseModel):
     name: str = Field(description="A short, evocative name for the special ability.")
-    description: str = Field(description="Visual and mechanical description. Does it burn, stun, or just emotionally damage the target?")
+    ability_type: AbilityType = Field(description = "The broad category this ability. Attack and debuff abilities target enemies. Heal and buff abilities target allies, including oneself. Control abilities shape the battlefield and don't have a specific target.")
+    description: str = Field(description="Visual and mechanical description.")
     ap_cost: int = Field(ge=1, le=3, description="Cost to use. normal impact abilities have 1 point cost, high impact is 2, 3 is reserved for legendary abilities.")
-
 
     def show(self) -> str:
         return f"{self.name} ({self.ap_cost} AP) - {self.description}"

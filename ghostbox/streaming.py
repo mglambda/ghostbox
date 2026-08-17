@@ -45,8 +45,11 @@ def process_sse_streaming_events(callback: Callable[[Dict[str, Any]], None], don
                 # this works usually if people aren't actually streaming, but maybe we should just crash
                 printerr("warning: Malformed data in process_sse_streaming_events. Are you actually streaming?")
                 printerr(f"dump: {w}")
-                d = json.loads(w)            
-                callback(d)                
+                try:
+                    d = json.loads(w)            
+                    callback(d)
+                except Exception as e:
+                    printerr(f"exception while trying to parse the JSON. You probably shouldn't ignore this and check out streaming.py. Exception: {e}")
 
                 
     done_flag.set()

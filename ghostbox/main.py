@@ -173,6 +173,7 @@ def showHelp(prog: "Plumbing", argv: List[str]) -> str:
     return w
 
 
+
 # these can be typed in at the CLI prompt
 cmds: List[Tuple[str, Callable[["Plumbing", List[str]], str]]] = [
     ("/help", showHelp),
@@ -198,6 +199,7 @@ cmds: List[Tuple[str, Callable[["Plumbing", List[str]], str]]] = [
     ("/audio", toggleAudio),
     ("/image_watch", toggleImageWatch),
     ("/image", image),
+    ("/video", video),
     ("/time", showTime),
     ("/status", showStatus),
     ("/detokenize", detokenize),
@@ -227,6 +229,7 @@ cmds: List[Tuple[str, Callable[["Plumbing", List[str]], str]]] = [
     ("/cont", doContinue),
     ("/continue", doContinue),
 ]
+
 
 # the mode formatters dictionary is a mapping from mode names to tuples of formatters, wrapped in a lambda that supplies a dictionary with keyword options to the formatters.
 # The tuple contains indices :
@@ -303,6 +306,8 @@ class Plumbing(object):
         self.images: Dict[int, ImageRef] = {}
         # flag to show wether image data needs to be resent to the backend
         self._images_dirty: bool = False
+        self.videos: Dict[int, VideoRef] = {}
+        self._videos_dirty: bool = False        
         self._lastPrompt: str = ""
         self._dirtyContextLlama: bool = False
         self._stop_generation: threading.Event = threading.Event()
@@ -879,7 +884,6 @@ class Plumbing(object):
 
     def getAIFormatter(self, with_color: bool = False) -> OutputFormatter:
         return self.getAIColorFormatter() + self.getFormatters()[3]
-
     def addUserText(self, w: str) -> None:
         if w and self.getOption("history"):
             if self.getOption("history_force_alternating_roles"):
@@ -888,8 +892,11 @@ class Plumbing(object):
                 w = self._maybe_extend_last_user_message(w)
 
             self.session.stories.get().addUserText(
-                self.getUserFormatter().format(w), image_context=self.images
+                self.getUserFormatter().format(w), 
+                image_context=self.images,
+                video_context=self.videos
             )
+            
 
     def addAIText(self, w: str) -> str:
         """Adds text toe the AI's history in a cleanly formatted way according to the AI formatter. Returns the formatted addition or empty string if nothing was added.."""
@@ -2186,6 +2193,18 @@ class Plumbing(object):
         self.images[id] = ImageRef(url=url, data=loadImageData(url))
         self._images_dirty = True
 
+
+    def loadVideo(self, url: str, id: int) -> None:
+        url = os.path.expanduser(url.strip())
+        if not (os.path.isfile(url)):
+            printerr("warning: Could not load video '" + url + "'. File not found. Big shocker.")
+            return
+
+        # Pass the absolute file URI so the local llama.cpp backend can grab it directly
+        absolute_uri = f"file://{os.path.abspath(url)}"
+        self.videos[id] = VideoRef(url=absolute_uri)
+        self._videos_dirty = True
+        
     def _get_last_result_tokens(self) -> str:
         """Get a string with a number in it showing the total tokens for the last resquest/result."""
         # this is backend dependent

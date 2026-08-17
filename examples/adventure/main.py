@@ -704,27 +704,66 @@ def scenario_creation_dialog(endpoint: str = "http://localhost:8080", initial_pr
         + chosen_scenario.description,
     )
 
-def player_creation_dialog(scenario: Scenario, endpoint: str ="http://localhost:8080", party: bool = True) -> Tuple[PlayerCharacter, List[PlayerCharacter]]:
+
+def prompt_player_creation(scenario: Scenario) -> str:
+
+    return f"""            "Here is an adventure scenario: " + scenario.show() + "\n\n"
+            "Create 4 unique player characters that fit this scenario. You must strictly adhere to the data schema:\n"
+            "Give them either 1 ability in the `special_abilities` list and 2 combat abilities in the `combat_component.combat_abilities` list, OR 2 abilities in the `special_abilities` list and 1 combat ability in the `combat_component.combat_abilities` list.\n"
+            "Narrative abilities cost Fate. Starting combat abilities should all cost exactly 4 AP.\n"
+            "All characters start with health equal to their max health, and 0 stress. They start with APequal to their max AP."
+            "Do not forget to assign a `primary_weapon` in the combat component.
+"""    
+
+def prompt_single_character_creation(scenario: Scenario, lvl: int = 1) -> str:
+    mod = lvl // 2
+
+    
+    # max hp and stress between 8 and 12 + half level
+    max_hp = random.randint(8, 12) + mod
+    max_stress = random.randint(8, 12) + mod
+    
+    # abilities
+    ability_mod = max(0, min(3, lvl // 2))    
+    if random.randint(1, 2) == 1:
+        narrative_abilities = 2 + ability_mod
+        combat_abilities = 1 + ability_mod
+    else:
+        narrative_abilities = 1 + ability_mod
+        combat_abilities = 2 + ability_mod
+
+    combat_ability_types_str = ", ".join([AbilityType.random_type() for _ in range(0, combat_abilities)])
+        
+    return f"""            "Here is an adventure scenario:
+```
+{scenario.show()}
+```
+Create a level {lvl} character that fits this scenario. You must strictly adhere to the data schema:
+ - "Narrative abilities cost Fate. Combat abilities should cost between 1 and 3 AP depending on effect strength.
+ - All characters start with health equal to their max health, and 0 stress. They start with AP equal to their max AP.
+ - Do not forget to assign a `primary_weapon` in the combat component.
+ - This character should have {max_hp} max HP.
+ - This character should have {max_stress} max stress.  
+ - This character should receive {narrative_abilities} narrative abilities.
+ - This character should receive {combat_abilities} combat abilities of the following types: {combat_ability_types_str}
+"""    
+
+    
+def player_creation_dialog(scenario: Scenario, endpoint: str ="http://localhost:8080", party: bool = True, number_characters: int = 4) -> Tuple[PlayerCharacter, List[PlayerCharacter]]:
     box = ghostbox.from_generic(endpoint=endpoint, character_folder="player_creator", **default_options)
     hint = ""
     chosen_player = None
     
     while chosen_player is None:
         print("Generating player characters...")
-
-        class PlayerCharacters(BaseModel):
-            player_characters: List[PlayerCharacter]
+        pcs: List[PlayerCharacter] = []
+        for i in range(0, number_characters):
+            character = box.new(
+                PlayerCharacter,
+                prompt_single_character_creation(scenario)
+            )
+            pcs.append(character)
             
-        pcs = box.new(
-            PlayerCharacters,
-            "Here is an adventure scenario: " + scenario.show() + "\n\n"
-            "Create 4 unique player characters that fit this scenario. You must strictly adhere to the data schema:\n"
-            "Give them either 1 ability in the `special_abilities` list and 2 combat abilities in the `combat_component.combat_abilities` list, OR 2 abilities in the `special_abilities` list and 1 combat ability in the `combat_component.combat_abilities` list.\n"
-            "Narrative abilities cost Fate. Starting combat abilities should all cost exactly 4 AP.\n"
-            "All characters start with health equal to their max health, and 0 stress. They start with APequal to their max AP."
-            "Do not forget to assign a `primary_weapon` in the combat component."
-        ).player_characters
-        
         def set_hint(w: str) -> None:
             nonlocal hint
             hint = w

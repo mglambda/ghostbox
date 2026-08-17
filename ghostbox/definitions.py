@@ -63,22 +63,24 @@ class ImageURL(BaseModel):
     # f"data:image/{ext};base64,{base64_image}"
     url: str
 
+class VideoRef(BaseModel):
+    """Internal representation of a video context. 
+    Unlike images, we do NOT load raw binary data into memory because we aren't unhinged."""
+    url: str    
 
 class VideoURL(BaseModel):
     # in keeping with image, this may be a URL (e.g. filepath) or base64 encoded data.
     # in the case of video, I suppose raw data is somewhat less likely.
     url: str
-    
-
 class ChatContentComplex(BaseModel):
     """Contentfield of a ChatMessage, at least when the content is not a mere string."""
 
-    type: Literal["text", "image_url"]
+    type: Literal["text", "image_url", "input_video"]
     # FIXME: I've seen multiple versions of this with text and content so we do both. the new llama.cpp vision implementation wants text
-    content: str
+    content: str = ""
     text: Optional[str] = None 
     image_url: Optional[ImageURL] = None
-    video_url: Optional[VideoURL] = None    
+    input_video: Optional[VideoURL] = None    
 
     def get_text(self) -> str:
         """Simple helper to extract text from a complex message."""
@@ -89,6 +91,9 @@ class ChatContentComplex(BaseModel):
 
 ChatContent = str | List[ChatContentComplex] | Dict[str, Any]
 
+        
+
+ChatContent = str | List[ChatContentComplex] | Dict[str, Any]
 
 class FunctionCall(BaseModel):
     name: str
@@ -101,7 +106,6 @@ class ToolCall(BaseModel):
     function: FunctionCall
     # FIXME: I don't quite understand id field yet
     id: str = ""
-
 
 class ChatMessage(BaseModel):
     role: Literal["system", "assistant", "user", "tool"]
@@ -136,10 +140,25 @@ class ChatMessage(BaseModel):
                 raise RuntimeError("Dict not supported for ChatMessage content.")
         return msg
                     
-    @model_serializer
-    def ser_model(self) -> Dict[str, Any]:
-        # we basically want exclude_none=True by default
-        return {k:v for k, v in dict(self).items() if v is not None and v != []}
+    @model_serializer(mode='wrap')
+    def ser_model(self, handler) -> Dict[str, Any]:
+        # Let Pydantic do the heavy lifting serialization first
+        dump = handler(self)
+        
+        # Surgically remove all the garbage you left in the complex content list
+        if "content" in dump and isinstance(dump["content"], list):
+            for item in dump["content"]:
+                # Strip out nulls that your old serializer ignored
+                keys_to_delete = [k for k, v in item.items() if v is None]
+                for k in keys_to_delete:
+                    del item[k]
+                
+                # Strip out the empty content string that upsets llama-server
+                if "content" in item and item["content"] == "":
+                    del item["content"]
+
+        # Maintain your original logic of stripping top-level None and empty lists
+        return {k: v for k, v in dump.items() if v is not None and v != []}
     
     @staticmethod
     def make_image_message(text: str, images: List[ImageRef], **kwargs: object) -> 'ChatMessage':
@@ -148,7 +167,7 @@ class ChatMessage(BaseModel):
         complex_content_list = []
         for image_ref in images:
             ext = getImageExtension(image_ref.url, default="png")
-            base64_image = image_ref.data.decode("utf-8")
+            base64_image = image_ref.data.decode("utf-8") if image_ref.data else ""
             image_content = ChatContentComplex(
                 type="image_url",
                 content="",
@@ -168,7 +187,25 @@ class ChatMessage(BaseModel):
         # FIXME: not sure why mypy complains about kwargs here
         return ChatMessage(role="user", content=complex_content_list, **kwargs) # type: ignore
 
+    @staticmethod
+    def make_video_message(text: str, videos: List[VideoRef], **kwargs: object) -> 'ChatMessage':
+        """Helper to create a native video message for multimodal backends using file paths."""
+        complex_content_list = []
+        for video_ref in videos:
+            video_content = ChatContentComplex(
+                type="input_video",
+                content="",
+                input_video=VideoURL(
+                    url=video_ref.url
+                )
+            )
+            complex_content_list.append(video_content)
 
+        # don't forget the prompt
+        complex_content_list.append(ChatContentComplex(type="text", content=text, text=text))
+
+        return ChatMessage(role="user", content=complex_content_list, **kwargs) # type: ignore
+    
 class LLMBackend(StrEnum):
     generic = "generic"
     legacy = "legacy"
@@ -2257,7 +2294,7 @@ class Config(BaseModel):
     dry_penalty_last_n: Annotated[
         int,
         Field(
-            default=-1,
+            default=100000,
             description="How many tokens to scan for repetitions.",
             json_schema_extra={
                 "argparse": {

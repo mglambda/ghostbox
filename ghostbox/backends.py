@@ -13,6 +13,7 @@ from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
 # this list is based on the llamacpp server. IMO most other backends are subsets of this.
 # the sampler values have been adjusted to more sane default options (no more top_p)
+# FIXME: since the addition of the config in definitions.py, this list and its default values is no longer authoritative. Consider removing.
 sampling_parameters: Dict[str, SamplingParameterSpec] = {
     "temperature": SamplingParameterSpec(
         name="temperature",
@@ -113,7 +114,7 @@ sampling_parameters: Dict[str, SamplingParameterSpec] = {
     "dry_penalty_last_n": SamplingParameterSpec(
         name="dry_penalty_last_n",
         description="How many tokens to scan for repetitions.",
-        default_value=-1,
+        default_value=100000,
     ),
     "dry_sequence_breakers": SamplingParameterSpec(
         name="dry_sequence_breakers",

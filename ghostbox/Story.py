@@ -7,15 +7,22 @@ class Story(BaseModel):
     
     data: List[ChatMessage] = [] 
 
-    def addUserText(self, w: str, image_context: Dict[int, ImageRef]={}, **kwargs: Any) -> None:
+    def addUserText(self, w: str, image_context: Dict[int, ImageRef]={}, video_context: Dict[int, VideoRef]={}, **kwargs: Any) -> None:
         """Adds a user message to the story.
         :param w: The user's prompt or message as plaintext.
-        :param images: A list of 0 or more images to include with the message. The images, confusingly, may be http URLs, filenames, or binary data.
+        :param image_context: A list of 0 or more images to include with the message.
+        :param video_context: A list of 0 or more videos to include with the message.
         """
-        if image_context == {}:
-            new_data = ChatMessage(role = "user", content = w, **kwargs)
-        else:
+        # If we have both images and videos, that's currently a headache since 
+        # make_image_message and make_video_message are separate. We default to images 
+        # if both are provided for now, otherwise we check videos.
+        if image_context:
             new_data = ChatMessage.make_image_message(w, list(image_context.values()), **kwargs)
+        elif video_context:
+            new_data = ChatMessage.make_video_message(w, list(video_context.values()), **kwargs)
+        else:
+            new_data = ChatMessage(role="user", content=w, **kwargs)
+            
         self.data.append(new_data)
 
     def addAssistantText(self, w: str, **kwargs: Any) -> None:
@@ -24,8 +31,8 @@ class Story(BaseModel):
         # since that can break server side when the content field with "" is interpreted as None or something
         if w == "":
             w = "..."
-            
-        self.data.append(ChatMessage(role="assistant", content= w, **kwargs))
+        
+        self.data.append(ChatMessage(role="assistant", content=w, **kwargs))
 
     def addRawJSON(self, json: Dict[str, Any]) -> None:
         """Try to parse a raw json dictionary as a ChatMessage and then append it to the story.
@@ -33,10 +40,9 @@ class Story(BaseModel):
         self.data.append(ChatMessage(**json))
         
     def addRawJSONs(self, json_list: List[Dict[str, Any]]) -> None:
-        """Add one or more python dictionaries that will be interpreted as ChatMessages and appended to the story.
-                         If any of the passed dictionaries don't conform to the ChatMessage schema, you will get a pydantic ValidationError."""
-        self.data.extend([ChatMessage(**item)
-                          for item in json_list])
+        """Add one or more python dictionaries that will be interpreted as ChatMessages and appended to the story. 
+        If any of the passed dictionaries don't conform to the ChatMessage schema, you will get a pydantic ValidationError."""
+        self.data.extend([ChatMessage(**item) for item in json_list])
 
     def addMessage(self, msg: ChatMessage) -> None:
         """Appends a chat message to the story."""
@@ -47,7 +53,7 @@ class Story(BaseModel):
         self.data.extend(msgs)
         
     def addSystemText(self, w: str, **kwargs: Any) -> None:
-        self.data.append(ChatMessage(role="system", content= w, **kwargs))
+        self.data.append(ChatMessage(role="system", content=w, **kwargs))
 
     def extendAssistantText(self, w: str) -> None:
         """Alters the latest found message in the story that is by the assistant, and extends it with w. If no such message exists, it adds w as an assistant message to the story."""
@@ -68,21 +74,15 @@ class Story(BaseModel):
                         if cmsg.type == "text": # type: ignore
                             cmsg.content += w # type: ignore
                             return
-
         # if we reached this point, no assistant was found
         # we just append a new message
         self.addAssistantText(w)
-                
-
-                
-                
-
-            
+                                                              
     def extendLast(self, w:str) -> None:
         """Appends w to the last message. Does nothing if there are no messages."""
         if self.data == []:
             return
-        
+            
         msg = self.data[-1]
         if msg.content is None:
             # tricky case, I say we do nothing
@@ -96,9 +96,7 @@ class Story(BaseModel):
                 if cmsg.type == "text": # type: ignore
                     cmsg.content += w # type: ignore
                     return
-                
-            
-            
+                                        
     def getData(self) -> List[ChatMessage]:
         return self.data
 
@@ -106,16 +104,14 @@ class Story(BaseModel):
         """Safely remove the nth story item from the story. Defaults to the last item. If there are no elements, of if n is out of range, this has no effect. Returns True if an item was removed."""
         if self.data == []:
             return False
-
         if n == -1:
             n = len(self.data) - 1
-        
+            
         if not(n in range(0, len(self.data))):
             return False
         self.pop(n)
         return True
-    
-    
+        
     def pop(self, n:int=-1) -> ChatMessage:
         """Remove and return the last story item. If n is supplied, item at position n is removed and returned."""
         return self.data.pop(n)
